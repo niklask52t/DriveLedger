@@ -458,7 +458,25 @@ DriveLedger/
 │   │   └── AuthContext.tsx
 │   ├── components/        # Reusable components
 │   │   ├── Layout.tsx     # Sidebar + header layout
-│   │   └── Modal.tsx      # Modal dialog
+│   │   ├── Modal.tsx      # Modal dialog
+│   │   ├── vehicle/       # Vehicle detail tab components
+│   │   │   ├── constants.ts
+│   │   │   ├── VehicleCostsTab.tsx
+│   │   │   ├── VehicleRepairsTab.tsx
+│   │   │   ├── VehicleLoansTab.tsx
+│   │   │   ├── VehicleSavingsTab.tsx
+│   │   │   ├── VehicleStatsTab.tsx
+│   │   │   └── VehicleEditForm.tsx
+│   │   ├── purchase/      # Purchase planner components
+│   │   │   ├── PurchaseCard.tsx
+│   │   │   ├── ComparisonTable.tsx
+│   │   │   ├── FinancingCalculator.tsx
+│   │   │   └── PurchaseForm.tsx
+│   │   └── settings/      # Settings tab components
+│   │       ├── ProfileTab.tsx
+│   │       ├── ApiTokensTab.tsx
+│   │       ├── AdminTab.tsx
+│   │       └── DataTab.tsx
 │   └── pages/             # Page components
 │       ├── Dashboard.tsx
 │       ├── Vehicles.tsx

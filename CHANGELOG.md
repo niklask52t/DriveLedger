@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ---
 
+## [1.2.0] - 2026-03-25
+
+### Refactored
+- Split `VehicleDetail.tsx` (1248 lines) into 7 focused components:
+  - `components/vehicle/VehicleCostsTab.tsx` - Cost table with add/edit modal
+  - `components/vehicle/VehicleRepairsTab.tsx` - Repair table with add/edit modal
+  - `components/vehicle/VehicleLoansTab.tsx` - Loan progress cards
+  - `components/vehicle/VehicleSavingsTab.tsx` - Savings goal progress cards
+  - `components/vehicle/VehicleStatsTab.tsx` - PieChart/BarChart statistics
+  - `components/vehicle/VehicleEditForm.tsx` - Vehicle edit form
+  - `components/vehicle/constants.ts` - Shared form constants and options
+  - Main file reduced from 1248 to 266 lines
+- Split `PurchasePlanner.tsx` (950 lines) into 4 focused components:
+  - `components/purchase/PurchaseCard.tsx` - Single purchase card display
+  - `components/purchase/ComparisonTable.tsx` - Side-by-side comparison table
+  - `components/purchase/FinancingCalculator.tsx` - Standalone calculator with sliders
+  - `components/purchase/PurchaseForm.tsx` - Add/edit purchase form
+  - Main file reduced from 950 to 218 lines
+- Split `Settings.tsx` (707 lines) into 4 focused components:
+  - `components/settings/ProfileTab.tsx` - User profile and password change
+  - `components/settings/ApiTokensTab.tsx` - API token management
+  - `components/settings/AdminTab.tsx` - Admin panel (tokens, users)
+  - `components/settings/DataTab.tsx` - Export/import/delete account
+  - Main file reduced from 707 to 51 lines
+- Total: 2905 lines split into 15 focused component files, main files reduced to 535 lines combined
+
+---
+
 ## [1.1.0] - 2026-03-25
 
 ### Changed
