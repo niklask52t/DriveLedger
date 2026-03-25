@@ -2,7 +2,7 @@ export type FuelType = 'diesel' | 'benzin' | 'elektro' | 'hybrid' | 'lpg';
 export type VehicleStatus = 'owned' | 'planned';
 export type CostFrequency = 'einmalig' | 'monatlich' | 'quartal' | 'halbjaehrlich' | 'jaehrlich';
 export type CostCategory = 'steuer' | 'versicherung' | 'sprit' | 'pflege' | 'reparatur' | 'tuev' | 'finanzierung' | 'sparen' | 'sonstiges';
-export type Page = 'dashboard' | 'vehicles' | 'vehicle-detail' | 'costs' | 'loans' | 'savings' | 'repairs' | 'purchase-planner' | 'login' | 'register' | 'forgot-password' | 'reset-password' | 'settings' | 'wiki';
+export type Page = 'dashboard' | 'vehicles' | 'vehicle-detail' | 'costs' | 'loans' | 'savings' | 'repairs' | 'reminders' | 'purchase-planner' | 'login' | 'register' | 'forgot-password' | 'reset-password' | 'settings' | 'wiki';
 
 export interface Vehicle {
   id: string;
@@ -153,6 +153,25 @@ export interface RegistrationToken {
   usedBy: string | null;
   createdAt: string;
   expiresAt: string;
+}
+
+export interface Reminder {
+  id: string;
+  title: string;
+  description: string;
+  type: 'cost_due' | 'loan_payment' | 'inspection' | 'insurance' | 'savings_goal' | 'custom';
+  entityType: string;
+  entityId: string;
+  remindAt: string;
+  recurring: '' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+  emailNotify: boolean;
+  sent: boolean;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface AppConfig {
+  emailEnabled: boolean;
 }
 
 export interface AppState {

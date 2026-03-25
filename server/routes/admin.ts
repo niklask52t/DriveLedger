@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import db from '../db';
 import { combinedAuthMiddleware, adminMiddleware } from '../middleware';
-import { generateSecureToken } from '../auth';
+import { generateSecureToken, hashPassword } from '../auth';
 import { toCamelCase, rowsToCamelCase } from '../utils';
 
 const router = Router();
@@ -130,6 +130,7 @@ router.delete('/users/:id', (req: Request, res: Response) => {
         DELETE FROM savings_transactions WHERE user_id = ?
       `).run(id);
 
+      db.prepare('DELETE FROM reminders WHERE user_id = ?').run(id);
       db.prepare('DELETE FROM savings_goals WHERE user_id = ?').run(id);
       db.prepare('DELETE FROM costs WHERE user_id = ?').run(id);
       db.prepare('DELETE FROM loans WHERE user_id = ?').run(id);
@@ -147,6 +148,40 @@ router.delete('/users/:id', (req: Request, res: Response) => {
     return res.status(200).json({ message: `User ${user.username} and all their data deleted` });
   } catch (err: any) {
     console.error('[ADMIN] Delete user error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /users/:id/reset-password - admin generates a password reset token for a specific user
+router.post('/users/:id/reset-password', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const user = db.prepare('SELECT id, email, username FROM users WHERE id = ?').get(id) as any;
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const resetToken = generateSecureToken();
+    const tokenId = uuid();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+
+    db.prepare(
+      'INSERT INTO password_resets (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
+    ).run(tokenId, user.id, resetToken, expiresAt);
+
+    console.log(`[ADMIN] Password reset token generated for user ${user.username} (${user.email})`);
+
+    return res.status(200).json({
+      message: `Password reset token generated for ${user.username}`,
+      token: resetToken,
+      expiresAt,
+      userId: user.id,
+      username: user.username,
+      email: user.email,
+    });
+  } catch (err: any) {
+    console.error('[ADMIN] Reset password for user error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

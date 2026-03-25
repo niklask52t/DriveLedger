@@ -23,6 +23,9 @@ import apiTokenRoutes from './routes/api-tokens.js';
 import adminRoutes from './routes/admin.js';
 import personRoutes from './routes/persons.js';
 import dataRoutes from './routes/data.js';
+import reminderRoutes from './routes/reminders.js';
+import { startReminderScheduler } from './reminder-scheduler.js';
+import { isEmailEnabled } from './email.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -53,6 +56,14 @@ app.use('/api/api-tokens', apiTokenRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/persons', personRoutes);
 app.use('/api/data', dataRoutes);
+app.use('/api/reminders', reminderRoutes);
+
+// Config endpoint (no auth) - lets frontend know about feature flags
+app.get('/api/config', (_req, res) => {
+  res.json({
+    emailEnabled: isEmailEnabled(),
+  });
+});
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -116,8 +127,11 @@ async function start(): Promise<void> {
     console.log(`  ║  Port:     ${String(PORT).padEnd(27)}║`);
     console.log(`  ║  Frontend: ${FRONTEND_URL.padEnd(27)}║`);
     console.log(`  ║  Env:      ${(process.env.NODE_ENV || 'development').padEnd(27)}║`);
+    console.log(`  ║  Email:    ${(isEmailEnabled() ? 'enabled' : 'disabled').padEnd(27)}║`);
     console.log('  ╚═══════════════════════════════════════╝');
     console.log('');
+
+    startReminderScheduler();
   });
 }
 

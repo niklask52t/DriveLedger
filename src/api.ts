@@ -1,6 +1,7 @@
 import type {
   Vehicle, Cost, Loan, Repair, SavingsGoal, SavingsTransaction,
   PlannedPurchase, Person, User, ApiToken, RegistrationToken,
+  Reminder, AppConfig,
 } from './types';
 
 const API_BASE = '/api';
@@ -124,6 +125,22 @@ class ApiClient {
 
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     await this.request<void>('POST', '/auth/change-password', { currentPassword, newPassword });
+  }
+
+  // ─── Config ──────────────────────────────────────────
+
+  async getConfig(): Promise<AppConfig> {
+    return this.request<AppConfig>('GET', '/config');
+  }
+
+  // ─── Email Verification ─────────────────────────────
+
+  async verifyEmail(token: string): Promise<void> {
+    await this.request<void>('POST', '/auth/verify-email', { token });
+  }
+
+  async resendVerification(): Promise<void> {
+    await this.request<void>('POST', '/auth/resend-verification');
   }
 
   // ─── Vehicles ──────────────────────────────────────────
@@ -335,6 +352,36 @@ class ApiClient {
 
   async getRegistrationTokens(): Promise<RegistrationToken[]> {
     return this.request<RegistrationToken[]>('GET', '/admin/registration-tokens');
+  }
+
+  async adminResetPassword(userId: string): Promise<{ token: string }> {
+    return this.request<{ token: string }>('POST', `/admin/users/${userId}/reset-password`);
+  }
+
+  // ─── Reminders ───────────────────────────────────────
+
+  async getReminders(): Promise<Reminder[]> {
+    return this.request<Reminder[]>('GET', '/reminders');
+  }
+
+  async getDueReminders(): Promise<Reminder[]> {
+    return this.request<Reminder[]>('GET', '/reminders/due');
+  }
+
+  async createReminder(data: Partial<Reminder>): Promise<Reminder> {
+    return this.request<Reminder>('POST', '/reminders', data);
+  }
+
+  async updateReminder(id: string, data: Partial<Reminder>): Promise<Reminder> {
+    return this.request<Reminder>('PUT', `/reminders/${id}`, data);
+  }
+
+  async deleteReminder(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/reminders/${id}`);
+  }
+
+  async snoozeReminder(id: string, newDate: string): Promise<Reminder> {
+    return this.request<Reminder>('POST', `/reminders/${id}/snooze`, { remindAt: newDate });
   }
 
   // ─── Data Management ──────────────────────────────────

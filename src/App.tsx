@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
-import type { Page, AppState } from './types';
-import { loadState, emptyState } from './store';
+import { Loader2, AlertTriangle, X } from 'lucide-react';
+import type { Page, AppState, Reminder, AppConfig } from './types';
+import { loadState, emptyState, loadDueReminders } from './store';
+import { api } from './api';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -11,6 +12,7 @@ import Costs from './pages/Costs';
 import Loans from './pages/Loans';
 import Savings from './pages/Savings';
 import Repairs from './pages/Repairs';
+import Reminders from './pages/Reminders';
 import PurchasePlanner from './pages/PurchasePlanner';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -27,6 +29,7 @@ const pageTitles: Record<Page, string> = {
   loans: 'Loans & Financing',
   savings: 'Savings Goals',
   repairs: 'Repair History',
+  reminders: 'Reminders',
   'purchase-planner': 'Purchase Planner',
   login: 'Login',
   register: 'Register',
@@ -43,6 +46,11 @@ function AppContent() {
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
   const [dataLoading, setDataLoading] = useState(false);
   const [dataError, setDataError] = useState('');
+  const [appConfig, setAppConfig] = useState<AppConfig>({ emailEnabled: false });
+  const [dueReminders, setDueReminders] = useState<Reminder[]>([]);
+  const [verificationBannerDismissed, setVerificationBannerDismissed] = useState(false);
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
 
   const refreshData = useCallback(async () => {
     try {
@@ -54,19 +62,58 @@ function AppContent() {
     }
   }, []);
 
+  const refreshDueReminders = useCallback(async () => {
+    try {
+      const due = await loadDueReminders();
+      setDueReminders(due);
+    } catch {
+      // silently ignore
+    }
+  }, []);
+
+  // Load config on mount
+  useEffect(() => {
+    api.getConfig()
+      .then((cfg) => setAppConfig(cfg))
+      .catch(() => { /* config endpoint may not exist yet */ });
+  }, []);
+
   // Load data when user logs in
   useEffect(() => {
     if (user) {
       setDataLoading(true);
       setDataError('');
-      loadState()
-        .then((s) => setStateRaw(s))
+      Promise.all([
+        loadState(),
+        loadDueReminders(),
+        api.getConfig().catch(() => ({ emailEnabled: false })),
+      ])
+        .then(([s, due, cfg]) => {
+          setStateRaw(s);
+          setDueReminders(due);
+          setAppConfig(cfg);
+        })
         .catch(() => setDataError('Failed to load data from server.'))
         .finally(() => setDataLoading(false));
     } else {
       setStateRaw(emptyState());
+      setDueReminders([]);
+      setVerificationBannerDismissed(false);
+      setResendSuccess(false);
     }
   }, [user]);
+
+  const handleResendVerification = async () => {
+    setResendingVerification(true);
+    try {
+      await api.resendVerification();
+      setResendSuccess(true);
+    } catch {
+      // ignore
+    } finally {
+      setResendingVerification(false);
+    }
+  };
 
   // setState wrapper: update local state, then refresh from API to keep in sync
   const setState = useCallback((newState: AppState) => {
@@ -160,6 +207,8 @@ function AppContent() {
         return <Savings state={state} setState={setState} />;
       case 'repairs':
         return <Repairs state={state} setState={setState} />;
+      case 'reminders':
+        return <Reminders state={state} emailEnabled={appConfig.emailEnabled} onRefreshDue={refreshDueReminders} />;
       case 'purchase-planner':
         return <PurchasePlanner state={state} setState={setState} onNavigate={handleNavigate} />;
       case 'settings':
@@ -171,12 +220,41 @@ function AppContent() {
     }
   };
 
+  const showVerificationBanner = appConfig.emailEnabled && user && !user.emailVerified && !verificationBannerDismissed;
+
   return (
     <Layout
       currentPage={currentPage}
       onNavigate={handleNavigate}
       pageTitle={pageTitles[currentPage] || 'DriveLedger'}
+      dueReminderCount={dueReminders.length}
     >
+      {showVerificationBanner && (
+        <div className="flex items-center gap-3 bg-amber-500/15 border border-amber-500/30 rounded-lg px-4 py-3 mb-4">
+          <AlertTriangle size={18} className="text-amber-400 shrink-0" />
+          <p className="text-sm text-amber-200 flex-1">
+            Please verify your email. Check your inbox or{' '}
+            {resendSuccess ? (
+              <span className="text-amber-300 font-medium">Verification email sent!</span>
+            ) : (
+              <button
+                onClick={handleResendVerification}
+                disabled={resendingVerification}
+                className="text-amber-300 hover:text-amber-100 underline font-medium cursor-pointer disabled:opacity-50"
+              >
+                {resendingVerification ? 'Sending...' : 'click here to resend'}
+              </button>
+            )}
+            .
+          </p>
+          <button
+            onClick={() => setVerificationBannerDismissed(true)}
+            className="p-1 rounded text-amber-400 hover:text-amber-200 transition-colors cursor-pointer"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
       {renderPage()}
     </Layout>
   );

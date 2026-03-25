@@ -29,6 +29,8 @@ export function initDb(): void {
       password_hash TEXT NOT NULL,
       is_admin INTEGER NOT NULL DEFAULT 0,
       email_verified INTEGER NOT NULL DEFAULT 0,
+      email_verification_token TEXT DEFAULT '',
+      email_verification_expires TEXT DEFAULT '',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -208,6 +210,22 @@ export function initDb(): void {
       name TEXT NOT NULL,
       color TEXT NOT NULL DEFAULT '',
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS reminders (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      title TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      type TEXT NOT NULL,
+      entity_type TEXT DEFAULT '',
+      entity_id TEXT DEFAULT '',
+      remind_at TEXT NOT NULL,
+      recurring TEXT DEFAULT '',
+      email_notify INTEGER DEFAULT 1,
+      sent INTEGER DEFAULT 0,
+      active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now'))
     );
   `);
 

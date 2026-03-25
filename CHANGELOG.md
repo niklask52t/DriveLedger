@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ---
 
+## [1.3.0] - 2026-03-25
+
+### Added
+- `EMAIL_ENABLED` environment variable (true/false) to toggle all email features
+- Email verification system:
+  - When email enabled: new users must verify email after registration
+  - Verification banner shown in app until email is verified
+  - `POST /api/auth/verify-email` and `POST /api/auth/resend-verification` endpoints
+  - When email disabled: users auto-verified on registration
+- Forgot password graceful degradation:
+  - Email enabled: sends reset link via email (existing behavior)
+  - Email disabled: shows "contact admin" message with token-based reset form
+- Admin password reset: `POST /api/admin/users/:id/reset-password`
+  - Admin generates reset token for any user (works regardless of email setting)
+- Reminder system:
+  - Full CRUD API: `GET/POST/PUT/DELETE /api/reminders`, `GET /api/reminders/due`, `POST /api/reminders/:id/snooze`
+  - Types: Cost Due, Loan Payment, Inspection (TUeV), Insurance Renewal, Savings Goal, Custom
+  - Recurring reminders: daily, weekly, monthly, yearly (auto-creates next occurrence)
+  - Email notifications for due reminders (when email enabled)
+  - Background scheduler checks every 5 minutes for due reminders
+  - Reminders page with due-now section, snooze (1d/7d/custom), filter by type
+  - Quick-add buttons for TUeV and loan payment reminders
+  - Bell icon in sidebar with red badge showing due reminder count
+  - Entity linking (reminders linked to vehicles, costs, loans, etc.)
+- `GET /api/config` endpoint returns server configuration (emailEnabled) for frontend
+- Email status shown in server startup banner
+
+### Changed
+- Registration flow now conditional on EMAIL_ENABLED
+- Forgot password page adapts UI based on email configuration
+- Server startup banner shows email enabled/disabled status
+- User deletion cascades now include reminders cleanup
+
+---
+
 ## [1.2.0] - 2026-03-25
 
 ### Refactored

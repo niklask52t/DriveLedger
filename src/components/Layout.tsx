@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   LayoutDashboard, Car, DollarSign, CreditCard, PiggyBank,
-  Wrench, ShoppingCart, Menu, X, Settings, BookOpen,
+  Wrench, Bell, ShoppingCart, Menu, X, Settings, BookOpen,
   LogOut, User
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,6 +18,7 @@ interface LayoutProps {
   onNavigate: (page: Page) => void;
   pageTitle: string;
   children: React.ReactNode;
+  dueReminderCount?: number;
 }
 
 const mainNavItems: NavItem[] = [
@@ -27,6 +28,7 @@ const mainNavItems: NavItem[] = [
   { page: 'loans', label: 'Loans', icon: <CreditCard size={20} /> },
   { page: 'savings', label: 'Savings', icon: <PiggyBank size={20} /> },
   { page: 'repairs', label: 'Repairs', icon: <Wrench size={20} /> },
+  { page: 'reminders', label: 'Reminders', icon: <Bell size={20} /> },
   { page: 'purchase-planner', label: 'Purchase Planner', icon: <ShoppingCart size={20} /> },
 ];
 
@@ -35,7 +37,7 @@ const bottomNavItems: NavItem[] = [
   { page: 'settings', label: 'Settings', icon: <Settings size={20} /> },
 ];
 
-export default function Layout({ currentPage, onNavigate, pageTitle, children }: LayoutProps) {
+export default function Layout({ currentPage, onNavigate, pageTitle, children, dueReminderCount = 0 }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, logout } = useAuth();
 
@@ -50,6 +52,7 @@ export default function Layout({ currentPage, onNavigate, pageTitle, children }:
 
   const renderNavButton = (item: NavItem) => {
     const isActive = currentPage === item.page;
+    const showBadge = item.page === 'reminders' && dueReminderCount > 0;
     return (
       <button
         key={item.page}
@@ -64,7 +67,14 @@ export default function Layout({ currentPage, onNavigate, pageTitle, children }:
           }
         `}
       >
-        <span className={isActive ? 'text-white' : ''}>{item.icon}</span>
+        <span className={`relative ${isActive ? 'text-white' : ''}`}>
+          {item.icon}
+          {showBadge && (
+            <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-danger text-[10px] font-bold text-white px-1">
+              {dueReminderCount > 99 ? '99+' : dueReminderCount}
+            </span>
+          )}
+        </span>
         {item.label}
       </button>
     );

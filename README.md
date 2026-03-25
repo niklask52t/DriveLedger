@@ -217,6 +217,7 @@ Copy `.env.example` to `.env` and configure the following variables:
 | `SMTP_USER` | -- | SMTP username |
 | `SMTP_PASS` | -- | SMTP password or app-specific password |
 | `SMTP_FROM` | -- | Sender email address (e.g., `DriveLedger <noreply@driveledger.app>`) |
+| `EMAIL_ENABLED` | `false` | Toggle email features. When `false`: registration skips email verification, forgot password requires admin token, reminders don't send emails. When `true`: full email functionality. |
 | `FRONTEND_URL` | `http://localhost:5173` | Frontend URL (used for CORS whitelist and email links) |
 | `ADMIN_EMAIL` | `admin@driveledger.app` | Initial admin email address |
 | `ADMIN_USERNAME` | `admin` | Initial admin username |
@@ -373,6 +374,24 @@ All endpoints below require authentication unless noted otherwise.
 |--------|----------|------|-------------|
 | GET | `/api/data/export` | Yes | Export all user data as JSON |
 | POST | `/api/data/import` | Yes | Import user data from JSON |
+
+#### Reminders (`/api/reminders`)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/reminders` | Yes | List all reminders (?active=true, ?type=xxx) |
+| GET | `/api/reminders/due` | Yes | Get due reminders (remind_at <= now) |
+| GET | `/api/reminders/:id` | Yes | Get single reminder |
+| POST | `/api/reminders` | Yes | Create reminder |
+| PUT | `/api/reminders/:id` | Yes | Update reminder |
+| DELETE | `/api/reminders/:id` | Yes | Delete reminder |
+| POST | `/api/reminders/:id/snooze` | Yes | Snooze reminder to new date |
+
+#### Config (`/api/config`)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/config` | No | Server configuration (emailEnabled) |
 
 ### Example API Calls
 

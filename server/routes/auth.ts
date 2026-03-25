@@ -11,8 +11,10 @@ import {
   generateSecureToken,
 } from '../auth';
 import { isValidEmail, isValidPassword, toCamelCase } from '../utils';
+import { isEmailEnabled, sendRegistrationEmail, sendVerificationEmail, sendPasswordResetEmail } from '../email';
 
 const router = Router();
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 // POST /register
 router.post('/register', async (req: Request, res: Response) => {
@@ -58,14 +60,31 @@ router.post('/register', async (req: Request, res: Response) => {
     const userId = uuid();
     const now = new Date().toISOString();
 
+    const emailEnabled = isEmailEnabled();
+    const emailVerified = emailEnabled ? 0 : 1;
+    let verificationToken = '';
+    let verificationExpires = '';
+
+    if (emailEnabled) {
+      verificationToken = generateSecureToken();
+      verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
+    }
+
     db.prepare(
-      'INSERT INTO users (id, email, username, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(userId, email, username, passwordHash, now, now);
+      'INSERT INTO users (id, email, username, password_hash, email_verified, email_verification_token, email_verification_expires, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(userId, email, username, passwordHash, emailVerified, verificationToken, verificationExpires, now, now);
 
     // Mark registration token as used
     db.prepare(
       'UPDATE registration_tokens SET used = 1, used_by = ? WHERE id = ?'
     ).run(userId, tokenRow.id);
+
+    // Send emails
+    if (emailEnabled) {
+      const verifyUrl = `${FRONTEND_URL}/verify-email`;
+      await sendVerificationEmail(email, verificationToken, verifyUrl);
+    }
+    await sendRegistrationEmail(email, username);
 
     // Generate tokens
     const accessToken = generateAccessToken(userId, email);
@@ -79,16 +98,13 @@ router.post('/register', async (req: Request, res: Response) => {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    // TODO: Send welcome email once email service is configured
-    // await sendWelcomeEmail(email, username);
-
     return res.status(201).json({
       user: {
         id: userId,
         email,
         username,
         isAdmin: false,
-        emailVerified: false,
+        emailVerified: !emailEnabled,
         createdAt: now,
       },
       accessToken,
@@ -198,12 +214,19 @@ router.post('/logout', (_req: Request, res: Response) => {
 });
 
 // POST /forgot-password
-router.post('/forgot-password', (req: Request, res: Response) => {
+router.post('/forgot-password', async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
 
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
+    }
+
+    if (!isEmailEnabled()) {
+      return res.status(200).json({
+        message: 'Email is not enabled. Contact your admin for a password reset token.',
+        emailDisabled: true,
+      });
     }
 
     // Always return success to not leak whether email exists
@@ -218,8 +241,8 @@ router.post('/forgot-password', (req: Request, res: Response) => {
         'INSERT INTO password_resets (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
       ).run(id, user.id, resetToken, expiresAt);
 
-      // TODO: Send reset email once email service is configured
-      // await sendPasswordResetEmail(email, resetToken);
+      const resetUrl = `${FRONTEND_URL}/reset-password`;
+      await sendPasswordResetEmail(email, resetToken, resetUrl);
       console.log(`[AUTH] Password reset token generated for ${email}`);
     }
 
@@ -270,6 +293,69 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     return res.status(200).json({ message: 'Password reset successfully' });
   } catch (err: any) {
     console.error('[AUTH] Reset password error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /verify-email
+router.post('/verify-email', (req: Request, res: Response) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Verification token is required' });
+    }
+
+    const user = db.prepare(
+      "SELECT id FROM users WHERE email_verification_token = ? AND email_verification_expires > datetime('now')"
+    ).get(token) as any;
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired verification token' });
+    }
+
+    db.prepare(
+      "UPDATE users SET email_verified = 1, email_verification_token = '', email_verification_expires = '', updated_at = datetime('now') WHERE id = ?"
+    ).run(user.id);
+
+    return res.status(200).json({ message: 'Email verified successfully' });
+  } catch (err: any) {
+    console.error('[AUTH] Verify email error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /resend-verification
+router.post('/resend-verification', combinedAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    if (!isEmailEnabled()) {
+      return res.status(400).json({ error: 'Email is not enabled' });
+    }
+
+    const userId = (req as any).user.id;
+    const user = db.prepare('SELECT id, email, email_verified FROM users WHERE id = ?').get(userId) as any;
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.email_verified) {
+      return res.status(400).json({ error: 'Email is already verified' });
+    }
+
+    const verificationToken = generateSecureToken();
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    db.prepare(
+      "UPDATE users SET email_verification_token = ?, email_verification_expires = ?, updated_at = datetime('now') WHERE id = ?"
+    ).run(verificationToken, verificationExpires, userId);
+
+    const verifyUrl = `${FRONTEND_URL}/verify-email`;
+    await sendVerificationEmail(user.email, verificationToken, verifyUrl);
+
+    return res.status(200).json({ message: 'Verification email sent' });
+  } catch (err: any) {
+    console.error('[AUTH] Resend verification error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -344,6 +430,7 @@ router.delete('/account', combinedAuthMiddleware, (req: Request, res: Response) 
     const userId = (req as any).user.id;
 
     const deleteAll = db.transaction(() => {
+      db.prepare('DELETE FROM reminders WHERE user_id = ?').run(userId);
       db.prepare('DELETE FROM savings_transactions WHERE user_id = ?').run(userId);
       db.prepare('DELETE FROM savings_goals WHERE user_id = ?').run(userId);
       db.prepare('DELETE FROM repairs WHERE user_id = ?').run(userId);

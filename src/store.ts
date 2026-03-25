@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { AppState } from './types';
+import type { AppState, Reminder } from './types';
 
 export async function loadState(): Promise<AppState> {
   // First load everything that's independent
@@ -30,6 +30,14 @@ export function emptyState(): AppState {
     plannedPurchases: [],
     persons: [],
   };
+}
+
+export async function loadReminders(): Promise<Reminder[]> {
+  return api.getReminders();
+}
+
+export async function loadDueReminders(): Promise<Reminder[]> {
+  return api.getDueReminders();
 }
 
 export function exportData(state: AppState): string {

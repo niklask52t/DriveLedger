@@ -25,6 +25,10 @@ if (isSmtpConfigured) {
   console.log('[EMAIL] SMTP not configured, emails will be logged to console');
 }
 
+export function isEmailEnabled(): boolean {
+  return process.env.EMAIL_ENABLED === 'true';
+}
+
 function wrapHtml(title: string, content: string): string {
   return `
 <!DOCTYPE html>
@@ -80,6 +84,10 @@ async function sendMail(to: string, subject: string, html: string): Promise<void
 }
 
 export async function sendRegistrationEmail(to: string, username: string): Promise<void> {
+  if (!isEmailEnabled()) {
+    console.log(`[EMAIL] Email disabled, skipping registration email to ${to}`);
+    return;
+  }
   const subject = 'Welcome to DriveLedger!';
   const html = wrapHtml(subject, `
     <h2>Welcome, ${username}!</h2>
@@ -93,6 +101,10 @@ export async function sendRegistrationEmail(to: string, username: string): Promi
 }
 
 export async function sendPasswordResetEmail(to: string, resetToken: string, resetUrl: string): Promise<void> {
+  if (!isEmailEnabled()) {
+    console.log(`[EMAIL] Email disabled, skipping password reset email to ${to}`);
+    return;
+  }
   const subject = 'Reset Your DriveLedger Password';
   const fullResetUrl = `${resetUrl}?token=${resetToken}`;
   const html = wrapHtml(subject, `
@@ -109,6 +121,10 @@ export async function sendPasswordResetEmail(to: string, resetToken: string, res
 }
 
 export async function sendApiTokenCreatedEmail(to: string, tokenName: string): Promise<void> {
+  if (!isEmailEnabled()) {
+    console.log(`[EMAIL] Email disabled, skipping API token created email to ${to}`);
+    return;
+  }
   const subject = 'New API Token Created — DriveLedger';
   const html = wrapHtml(subject, `
     <h2>New API Token Created</h2>
@@ -117,6 +133,42 @@ export async function sendApiTokenCreatedEmail(to: string, tokenName: string): P
       <strong>${tokenName}</strong>
     </p>
     <p>If you did not create this token, please log in to your account immediately and revoke it.</p>
+    <p><strong>The DriveLedger Team</strong></p>
+  `);
+  await sendMail(to, subject, html);
+}
+
+export async function sendVerificationEmail(to: string, token: string, verifyUrl: string): Promise<void> {
+  if (!isEmailEnabled()) {
+    console.log(`[EMAIL] Email disabled, skipping verification email to ${to}`);
+    return;
+  }
+  const subject = 'Verify Your Email — DriveLedger';
+  const fullVerifyUrl = `${verifyUrl}?token=${token}`;
+  const html = wrapHtml(subject, `
+    <h2>Verify Your Email</h2>
+    <p>Thanks for registering with DriveLedger! Please verify your email address by clicking the button below.</p>
+    <p style="text-align: center;">
+      <a href="${fullVerifyUrl}" class="button">Verify Email</a>
+    </p>
+    <p style="font-size: 14px; color: #666;">This link expires in 24 hours.</p>
+    <p style="font-size: 12px; color: #999; word-break: break-all;">Direct link: ${fullVerifyUrl}</p>
+  `);
+  await sendMail(to, subject, html);
+}
+
+export async function sendReminderEmail(to: string, reminderTitle: string, reminderBody: string, entityType: string): Promise<void> {
+  if (!isEmailEnabled()) {
+    console.log(`[EMAIL] Email disabled, skipping reminder email to ${to}`);
+    return;
+  }
+  const subject = `Reminder: ${reminderTitle} — DriveLedger`;
+  const entityLabel = entityType ? `<p style="font-size: 13px; color: #888;">Related to: <strong>${entityType}</strong></p>` : '';
+  const html = wrapHtml(subject, `
+    <h2>${reminderTitle}</h2>
+    ${entityLabel}
+    <p>${reminderBody || 'This is a reminder you set up in DriveLedger.'}</p>
+    <p style="margin-top: 30px; font-size: 14px; color: #666;">Log in to DriveLedger to view or manage your reminders.</p>
     <p><strong>The DriveLedger Team</strong></p>
   `);
   await sendMail(to, subject, html);
