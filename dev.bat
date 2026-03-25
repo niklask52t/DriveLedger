@@ -17,17 +17,15 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:: Check if node_modules exists
-if not exist "node_modules\" (
-    echo [INFO] Installing dependencies...
-    call npm install
-    if %errorlevel% neq 0 (
-        echo [ERROR] Failed to install dependencies.
-        pause
-        exit /b 1
-    )
-    echo.
+:: Always install/update dependencies
+echo [INFO] Installing dependencies...
+call npm install
+if %errorlevel% neq 0 (
+    echo [ERROR] Failed to install dependencies.
+    pause
+    exit /b 1
 )
+echo.
 
 :: Check if .env exists
 if not exist ".env" (
