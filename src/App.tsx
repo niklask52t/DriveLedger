@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Loader2, Gauge } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import type { Page, AppState } from './types';
 import { loadState, emptyState } from './store';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -84,9 +84,7 @@ function AppContent() {
   if (authLoading) {
     return (
       <div className="min-h-screen bg-dark-950 flex flex-col items-center justify-center gap-4">
-        <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-lg shadow-primary-600/30">
-          <Gauge size={32} className="text-white" />
-        </div>
+        <img src="/logo.png" alt="DriveLedger" className="w-20 h-20 rounded-2xl shadow-lg shadow-primary-600/30 object-cover" />
         <Loader2 size={28} className="animate-spin text-primary-400" />
         <p className="text-dark-400 text-sm">Loading DriveLedger...</p>
       </div>

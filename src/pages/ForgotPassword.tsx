@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Gauge, ArrowLeft, Mail, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Mail, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { api } from '../api';
 import { ApiError } from '../api';
 import type { Page } from '../types';
@@ -49,9 +49,7 @@ export default function ForgotPassword({ onNavigate }: ForgotPasswordProps) {
       <div className="w-full max-w-md relative z-10">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-lg shadow-primary-600/30 mb-4">
-            <Gauge size={32} className="text-white" />
-          </div>
+          <img src="/logo.png" alt="DriveLedger" className="w-20 h-20 mx-auto rounded-2xl shadow-lg shadow-primary-600/30 mb-4 object-cover" />
           <h1 className="text-3xl font-bold text-dark-50 tracking-tight">DriveLedger</h1>
         </div>
 

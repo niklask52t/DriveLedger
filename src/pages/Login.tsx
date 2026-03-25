@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Gauge, Eye, EyeOff, LogIn, AlertCircle, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, LogIn, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { ApiError } from '../api';
 import type { Page } from '../types';
@@ -57,9 +57,7 @@ export default function Login({ onNavigate }: LoginProps) {
       <div className="w-full max-w-md relative z-10">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-lg shadow-primary-600/30 mb-4">
-            <Gauge size={32} className="text-white" />
-          </div>
+          <img src="/logo.png" alt="DriveLedger" className="w-20 h-20 mx-auto rounded-2xl shadow-lg shadow-primary-600/30 mb-4 object-cover" />
           <h1 className="text-3xl font-bold text-dark-50 tracking-tight">DriveLedger</h1>
           <p className="text-dark-400 mt-1">Your personal vehicle finance manager</p>
         </div>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   LayoutDashboard, Car, DollarSign, CreditCard, PiggyBank,
-  Wrench, ShoppingCart, Menu, X, Gauge, Settings, BookOpen,
+  Wrench, ShoppingCart, Menu, X, Settings, BookOpen,
   LogOut, User
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -91,9 +91,7 @@ export default function Layout({ currentPage, onNavigate, pageTitle, children }:
       >
         {/* Logo area */}
         <div className="flex h-16 items-center gap-3 px-5 border-b border-dark-800">
-          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary-600/20">
-            <Gauge size={22} className="text-primary-400" />
-          </div>
+          <img src="/logo.png" alt="DriveLedger" className="w-9 h-9 rounded-lg object-cover" />
           <span className="text-lg font-bold tracking-tight text-dark-50">
             DriveLedger
           </span>
