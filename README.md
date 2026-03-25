@@ -82,6 +82,9 @@ DriveLedger is a self-hosted web application for tracking every financial aspect
 
 - Node.js 22+ (LTS)
 - npm 10+
+- Docker Desktop (for MariaDB database)
+  - Windows: `winget install Docker.DockerDesktop`
+  - Linux: [Install Docker Engine](https://docs.docker.com/engine/install/)
 
 ### Windows Development (dev.bat)
 
