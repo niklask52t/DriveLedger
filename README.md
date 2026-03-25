@@ -1,17 +1,17 @@
 # DriveLedger
 
-**Your complete vehicle finance management platform.**
+> Your complete vehicle finance management platform.
 
-DriveLedger is a self-hosted web application for tracking all financial aspects of vehicle ownership. Manage multiple vehicles, monitor costs, track loans and savings goals, log repairs, and plan future purchases -- all from a single, responsive dashboard.
+DriveLedger is a self-hosted web application for tracking every financial aspect of vehicle ownership. Manage multiple vehicles, monitor recurring and one-time costs, track loans and savings goals, log repairs, and plan future purchases -- all from a single, responsive dashboard built for desktop and mobile.
 
 ---
 
 ## Features
 
 ### Vehicle Management
-- Track multiple owned vehicles with detailed specifications (brand, model, variant, fuel type, horsepower, mileage, HSN/TSN, and more)
+- Track multiple owned vehicles with detailed specifications (brand, model, variant, fuel type, horsepower, mileage, HSN/TSN, license plate, and more)
 - Plan future purchases with financing estimates and mobile.de integration
-- Convert planned purchases into owned vehicles
+- Convert planned purchases into owned vehicles seamlessly
 - Side-by-side vehicle comparison table with best/worst value highlighting
 
 ### Cost Tracking
@@ -24,7 +24,7 @@ DriveLedger is a self-hosted web application for tracking all financial aspects 
 - Full loan tracking with interest rate, duration, and monthly payment
 - Amortization schedule generation
 - Interactive loan payoff progress visualization
-- Additional savings/overpayment tracking
+- Additional savings and overpayment tracking
 
 ### Savings Goals
 - Create savings goals tied to specific vehicles
@@ -42,6 +42,7 @@ DriveLedger is a self-hosted web application for tracking all financial aspects 
 - Built-in financing calculator with adjustable parameters (down payment, term, interest rate)
 - mobile.de link integration for listing references
 - Pros/cons lists and personal ratings
+- One-click conversion from planned purchase to owned vehicle
 
 ### Dashboard
 - Cost breakdown by category (pie chart)
@@ -53,24 +54,25 @@ DriveLedger is a self-hosted web application for tracking all financial aspects 
 
 ### Platform
 - Multi-user system with invite-only registration
-- Full REST API with token-based authentication
+- Full REST API with JWT and API key authentication
 - In-app documentation wiki
-- Data export/import (JSON)
+- Data export and import (JSON)
 - Dark theme UI with gradient accents
 - Fully responsive design (mobile, tablet, desktop)
+- Person management for cost splitting
 
 ---
 
 ## Tech Stack
 
-| Layer        | Technology                                                    |
-|--------------|---------------------------------------------------------------|
-| **Frontend** | React 19, TypeScript, Tailwind CSS 4, Recharts, Lucide Icons |
-| **Backend**  | Node.js, Express 5, TypeScript                                |
-| **Database** | SQLite (better-sqlite3, WAL mode)                             |
-| **Auth**     | JWT (access + refresh tokens), bcrypt password hashing        |
-| **Email**    | Nodemailer (configurable SMTP)                                |
-| **Build**    | Vite 8, tsx, concurrently                                     |
+| Layer        | Technology                                                          |
+|--------------|---------------------------------------------------------------------|
+| **Frontend** | React 19.2, TypeScript 6.0, Tailwind CSS 4.2, Vite 8.0, Recharts 3.8, Lucide Icons |
+| **Backend**  | Node.js 22, Express 5.2, TypeScript 6.0                            |
+| **Database** | SQLite (better-sqlite3, WAL mode)                                   |
+| **Auth**     | JWT (access + refresh tokens), bcrypt password hashing              |
+| **Email**    | Nodemailer (configurable SMTP)                                      |
+| **DevOps**   | Docker, Docker Compose                                              |
 
 ---
 
@@ -78,43 +80,125 @@ DriveLedger is a self-hosted web application for tracking all financial aspects 
 
 ### Prerequisites
 
-- Node.js 18+
-- npm 9+
+- Node.js 22+ (LTS)
+- npm 10+
 
-### Installation
+### Windows Development (dev.bat)
+
+The fastest way to get started on Windows:
+
+```
+1. Clone the repository
+2. Double-click dev.bat
+3. That's it! Opens http://localhost:5173
+```
+
+`dev.bat` handles the entire setup automatically: it checks that Node.js is installed, runs `npm install` if `node_modules` is missing, creates `.env` from `.env.example` if no `.env` exists, then starts both the frontend and backend dev servers concurrently.
+
+### Manual Development
 
 ```bash
-git clone https://github.com/niklasrosseck/DriveLedger.git
+git clone https://github.com/niklask52t/DriveLedger.git
 cd DriveLedger
 npm install
 cp .env.example .env
-# Edit .env with your settings (see Configuration section below)
+npm run dev
 ```
 
-### Development
+### npm Scripts
 
-```bash
-npm run dev        # Start frontend + backend concurrently
-npm run dev:server # Start backend only
-npm run dev:client # Start frontend only
-```
+| Script             | Description                                                   |
+|--------------------|---------------------------------------------------------------|
+| `npm run dev`      | Starts frontend (port 5173) + backend (port 3001) concurrently |
+| `npm run dev:server` | Backend only                                                |
+| `npm run dev:client` | Frontend only                                               |
+| `npm run build`    | Build for production                                          |
 
 The frontend runs on `http://localhost:5173` and the API server on `http://localhost:3001` by default.
 
-### Production Build
-
-```bash
-npm run build
-npm start
-```
-
 ### First Login
 
-On first startup, an admin user is automatically created using the credentials defined in your `.env` file. Use this account to:
+On first startup, an admin user is automatically created from the credentials defined in your `.env` file.
 
-1. Log in to the application.
-2. Navigate to Settings > Admin Panel.
-3. Generate registration tokens to invite other users.
+Default credentials: `admin@driveledger.app` / `Admin123!`
+
+To invite additional users:
+
+1. Log in with the admin account.
+2. Navigate to **Settings > Admin Panel**.
+3. Generate registration tokens and share them with users you want to invite.
+
+---
+
+## Production Deployment (Docker)
+
+### Prerequisites
+
+- Docker 24+
+- Docker Compose v2+
+- Debian 13 (Trixie) or any Linux distribution with Docker support
+
+### Setup
+
+```bash
+git clone https://github.com/niklask52t/DriveLedger.git
+cd DriveLedger
+cp .env.example .env
+# Edit .env with production values (CHANGE JWT SECRETS!)
+nano .env
+docker compose up -d
+```
+
+### Docker Details
+
+- **Multi-stage build**: Separate builder and runtime stages for minimal image size
+- **Non-root execution**: Runs as the `driveledger` user inside the container
+- **Persistent storage**: SQLite data persisted in the Docker volume `driveledger-data`
+- **Health checks**: Container health verified every 30 seconds
+- **Auto-restart**: Automatically restarts on failure
+- **Single port**: Exposes port 3001 (configurable via the `PORT` environment variable)
+- **Unified serving**: In production, Express serves the built frontend and API on the same port
+
+### Reverse Proxy (Nginx)
+
+To expose DriveLedger behind a reverse proxy, use a configuration like the following:
+
+```nginx
+server {
+    listen 80;
+    server_name driveledger.example.com;
+
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+For HTTPS, add an SSL termination block or use Certbot to automatically configure Let's Encrypt certificates.
+
+---
+
+## Update & Reset (update.sh)
+
+### Update
+
+```bash
+./update.sh update
+```
+
+Pulls the latest code from the repository, stops running containers, rebuilds the Docker image, and restarts the application. The database volume is preserved -- all your data remains intact.
+
+### Reset
+
+```bash
+./update.sh reset
+```
+
+**WARNING: This deletes ALL data!** You must type `YES DELETE EVERYTHING` to confirm. This command removes the Docker volume, rebuilds the image from scratch, and creates a fresh database with a new admin user from the credentials in your `.env` file.
 
 ---
 
@@ -122,58 +206,48 @@ On first startup, an admin user is automatically created using the credentials d
 
 Copy `.env.example` to `.env` and configure the following variables:
 
-### Server
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3001` | Server port |
+| `NODE_ENV` | `development` | Environment (`development` or `production`) |
+| `JWT_SECRET` | -- | Secret for signing JWT access tokens. **MUST change in production!** |
+| `JWT_REFRESH_SECRET` | -- | Secret for signing JWT refresh tokens. **MUST change in production!** |
+| `SMTP_HOST` | -- | SMTP server hostname (optional; if not configured, emails are logged to the console) |
+| `SMTP_PORT` | `587` | SMTP port |
+| `SMTP_USER` | -- | SMTP username |
+| `SMTP_PASS` | -- | SMTP password or app-specific password |
+| `SMTP_FROM` | -- | Sender email address (e.g., `DriveLedger <noreply@driveledger.app>`) |
+| `FRONTEND_URL` | `http://localhost:5173` | Frontend URL (used for CORS whitelist and email links) |
+| `ADMIN_EMAIL` | `admin@driveledger.app` | Initial admin email address |
+| `ADMIN_USERNAME` | `admin` | Initial admin username |
+| `ADMIN_PASSWORD` | `Admin123!` | Initial admin password |
 
-| Variable   | Description                                 | Default       |
-|------------|---------------------------------------------|---------------|
-| `PORT`     | Port the API server listens on              | `3001`        |
-| `NODE_ENV` | Environment (`development` or `production`) | `development` |
-
-### Authentication
-
-| Variable             | Description                                                          | Default |
-|----------------------|----------------------------------------------------------------------|---------|
-| `JWT_SECRET`         | Secret key for signing JWT access tokens. **Change in production.**  | --      |
-| `JWT_REFRESH_SECRET` | Secret key for signing JWT refresh tokens. **Change in production.** | --      |
-
-### Email (SMTP)
-
-If SMTP is not configured, emails are logged to the console instead.
-
-| Variable    | Description                            | Example                                 |
-|-------------|----------------------------------------|-----------------------------------------|
-| `SMTP_HOST` | SMTP server hostname                   | `smtp.gmail.com`                        |
-| `SMTP_PORT` | SMTP server port                       | `587`                                   |
-| `SMTP_USER` | SMTP username/email                    | `your-email@gmail.com`                  |
-| `SMTP_PASS` | SMTP password or app-specific password | --                                      |
-| `SMTP_FROM` | Sender address for outgoing emails     | `DriveLedger <noreply@driveledger.app>` |
-
-### Frontend
-
-| Variable       | Description                                          | Default                  |
-|----------------|------------------------------------------------------|--------------------------|
-| `FRONTEND_URL` | URL of the frontend (used for CORS and email links)  | `http://localhost:5173`  |
-
-### Initial Admin User
-
-These credentials are used to create the first admin account on initial startup (only when the database has no users).
-
-| Variable         | Description         | Default                  |
-|------------------|---------------------|--------------------------|
-| `ADMIN_EMAIL`    | Admin email address | `admin@driveledger.app`  |
-| `ADMIN_USERNAME` | Admin username      | `admin`                  |
-| `ADMIN_PASSWORD` | Admin password      | `ChangeMe123!`           |
+> The initial admin user is only created when the database contains no users (first startup).
 
 ---
 
 ## API Documentation
 
-### Authentication
+### Authentication Methods
 
 DriveLedger supports two authentication methods:
 
-- **Browser sessions**: JWT access token (15-minute expiry) paired with a refresh token (7-day expiry, stored as an httpOnly cookie). The refresh token is used to obtain new access tokens transparently.
-- **API tokens**: For programmatic access. Authenticate with the `Authorization: ApiKey <token>:<secret>` header. API tokens are generated from the Settings page.
+**Browser (JWT)**
+
+```
+POST /api/auth/login  -->  returns accessToken + sets httpOnly refreshToken cookie
+Authorization: Bearer <accessToken>
+```
+
+Access tokens expire after 15 minutes. The refresh token (stored as an httpOnly cookie with a 7-day expiry) is used to obtain new access tokens transparently.
+
+**Programmatic (API Key)**
+
+```
+Authorization: ApiKey <token>:<secret>
+```
+
+Create API keys in **Settings > API Tokens**. The token and secret are shown once at creation time. The secret is hashed and cannot be recovered.
 
 ### Health Check
 
@@ -183,194 +257,144 @@ GET /api/health
 
 Returns server status. No authentication required.
 
-```bash
-curl http://localhost:3001/api/health
-```
-
 ### Endpoints
 
 All endpoints below require authentication unless noted otherwise.
 
 #### Auth (`/api/auth`)
 
-| Method | Endpoint                     | Description                                            | Auth Required |
-|--------|------------------------------|--------------------------------------------------------|---------------|
-| POST   | `/api/auth/register`         | Register a new user (requires valid registration token)| No            |
-| POST   | `/api/auth/login`            | Log in and receive tokens                              | No            |
-| POST   | `/api/auth/refresh`          | Refresh the access token                               | Cookie        |
-| POST   | `/api/auth/logout`           | Log out and clear refresh cookie                       | No            |
-| POST   | `/api/auth/forgot-password`  | Request a password reset email                         | No            |
-| POST   | `/api/auth/reset-password`   | Reset password with token                              | No            |
-| GET    | `/api/auth/me`               | Get current user info                                  | Yes           |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/auth/register` | No | Register a new user (requires valid invite token) |
+| POST | `/api/auth/login` | No | Log in and receive access + refresh tokens |
+| POST | `/api/auth/refresh` | Cookie | Refresh the access token using the refresh cookie |
+| POST | `/api/auth/logout` | No | Log out and clear the refresh cookie |
+| POST | `/api/auth/forgot-password` | No | Request a password reset email |
+| POST | `/api/auth/reset-password` | No | Reset password with a reset token |
+| GET | `/api/auth/me` | Yes | Get current user info |
+| POST | `/api/auth/change-password` | Yes | Change the current user's password |
+| DELETE | `/api/auth/account` | Yes | Delete the current user's account and all data |
 
 #### Vehicles (`/api/vehicles`)
 
-| Method | Endpoint             | Description                    |
-|--------|----------------------|--------------------------------|
-| GET    | `/api/vehicles`      | List all vehicles for the user |
-| GET    | `/api/vehicles/:id`  | Get a single vehicle by ID     |
-| POST   | `/api/vehicles`      | Create a new vehicle           |
-| PUT    | `/api/vehicles/:id`  | Update a vehicle               |
-| DELETE | `/api/vehicles/:id`  | Delete a vehicle               |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/vehicles` | Yes | List all vehicles for the user |
+| GET | `/api/vehicles/:id` | Yes | Get a single vehicle by ID |
+| POST | `/api/vehicles` | Yes | Create a new vehicle |
+| PUT | `/api/vehicles/:id` | Yes | Update a vehicle |
+| DELETE | `/api/vehicles/:id` | Yes | Delete a vehicle and all associated data |
 
 #### Costs (`/api/costs`)
 
-| Method | Endpoint          | Description                     |
-|--------|-------------------|---------------------------------|
-| GET    | `/api/costs`      | List all costs for the user     |
-| GET    | `/api/costs/:id`  | Get a single cost by ID         |
-| POST   | `/api/costs`      | Create a new cost entry         |
-| PUT    | `/api/costs/:id`  | Update a cost entry             |
-| DELETE | `/api/costs/:id`  | Delete a cost entry             |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/costs` | Yes | List all costs for the user |
+| GET | `/api/costs/:id` | Yes | Get a single cost by ID |
+| POST | `/api/costs` | Yes | Create a new cost entry |
+| PUT | `/api/costs/:id` | Yes | Update a cost entry |
+| DELETE | `/api/costs/:id` | Yes | Delete a cost entry |
 
 #### Loans (`/api/loans`)
 
-| Method | Endpoint          | Description                     |
-|--------|-------------------|---------------------------------|
-| GET    | `/api/loans`      | List all loans for the user     |
-| GET    | `/api/loans/:id`  | Get a single loan by ID         |
-| POST   | `/api/loans`      | Create a new loan               |
-| PUT    | `/api/loans/:id`  | Update a loan                   |
-| DELETE | `/api/loans/:id`  | Delete a loan                   |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/loans` | Yes | List all loans for the user |
+| GET | `/api/loans/:id` | Yes | Get a single loan by ID |
+| POST | `/api/loans` | Yes | Create a new loan |
+| PUT | `/api/loans/:id` | Yes | Update a loan |
+| DELETE | `/api/loans/:id` | Yes | Delete a loan |
 
 #### Repairs (`/api/repairs`)
 
-| Method | Endpoint            | Description                       |
-|--------|---------------------|-----------------------------------|
-| GET    | `/api/repairs`      | List all repairs for the user     |
-| GET    | `/api/repairs/:id`  | Get a single repair by ID         |
-| POST   | `/api/repairs`      | Create a new repair entry         |
-| PUT    | `/api/repairs/:id`  | Update a repair entry             |
-| DELETE | `/api/repairs/:id`  | Delete a repair entry             |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/repairs` | Yes | List all repairs for the user |
+| GET | `/api/repairs/:id` | Yes | Get a single repair by ID |
+| POST | `/api/repairs` | Yes | Create a new repair entry |
+| PUT | `/api/repairs/:id` | Yes | Update a repair entry |
+| DELETE | `/api/repairs/:id` | Yes | Delete a repair entry |
 
 #### Savings (`/api/savings`)
 
-| Method | Endpoint                              | Description                              |
-|--------|---------------------------------------|------------------------------------------|
-| GET    | `/api/savings`                        | List all savings goals                   |
-| GET    | `/api/savings/:id`                    | Get a savings goal by ID                 |
-| POST   | `/api/savings`                        | Create a new savings goal                |
-| PUT    | `/api/savings/:id`                    | Update a savings goal                    |
-| DELETE | `/api/savings/:id`                    | Delete a savings goal                    |
-| GET    | `/api/savings/:id/transactions`       | List transactions for a savings goal     |
-| POST   | `/api/savings/:id/transactions`       | Add a transaction (deposit/withdrawal)   |
-| DELETE | `/api/savings/:id/transactions/:txId` | Delete a transaction                     |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/savings/goals` | Yes | List all savings goals |
+| GET | `/api/savings/goals/:id` | Yes | Get a savings goal by ID |
+| POST | `/api/savings/goals` | Yes | Create a new savings goal |
+| PUT | `/api/savings/goals/:id` | Yes | Update a savings goal |
+| DELETE | `/api/savings/goals/:id` | Yes | Delete a savings goal |
+| GET | `/api/savings/goals/:goalId/transactions` | Yes | List transactions for a savings goal |
+| POST | `/api/savings/goals/:goalId/transactions` | Yes | Add a transaction (deposit or withdrawal) |
+| DELETE | `/api/savings/transactions/:id` | Yes | Delete a transaction |
 
-#### Planned Purchases (`/api/purchases`)
+#### Purchases (`/api/purchases`)
 
-| Method | Endpoint              | Description                    |
-|--------|-----------------------|--------------------------------|
-| GET    | `/api/purchases`      | List all planned purchases     |
-| GET    | `/api/purchases/:id`  | Get a planned purchase by ID   |
-| POST   | `/api/purchases`      | Create a new planned purchase  |
-| PUT    | `/api/purchases/:id`  | Update a planned purchase      |
-| DELETE | `/api/purchases/:id`  | Delete a planned purchase      |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/purchases` | Yes | List all planned purchases |
+| GET | `/api/purchases/:id` | Yes | Get a planned purchase by ID |
+| POST | `/api/purchases` | Yes | Create a new planned purchase |
+| PUT | `/api/purchases/:id` | Yes | Update a planned purchase |
+| DELETE | `/api/purchases/:id` | Yes | Delete a planned purchase |
+| POST | `/api/purchases/:id/convert` | Yes | Convert a planned purchase into an owned vehicle |
 
 #### Persons (`/api/persons`)
 
-| Method | Endpoint            | Description                    |
-|--------|---------------------|--------------------------------|
-| GET    | `/api/persons`      | List all persons for the user  |
-| POST   | `/api/persons`      | Create a new person            |
-| PUT    | `/api/persons/:id`  | Update a person                |
-| DELETE | `/api/persons/:id`  | Delete a person                |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/persons` | Yes | List all persons for the user |
+| POST | `/api/persons` | Yes | Create a new person |
+| PUT | `/api/persons/:id` | Yes | Update a person |
+| DELETE | `/api/persons/:id` | Yes | Delete a person |
 
 #### API Tokens (`/api/api-tokens`)
 
-| Method | Endpoint              | Description                          |
-|--------|-----------------------|--------------------------------------|
-| GET    | `/api/api-tokens`     | List all API tokens for the user     |
-| POST   | `/api/api-tokens`     | Create a new API token               |
-| PUT    | `/api/api-tokens/:id` | Toggle or update an API token        |
-| DELETE | `/api/api-tokens/:id` | Revoke and delete an API token       |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/api-tokens` | Yes | List all API tokens for the user |
+| POST | `/api/api-tokens` | Yes | Create a new API token |
+| PATCH | `/api/api-tokens/:id` | Yes | Toggle or update an API token |
+| DELETE | `/api/api-tokens/:id` | Yes | Revoke and delete an API token |
 
 #### Admin (`/api/admin`)
 
-| Method | Endpoint                             | Description                      |
-|--------|--------------------------------------|----------------------------------|
-| GET    | `/api/admin/users`                   | List all users (admin only)      |
-| DELETE | `/api/admin/users/:id`               | Delete a user (admin only)       |
-| POST   | `/api/admin/registration-tokens`     | Generate a registration token    |
-| GET    | `/api/admin/registration-tokens`     | List all registration tokens     |
-| DELETE | `/api/admin/registration-tokens/:id` | Delete a registration token      |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/admin/users` | Admin | List all users |
+| DELETE | `/api/admin/users/:id` | Admin | Delete a user and all their data |
+| POST | `/api/admin/registration-tokens` | Admin | Generate a registration invite token |
+| GET | `/api/admin/registration-tokens` | Admin | List all registration tokens |
+| DELETE | `/api/admin/registration-tokens/:id` | Admin | Delete a registration token |
 
-### Example API Requests
+#### Data (`/api/data`)
 
-**Login:**
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/data/export` | Yes | Export all user data as JSON |
+| POST | `/api/data/import` | Yes | Import user data from JSON |
+
+### Example API Calls
 
 ```bash
+# Login
 curl -X POST http://localhost:3001/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "admin@driveledger.app", "password": "ChangeMe123!"}'
-```
+  -d '{"email":"admin@driveledger.app","password":"Admin123!"}'
 
-**List vehicles (with JWT):**
-
-```bash
+# List vehicles (JWT)
 curl http://localhost:3001/api/vehicles \
-  -H "Authorization: Bearer <access_token>"
-```
+  -H "Authorization: Bearer <token>"
 
-**List vehicles (with API token):**
-
-```bash
+# List vehicles (API Key)
 curl http://localhost:3001/api/vehicles \
-  -H "Authorization: ApiKey <token>:<secret>"
-```
+  -H "Authorization: ApiKey dl_abc123:your-secret"
 
-**Create a vehicle:**
-
-```bash
+# Create vehicle
 curl -X POST http://localhost:3001/api/vehicles \
-  -H "Authorization: Bearer <access_token>" \
+  -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{
-    "name": "Daily Driver",
-    "brand": "Volkswagen",
-    "model": "Golf",
-    "variant": "GTI",
-    "licensePlate": "B-AB 1234",
-    "purchasePrice": 25000,
-    "currentMileage": 45000,
-    "annualMileage": 15000,
-    "fuelType": "benzin",
-    "avgConsumption": 7.5,
-    "fuelPrice": 1.65,
-    "horsePower": 245,
-    "status": "owned"
-  }'
-```
-
-**Add a cost entry:**
-
-```bash
-curl -X POST http://localhost:3001/api/costs \
-  -H "Authorization: Bearer <access_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "vehicleId": "<vehicle_id>",
-    "name": "KFZ Insurance",
-    "category": "versicherung",
-    "amount": 89.50,
-    "frequency": "monatlich",
-    "paidBy": "Max",
-    "startDate": "2026-01-01"
-  }'
-```
-
-**Create a savings goal:**
-
-```bash
-curl -X POST http://localhost:3001/api/savings \
-  -H "Authorization: Bearer <access_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "vehicleId": "<vehicle_id>",
-    "name": "New Tires Fund",
-    "targetAmount": 800,
-    "monthlyContribution": 100,
-    "startDate": "2026-01-01"
-  }'
+  -d '{"name":"My Car","brand":"BMW","model":"320i","fuelType":"benzin"}'
 ```
 
 ---
@@ -379,19 +403,18 @@ curl -X POST http://localhost:3001/api/savings \
 
 DriveLedger implements multiple layers of security:
 
-| Measure                      | Details                                                                  |
-|------------------------------|--------------------------------------------------------------------------|
-| **Invite-only registration** | New users require a registration token generated by an admin             |
-| **JWT access tokens**        | Short-lived (15-minute expiry), used for request authorization           |
-| **Refresh tokens**           | Stored in httpOnly cookies (7-day expiry), not accessible to JavaScript  |
-| **Password hashing**         | bcrypt with 12 salt rounds                                               |
-| **API token storage**        | Token hashed with SHA-256, secret hashed with bcrypt; plaintext never stored |
-| **Rate limiting**            | 100 requests/minute general; 5 requests/minute on auth endpoints         |
-| **Security headers**         | Helmet.js for HTTP security headers (CSP, HSTS, X-Frame-Options, etc.)  |
-| **CORS protection**          | Restricted to configured frontend origin                                 |
-| **SQL injection prevention** | All queries use parameterized statements via better-sqlite3              |
-| **Input validation**         | Server-side validation on all endpoints                                  |
-| **Data isolation**           | All data queries are scoped to the authenticated user's ID               |
+- **JWT access tokens** -- Short-lived with 15-minute expiry for request authorization
+- **Refresh tokens** -- Stored in httpOnly cookies (7-day expiry), not accessible to JavaScript
+- **bcrypt password hashing** -- 12 salt rounds for all stored passwords
+- **Rate limiting** -- 100 requests/minute general; 5 requests/minute on authentication endpoints
+- **Helmet.js security headers** -- CSP, HSTS, X-Frame-Options, and other HTTP security headers
+- **CORS whitelist** -- Restricted to the configured frontend origin only
+- **Parameterized SQL queries** -- All queries use parameterized statements via better-sqlite3 (no SQL injection)
+- **API token security** -- Tokens hashed with SHA-256, secrets hashed with bcrypt; plaintext is never stored
+- **Per-user data isolation** -- All database queries are scoped to the authenticated user's ID
+- **Invite-only registration** -- New users require a registration token generated by an admin
+- **Non-root Docker user** -- Container runs as the unprivileged `driveledger` user
+- **Docker health checks** -- Container health verified every 30 seconds with automatic restart on failure
 
 ---
 
@@ -399,72 +422,60 @@ DriveLedger implements multiple layers of security:
 
 ```
 DriveLedger/
-├── server/                      # Backend (Express API)
-│   ├── index.ts                 # Server entry point, middleware setup, route mounting
-│   ├── db.ts                    # SQLite database initialization and connection
-│   ├── auth.ts                  # Password hashing, JWT signing/verification utilities
-│   ├── middleware.ts            # Auth middleware, rate limiters
-│   ├── email.ts                 # Email sending via Nodemailer
-│   ├── utils.ts                 # Shared utility functions
-│   └── routes/                  # Route handlers
-│       ├── auth.ts              # Authentication endpoints
-│       ├── vehicles.ts          # Vehicle CRUD
-│       ├── costs.ts             # Cost CRUD
-│       ├── loans.ts             # Loan CRUD
-│       ├── repairs.ts           # Repair CRUD
-│       ├── savings.ts           # Savings goals and transactions
-│       ├── purchases.ts         # Planned purchases CRUD
-│       ├── persons.ts           # Person CRUD
-│       ├── api-tokens.ts        # API token management
-│       └── admin.ts             # Admin endpoints (users, registration tokens)
-├── src/                         # Frontend (React)
-│   ├── main.tsx                 # React entry point
-│   ├── App.tsx                  # Root component and routing
-│   ├── types.ts                 # TypeScript type definitions
-│   ├── store.ts                 # State management
-│   ├── utils.ts                 # Frontend utility functions
-│   ├── contexts/                # React contexts (auth, theme, etc.)
-│   ├── components/              # Shared UI components
-│   │   ├── Layout.tsx           # App shell layout
-│   │   └── Modal.tsx            # Reusable modal component
-│   └── pages/                   # Page components
-│       ├── Dashboard.tsx        # Main dashboard with charts
-│       ├── Vehicles.tsx         # Vehicle list and management
-│       ├── VehicleDetail.tsx    # Single vehicle detail view
-│       ├── Costs.tsx            # Cost tracking page
-│       ├── Loans.tsx            # Loan management page
-│       ├── Savings.tsx          # Savings goals page
-│       ├── Repairs.tsx          # Repair history page
-│       └── PurchasePlanner.tsx  # Purchase planning and comparison
-├── .env.example                 # Environment variable template
-├── package.json                 # Dependencies and scripts
-├── tsconfig.json                # TypeScript configuration
-├── vite.config.ts               # Vite build configuration
-├── CHANGELOG.md                 # Version history
-└── README.md                    # This file
+├── dev.bat                # Windows development launcher
+├── update.sh              # Linux update/reset tool
+├── docker-compose.yml     # Production Docker setup
+├── Dockerfile             # Multi-stage Docker build
+├── .env.example           # Environment template
+├── CHANGELOG.md           # Version history
+├── README.md              # This file
+├── server/                # Backend (Express API)
+│   ├── index.ts           # Server entry point
+│   ├── db.ts              # SQLite database setup
+│   ├── auth.ts            # JWT & password utilities
+│   ├── email.ts           # Email service (Nodemailer)
+│   ├── middleware.ts       # Auth & rate limiting middleware
+│   ├── utils.ts           # Shared helpers
+│   └── routes/            # API route handlers
+│       ├── auth.ts        # Registration, login, password reset
+│       ├── vehicles.ts    # Vehicle CRUD
+│       ├── costs.ts       # Cost CRUD
+│       ├── loans.ts       # Loan CRUD
+│       ├── repairs.ts     # Repair CRUD
+│       ├── savings.ts     # Savings goals & transactions
+│       ├── purchases.ts   # Planned purchases
+│       ├── persons.ts     # Person management
+│       ├── api-tokens.ts  # API token management
+│       ├── admin.ts       # Admin functions
+│       └── data.ts        # Export/import
+├── src/                   # Frontend (React)
+│   ├── App.tsx            # Main app with auth routing
+│   ├── api.ts             # API client
+│   ├── types.ts           # TypeScript interfaces
+│   ├── store.ts           # State management
+│   ├── utils.ts           # Utility functions
+│   ├── contexts/          # React contexts
+│   │   └── AuthContext.tsx
+│   ├── components/        # Reusable components
+│   │   ├── Layout.tsx     # Sidebar + header layout
+│   │   └── Modal.tsx      # Modal dialog
+│   └── pages/             # Page components
+│       ├── Dashboard.tsx
+│       ├── Vehicles.tsx
+│       ├── VehicleDetail.tsx
+│       ├── Costs.tsx
+│       ├── Loans.tsx
+│       ├── Savings.tsx
+│       ├── Repairs.tsx
+│       ├── PurchasePlanner.tsx
+│       ├── Login.tsx
+│       ├── Register.tsx
+│       ├── ForgotPassword.tsx
+│       ├── ResetPassword.tsx
+│       ├── Settings.tsx
+│       └── Wiki.tsx
+└── data/                  # SQLite database (gitignored)
 ```
-
----
-
-## Contributing
-
-Contributions are welcome. To get started:
-
-1. Fork the repository.
-2. Create a feature branch: `git checkout -b feature/your-feature-name`
-3. Make your changes, ensuring:
-   - TypeScript strict mode passes with no errors.
-   - All existing functionality continues to work.
-   - New endpoints include input validation.
-   - Code follows the existing style and conventions.
-4. Commit with a descriptive message.
-5. Open a pull request against `main` with a clear description of changes.
-
-### Development Tips
-
-- The SQLite database file is created automatically on first server start.
-- If SMTP is not configured, all emails are printed to the server console -- useful during development.
-- The frontend proxies API requests to the backend via Vite's dev server proxy.
 
 ---
 

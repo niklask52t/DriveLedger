@@ -1,5 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -56,6 +58,16 @@ app.use('/api/data', dataRoutes);
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Serve built frontend in production
+if (process.env.NODE_ENV === 'production') {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const distPath = path.join(__dirname, '..', 'dist');
+  app.use(express.static(distPath));
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
 
 // Global error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

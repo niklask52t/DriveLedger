@@ -6,6 +6,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ---
 
+## [1.1.0] - 2026-03-25
+
+### Changed
+- Upgraded to TypeScript 6.0.2 (from 5.9.3)
+- Upgraded to Vite 8.0.2
+- Upgraded to @types/node 25.5.0
+- Upgraded to @types/bcryptjs 3.0.0
+- Removed ESLint (incompatible with TypeScript 6.0 — using TypeScript's own strict checking)
+- Removed eslint-plugin-react-hooks, eslint-plugin-react-refresh, typescript-eslint, @eslint/js, globals
+
+### Added
+- `dev.bat` - One-click Windows development launcher
+  - Auto-checks Node.js installation
+  - Auto-installs dependencies if missing
+  - Auto-creates .env from template
+  - Starts backend + frontend concurrently
+- Docker production deployment
+  - Multi-stage Dockerfile (build + runtime)
+  - Non-root user for security
+  - Docker Compose with persistent volume
+  - Health checks
+  - Single-port deployment (Express serves frontend + API)
+- `update.sh` - Linux update/reset management tool
+  - `update` command: pulls code, rebuilds, restarts (preserves data)
+  - `reset` command: full wipe with safety confirmation
+- Nginx reverse proxy configuration example
+- Production static file serving from Express
+- Password change endpoint (POST /api/auth/change-password)
+- Account deletion endpoint (DELETE /api/auth/account)
+- Data export/import endpoints (GET/POST /api/data/export, /api/data/import)
+- Comprehensive README documentation
+  - Windows dev setup (dev.bat)
+  - Docker production deployment
+  - update.sh usage
+  - Full API endpoint reference tables
+  - Example curl commands
+  - Nginx reverse proxy config
+  - Complete .env variable reference
+  - Security measures documentation
+  - Project structure tree
+
+### Fixed
+- API client URLs now correctly match server routes for savings and purchases
+- getMe() endpoint response unwrapping fixed
+
+---
+
 ## [1.0.0] - 2026-03-25
 
 ### Added

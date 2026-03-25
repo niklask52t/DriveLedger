@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   ChevronDown, ChevronRight, BookOpen, Car, DollarSign,
   CreditCard, PiggyBank, Wrench, ShoppingCart, Code, Shield,
-  HelpCircle, Gauge
+  HelpCircle, Gauge, Server
 } from 'lucide-react';
 
 interface Section {
@@ -76,6 +76,13 @@ export default function Wiki() {
           </UL>
           <H3>Dashboard</H3>
           <P>The Dashboard gives you an overview of all your vehicles, total monthly and yearly costs broken down by category and person, loan progress, and savings status. It is your central hub for understanding your vehicle finances at a glance.</P>
+          <H3>Quick Setup Options</H3>
+          <UL>
+            <li><strong className="text-dark-100">Windows (dev.bat)</strong> - Double-click <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">dev.bat</code> to auto-install dependencies, create the .env file, and launch both backend and frontend in one step.</li>
+            <li><strong className="text-dark-100">Docker (Production)</strong> - Use <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">docker compose up -d</code> for a single-command production deployment with persistent data and health checks.</li>
+            <li><strong className="text-dark-100">update.sh (Maintenance)</strong> - On Linux servers, use <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">./update.sh update</code> to pull the latest code and rebuild, or <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">./update.sh reset</code> for a full wipe.</li>
+          </UL>
+          <P>See the <strong className="text-dark-100">Deployment</strong> section below for detailed instructions on each method.</P>
         </>
       ),
     },
@@ -211,25 +218,122 @@ export default function Wiki() {
       ),
     },
     {
+      id: 'deployment',
+      title: 'Deployment',
+      icon: <Server size={20} />,
+      content: (
+        <>
+          <P>DriveLedger can be run in development mode on Windows or deployed to production with Docker.</P>
+
+          <H3>Windows Development (dev.bat)</H3>
+          <P>The included <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">dev.bat</code> script is the easiest way to get started on Windows:</P>
+          <UL>
+            <li>Double-click <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">dev.bat</code> or run it from a terminal</li>
+            <li>It checks that Node.js is installed</li>
+            <li>Automatically runs <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">npm install</code> if <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">node_modules</code> is missing</li>
+            <li>Creates <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">.env</code> from <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">.env.example</code> if it does not exist</li>
+            <li>Starts both the backend (Express) and frontend (Vite) concurrently</li>
+          </UL>
+          <CodeBlock>{`# Just double-click dev.bat, or from a terminal:
+dev.bat`}</CodeBlock>
+
+          <H3>Docker Production Setup</H3>
+          <P>For production, DriveLedger ships with a multi-stage Dockerfile and Docker Compose configuration:</P>
+          <UL>
+            <li>Multi-stage build keeps the final image small (only runtime dependencies)</li>
+            <li>Runs as a non-root user for security</li>
+            <li>Persistent volume for the SQLite database</li>
+            <li>Built-in health checks</li>
+            <li>Single-port deployment: Express serves both the frontend and API</li>
+          </UL>
+          <CodeBlock>{`# Start in production mode:
+docker compose up -d
+
+# View logs:
+docker compose logs -f
+
+# Stop:
+docker compose down`}</CodeBlock>
+
+          <H3>Nginx Reverse Proxy</H3>
+          <P>For HTTPS and domain-based access, place Nginx in front of the Docker container:</P>
+          <CodeBlock>{`server {
+    listen 443 ssl;
+    server_name drive.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/drive.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/drive.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}`}</CodeBlock>
+
+          <H3>update.sh (Linux Maintenance)</H3>
+          <P>The <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">update.sh</code> script manages your Docker deployment on Linux servers:</P>
+          <UL>
+            <li><strong className="text-dark-100">update</strong> - Pulls latest code, rebuilds the Docker image, and restarts. Your database and data are preserved.</li>
+            <li><strong className="text-dark-100">reset</strong> - Full factory reset: stops containers, removes volumes and images, and redeploys from scratch. Requires triple confirmation for safety.</li>
+          </UL>
+          <CodeBlock>{`# Update to latest version (preserves data):
+./update.sh update
+
+# Full reset (destroys all data!):
+./update.sh reset`}</CodeBlock>
+
+          <H3>Environment Variables</H3>
+          <P>Configure DriveLedger via the <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">.env</code> file. Key variables:</P>
+          <UL>
+            <li><strong className="text-dark-100">PORT</strong> - Server port (default: 3000)</li>
+            <li><strong className="text-dark-100">JWT_SECRET</strong> - Secret key for signing JWT tokens (required, use a long random string)</li>
+            <li><strong className="text-dark-100">ADMIN_EMAIL / ADMIN_PASSWORD</strong> - Auto-created admin account on first startup</li>
+            <li><strong className="text-dark-100">FRONTEND_URL</strong> - The URL where the frontend is accessible (used for CORS)</li>
+            <li><strong className="text-dark-100">SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS</strong> - Email server for password resets and notifications</li>
+            <li><strong className="text-dark-100">SMTP_FROM</strong> - Sender address for outgoing emails</li>
+          </UL>
+          <P>Copy <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">.env.example</code> to <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">.env</code> and fill in your values. The dev.bat script does this automatically.</P>
+        </>
+      ),
+    },
+    {
       id: 'api',
       title: 'API',
       icon: <Code size={20} />,
       content: (
         <>
-          <P>DriveLedger provides a RESTful API for programmatic access to your data.</P>
-          <H3>Authentication</H3>
-          <P>Create an API token in Settings &gt; API Tokens. Use the token in the Authorization header:</P>
+          <P>DriveLedger provides a RESTful API for programmatic access to your data. Two authentication methods are supported.</P>
+          <H3>Authentication Methods</H3>
+          <P><strong className="text-dark-100">1. JWT (Browser Sessions)</strong> - Used automatically by the web UI. Access tokens expire after 15 minutes; refresh tokens (httpOnly cookies) last 7 days.</P>
+          <P><strong className="text-dark-100">2. API Key (Programmatic Access)</strong> - For scripts, automations, and third-party integrations. Create a token in Settings &gt; API Tokens. Each token has a visible prefix and a secret. Use the secret in the Authorization header:</P>
           <CodeBlock>{`curl -H "Authorization: Bearer YOUR_TOKEN_SECRET" \\
   https://your-domain.com/api/vehicles`}</CodeBlock>
-          <H3>Endpoints</H3>
+          <H3>Creating API Tokens</H3>
           <UL>
-            <li><strong className="text-dark-100">GET /api/vehicles</strong> - List all vehicles</li>
-            <li><strong className="text-dark-100">POST /api/vehicles</strong> - Create a vehicle</li>
-            <li><strong className="text-dark-100">GET /api/vehicles/:id</strong> - Get a vehicle</li>
-            <li><strong className="text-dark-100">PUT /api/vehicles/:id</strong> - Update a vehicle</li>
-            <li><strong className="text-dark-100">DELETE /api/vehicles/:id</strong> - Delete a vehicle</li>
+            <li>Go to <strong className="text-dark-100">Settings &gt; API Tokens</strong> and click "Create Token"</li>
+            <li>Give the token a descriptive name (e.g., "Backup Script")</li>
+            <li>Copy the secret immediately - it is only shown once</li>
+            <li>Tokens can be activated/deactivated or revoked at any time</li>
+            <li>Last usage time is tracked for auditing</li>
           </UL>
-          <P>The same CRUD pattern applies to: <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/costs</code>, <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/loans</code>, <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/repairs</code>, <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/savings-goals</code>, <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/savings-transactions</code>, <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/planned-purchases</code>, <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/persons</code>.</P>
+          <H3>Endpoint Groups</H3>
+          <UL>
+            <li><strong className="text-dark-100">Auth</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/auth/*</code> - Login, register, refresh, change password, delete account</li>
+            <li><strong className="text-dark-100">Vehicles</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/vehicles</code> - Full CRUD for owned and planned vehicles</li>
+            <li><strong className="text-dark-100">Costs</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/costs</code> - Recurring and one-time cost tracking</li>
+            <li><strong className="text-dark-100">Loans</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/loans</code> - Loan and financing management</li>
+            <li><strong className="text-dark-100">Repairs</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/repairs</code> - Repair history records</li>
+            <li><strong className="text-dark-100">Savings Goals</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/savings-goals</code> - Goals with target amounts</li>
+            <li><strong className="text-dark-100">Savings Transactions</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/savings-transactions</code> - Deposits and withdrawals</li>
+            <li><strong className="text-dark-100">Planned Purchases</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/planned-purchases</code> - Vehicle purchase planning</li>
+            <li><strong className="text-dark-100">Persons</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/persons</code> - Cost-split person management</li>
+            <li><strong className="text-dark-100">Data</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/data/export</code>, <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/data/import</code> - Full data export/import</li>
+            <li><strong className="text-dark-100">API Tokens</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/api-tokens</code> - Token management (create, list, toggle, revoke)</li>
+          </UL>
+          <P>Each resource group supports the standard CRUD operations: GET (list/detail), POST (create), PUT (update), DELETE (remove).</P>
           <H3>Example: Create a Vehicle</H3>
           <CodeBlock>{`curl -X POST https://your-domain.com/api/vehicles \\
   -H "Authorization: Bearer YOUR_TOKEN_SECRET" \\
@@ -241,8 +345,16 @@ export default function Wiki() {
     "fuelType": "diesel",
     "purchasePrice": 25000
   }'`}</CodeBlock>
+          <H3>Example: Export All Data</H3>
+          <CodeBlock>{`curl -H "Authorization: Bearer YOUR_TOKEN_SECRET" \\
+  https://your-domain.com/api/data/export -o backup.json`}</CodeBlock>
+          <H3>Example: Change Password</H3>
+          <CodeBlock>{`curl -X POST https://your-domain.com/api/auth/change-password \\
+  -H "Authorization: Bearer YOUR_TOKEN_SECRET" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "currentPassword": "old", "newPassword": "new" }'`}</CodeBlock>
           <H3>Error Handling</H3>
-          <P>Errors return JSON with an <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">error</code> field. Common status codes: 400 (bad request), 401 (unauthorized), 404 (not found), 500 (server error).</P>
+          <P>Errors return JSON with an <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">error</code> field. Common status codes: 400 (bad request), 401 (unauthorized), 404 (not found), 429 (rate limited), 500 (server error). Auth endpoints are rate-limited to 5 requests/minute; all other endpoints allow 100 requests/minute.</P>
         </>
       ),
     },
