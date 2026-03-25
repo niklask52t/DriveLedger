@@ -17,6 +17,30 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+:: Check Docker
+where docker >nul 2>nul
+if %errorlevel% neq 0 (
+    echo [ERROR] Docker is required for the database.
+    echo Please install Docker Desktop from https://www.docker.com/
+    pause
+    exit /b 1
+)
+
+:: Start MariaDB container if not running
+docker ps --filter "name=driveledger-dev-db" --format "{{.Names}}" | findstr /i "driveledger-dev-db" >nul 2>nul
+if %errorlevel% neq 0 (
+    echo [INFO] Starting MariaDB database container...
+    docker run -d --name driveledger-dev-db -p 3306:3306 -e MYSQL_ROOT_PASSWORD=rootpassword -e MYSQL_DATABASE=driveledger -e MYSQL_USER=driveledger -e MYSQL_PASSWORD=driveledger mariadb:11 >nul 2>nul
+    if %errorlevel% neq 0 (
+        :: Container might exist but be stopped
+        docker start driveledger-dev-db >nul 2>nul
+    )
+    echo [INFO] Waiting for database to be ready...
+    timeout /t 10 /nobreak >nul
+) else (
+    echo [INFO] MariaDB database already running.
+)
+
 :: Always install/update dependencies
 echo [INFO] Installing dependencies...
 call npm install
@@ -32,13 +56,6 @@ if not exist ".env" (
     echo [INFO] Creating .env from .env.example...
     copy .env.example .env >nul
     echo [INFO] .env created. Edit it with your settings before first use.
-    echo.
-)
-
-:: Check if data directory exists
-if not exist "data\" (
-    echo [INFO] First run - database will be created automatically.
-    echo [INFO] Default admin: admin@driveledger.app / Admin123!
     echo.
 )
 

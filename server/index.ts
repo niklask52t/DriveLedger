@@ -7,7 +7,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { v4 as uuidv4 } from 'uuid';
 
-import db, { initDb } from './db.js';
+import { getPool, initDb } from './db.js';
 import { hashPassword } from './auth.js';
 import { generalRateLimiter, authRateLimiter } from './middleware.js';
 
@@ -86,9 +86,26 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   res.status(500).json({ error: 'Internal server error' });
 });
 
+// Wait for database to be ready (handles Docker startup timing)
+async function waitForDb(maxRetries = 30, delayMs = 2000): Promise<void> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const pool = getPool();
+      await pool.execute('SELECT 1');
+      return;
+    } catch {
+      console.log(`[DB] Waiting for database... (${i + 1}/${maxRetries})`);
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+  throw new Error('Database connection failed after max retries');
+}
+
 // Auto-create admin user if no users exist
 async function createInitialAdmin(): Promise<void> {
-  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
+  const pool = getPool();
+  const [rows] = await pool.execute('SELECT COUNT(*) as count FROM users');
+  const userCount = (rows as { count: number }[])[0];
 
   if (userCount.count > 0) {
     return;
@@ -106,17 +123,18 @@ async function createInitialAdmin(): Promise<void> {
   const passwordHash = await hashPassword(password);
   const id = uuidv4();
 
-  db.prepare(`
-    INSERT INTO users (id, email, username, password_hash, is_admin, email_verified)
-    VALUES (?, ?, ?, ?, 1, 1)
-  `).run(id, email, username, passwordHash);
+  await pool.execute(
+    'INSERT INTO users (id, email, username, password_hash, is_admin, email_verified) VALUES (?, ?, ?, ?, 1, 1)',
+    [id, email, username, passwordHash]
+  );
 
   console.log(`[INIT] Initial admin user created: ${username} (${email})`);
 }
 
 // Start server
 async function start(): Promise<void> {
-  initDb();
+  await waitForDb();
+  await initDb();
   await createInitialAdmin();
 
   app.listen(PORT, () => {

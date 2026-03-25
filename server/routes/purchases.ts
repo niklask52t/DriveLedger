@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
-import db from '../db';
+import { getPool } from '../db';
 import { combinedAuthMiddleware } from '../middleware';
 import { toCamelCase, toSnakeCase, rowsToCamelCase } from '../utils';
 
@@ -8,13 +8,15 @@ const router = Router();
 router.use(combinedAuthMiddleware);
 
 // GET / - list all planned purchases
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
-    const rows = db.prepare(
-      'SELECT * FROM planned_purchases WHERE user_id = ? ORDER BY created_at DESC'
-    ).all(userId) as any[];
-    return res.status(200).json(rowsToCamelCase(rows));
+    const [rows] = await pool.execute(
+      'SELECT * FROM planned_purchases WHERE user_id = ? ORDER BY created_at DESC',
+      [userId]
+    );
+    return res.status(200).json(rowsToCamelCase(rows as any[]));
   } catch (err: any) {
     console.error('[PURCHASES] List error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -22,12 +24,15 @@ router.get('/', (req: Request, res: Response) => {
 });
 
 // GET /:id - single purchase
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
-    const row = db.prepare(
-      'SELECT * FROM planned_purchases WHERE id = ? AND user_id = ?'
-    ).get(req.params.id, userId) as any;
+    const [rows] = await pool.execute(
+      'SELECT * FROM planned_purchases WHERE id = ? AND user_id = ?',
+      [req.params.id, userId]
+    );
+    const row = (rows as any[])[0];
 
     if (!row) {
       return res.status(404).json({ error: 'Planned purchase not found' });
@@ -41,8 +46,9 @@ router.get('/:id', (req: Request, res: Response) => {
 });
 
 // POST / - create purchase
-router.post('/', (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { brand, model } = req.body;
 
@@ -53,7 +59,7 @@ router.post('/', (req: Request, res: Response) => {
     const id = uuid();
     const data = toSnakeCase(req.body);
 
-    db.prepare(`
+    await pool.execute(`
       INSERT INTO planned_purchases (
         id, user_id, brand, model, variant, price, mobile_de_link, image_url,
         year, mileage, fuel_type, horse_power, down_payment, financing_months,
@@ -65,7 +71,7 @@ router.post('/', (req: Request, res: Response) => {
         ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?
       )
-    `).run(
+    `, [
       id,
       userId,
       data.brand,
@@ -90,9 +96,10 @@ router.post('/', (req: Request, res: Response) => {
       data.pros || '',
       data.cons || '',
       data.rating || 0
-    );
+    ]);
 
-    const created = db.prepare('SELECT * FROM planned_purchases WHERE id = ?').get(id) as any;
+    const [createdRows] = await pool.execute('SELECT * FROM planned_purchases WHERE id = ?', [id]);
+    const created = (createdRows as any[])[0];
     return res.status(201).json(toCamelCase(created));
   } catch (err: any) {
     console.error('[PURCHASES] Create error:', err);
@@ -101,21 +108,24 @@ router.post('/', (req: Request, res: Response) => {
 });
 
 // PUT /:id - update purchase
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { id } = req.params;
 
-    const existing = db.prepare(
-      'SELECT id FROM planned_purchases WHERE id = ? AND user_id = ?'
-    ).get(id, userId) as any;
+    const [existingRows] = await pool.execute(
+      'SELECT id FROM planned_purchases WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+    const existing = (existingRows as any[])[0];
     if (!existing) {
       return res.status(404).json({ error: 'Planned purchase not found' });
     }
 
     const data = toSnakeCase(req.body);
 
-    db.prepare(`
+    await pool.execute(`
       UPDATE planned_purchases SET
         brand = COALESCE(?, brand),
         model = COALESCE(?, model),
@@ -140,7 +150,7 @@ router.put('/:id', (req: Request, res: Response) => {
         cons = COALESCE(?, cons),
         rating = COALESCE(?, rating)
       WHERE id = ? AND user_id = ?
-    `).run(
+    `, [
       data.brand ?? null,
       data.model ?? null,
       data.variant ?? null,
@@ -165,9 +175,10 @@ router.put('/:id', (req: Request, res: Response) => {
       data.rating ?? null,
       id,
       userId
-    );
+    ]);
 
-    const updated = db.prepare('SELECT * FROM planned_purchases WHERE id = ?').get(id) as any;
+    const [updatedRows] = await pool.execute('SELECT * FROM planned_purchases WHERE id = ?', [id]);
+    const updated = (updatedRows as any[])[0];
     return res.status(200).json(toCamelCase(updated));
   } catch (err: any) {
     console.error('[PURCHASES] Update error:', err);
@@ -176,19 +187,22 @@ router.put('/:id', (req: Request, res: Response) => {
 });
 
 // DELETE /:id - delete purchase
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { id } = req.params;
 
-    const existing = db.prepare(
-      'SELECT id FROM planned_purchases WHERE id = ? AND user_id = ?'
-    ).get(id, userId) as any;
+    const [existingRows] = await pool.execute(
+      'SELECT id FROM planned_purchases WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+    const existing = (existingRows as any[])[0];
     if (!existing) {
       return res.status(404).json({ error: 'Planned purchase not found' });
     }
 
-    db.prepare('DELETE FROM planned_purchases WHERE id = ? AND user_id = ?').run(id, userId);
+    await pool.execute('DELETE FROM planned_purchases WHERE id = ? AND user_id = ?', [id, userId]);
 
     return res.status(200).json({ message: 'Planned purchase deleted' });
   } catch (err: any) {
@@ -198,14 +212,17 @@ router.delete('/:id', (req: Request, res: Response) => {
 });
 
 // POST /:id/convert - convert planned purchase to vehicle
-router.post('/:id/convert', (req: Request, res: Response) => {
+router.post('/:id/convert', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { id } = req.params;
 
-    const purchase = db.prepare(
-      'SELECT * FROM planned_purchases WHERE id = ? AND user_id = ?'
-    ).get(id, userId) as any;
+    const [purchaseRows] = await pool.execute(
+      'SELECT * FROM planned_purchases WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+    const purchase = (purchaseRows as any[])[0];
 
     if (!purchase) {
       return res.status(404).json({ error: 'Planned purchase not found' });
@@ -213,15 +230,17 @@ router.post('/:id/convert', (req: Request, res: Response) => {
 
     const vehicleId = uuid();
 
-    const convertTransaction = db.transaction(() => {
+    const conn = await pool.getConnection();
+    await conn.beginTransaction();
+    try {
       // Create vehicle from purchase data
-      db.prepare(`
+      await conn.execute(`
         INSERT INTO vehicles (
           id, user_id, name, brand, model, variant, purchase_price,
           current_mileage, fuel_type, horse_power, image_url, status,
           mobile_de_link, notes
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
+      `, [
         vehicleId,
         userId,
         `${purchase.brand} ${purchase.model}`,
@@ -236,15 +255,20 @@ router.post('/:id/convert', (req: Request, res: Response) => {
         'owned',
         purchase.mobile_de_link || '',
         purchase.notes || ''
-      );
+      ]);
 
       // Delete the planned purchase
-      db.prepare('DELETE FROM planned_purchases WHERE id = ? AND user_id = ?').run(id, userId);
-    });
+      await conn.execute('DELETE FROM planned_purchases WHERE id = ? AND user_id = ?', [id, userId]);
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
 
-    convertTransaction();
-
-    const vehicle = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(vehicleId) as any;
+    const [vehicleRows] = await pool.execute('SELECT * FROM vehicles WHERE id = ?', [vehicleId]);
+    const vehicle = (vehicleRows as any[])[0];
     return res.status(201).json(toCamelCase(vehicle));
   } catch (err: any) {
     console.error('[PURCHASES] Convert error:', err);

@@ -1,23 +1,45 @@
 services:
-  driveledger:
+  db:
+    image: mariadb:11
+    container_name: driveledger-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-driveledger}
+      MYSQL_USER: ${DB_USER:-driveledger}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-driveledger}
+    volumes:
+      - driveledger-db:/var/lib/mysql
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  app:
     build: .
     container_name: driveledger
     restart: unless-stopped
     ports:
       - "${PORT:-3001}:3001"
-    volumes:
-      - driveledger-data:/app/data
     env_file:
       - .env
     environment:
       - NODE_ENV=production
+      - DB_HOST=db
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/health').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
 
 volumes:
-  driveledger-data:
+  driveledger-db:
     driver: local

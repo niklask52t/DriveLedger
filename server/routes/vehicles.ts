@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
-import db from '../db';
+import { getPool } from '../db';
 import { combinedAuthMiddleware } from '../middleware';
 import { toCamelCase, toSnakeCase, rowsToCamelCase } from '../utils';
 
@@ -8,11 +8,12 @@ const router = Router();
 router.use(combinedAuthMiddleware);
 
 // GET / - list all vehicles for current user
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
-    const rows = db.prepare('SELECT * FROM vehicles WHERE user_id = ? ORDER BY created_at DESC').all(userId) as any[];
-    return res.status(200).json(rowsToCamelCase(rows));
+    const [rows] = await pool.execute('SELECT * FROM vehicles WHERE user_id = ? ORDER BY created_at DESC', [userId]);
+    return res.status(200).json(rowsToCamelCase(rows as any[]));
   } catch (err: any) {
     console.error('[VEHICLES] List error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -20,10 +21,12 @@ router.get('/', (req: Request, res: Response) => {
 });
 
 // GET /:id - get single vehicle
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
-    const row = db.prepare('SELECT * FROM vehicles WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
+    const [rows] = await pool.execute('SELECT * FROM vehicles WHERE id = ? AND user_id = ?', [req.params.id, userId]);
+    const row = (rows as any[])[0];
 
     if (!row) {
       return res.status(404).json({ error: 'Vehicle not found' });
@@ -37,8 +40,9 @@ router.get('/:id', (req: Request, res: Response) => {
 });
 
 // POST / - create vehicle
-router.post('/', (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { name } = req.body;
 
@@ -49,7 +53,7 @@ router.post('/', (req: Request, res: Response) => {
     const id = uuid();
     const data = toSnakeCase(req.body);
 
-    db.prepare(`
+    await pool.execute(`
       INSERT INTO vehicles (
         id, user_id, name, brand, model, variant, license_plate, hsn, tsn,
         first_registration, purchase_price, purchase_date, current_mileage,
@@ -61,7 +65,7 @@ router.post('/', (req: Request, res: Response) => {
         ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?
       )
-    `).run(
+    `, [
       id,
       userId,
       data.name || '',
@@ -85,9 +89,10 @@ router.post('/', (req: Request, res: Response) => {
       data.mobile_de_link || '',
       data.notes || '',
       data.color || ''
-    );
+    ]);
 
-    const created = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(id) as any;
+    const [createdRows] = await pool.execute('SELECT * FROM vehicles WHERE id = ?', [id]);
+    const created = (createdRows as any[])[0];
     return res.status(201).json(toCamelCase(created));
   } catch (err: any) {
     console.error('[VEHICLES] Create error:', err);
@@ -96,20 +101,22 @@ router.post('/', (req: Request, res: Response) => {
 });
 
 // PUT /:id - update vehicle
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { id } = req.params;
 
     // Verify ownership
-    const existing = db.prepare('SELECT id FROM vehicles WHERE id = ? AND user_id = ?').get(id, userId) as any;
+    const [existingRows] = await pool.execute('SELECT id FROM vehicles WHERE id = ? AND user_id = ?', [id, userId]);
+    const existing = (existingRows as any[])[0];
     if (!existing) {
       return res.status(404).json({ error: 'Vehicle not found' });
     }
 
     const data = toSnakeCase(req.body);
 
-    db.prepare(`
+    await pool.execute(`
       UPDATE vehicles SET
         name = COALESCE(?, name),
         brand = COALESCE(?, brand),
@@ -133,7 +140,7 @@ router.put('/:id', (req: Request, res: Response) => {
         notes = COALESCE(?, notes),
         color = COALESCE(?, color)
       WHERE id = ? AND user_id = ?
-    `).run(
+    `, [
       data.name ?? null,
       data.brand ?? null,
       data.model ?? null,
@@ -157,9 +164,10 @@ router.put('/:id', (req: Request, res: Response) => {
       data.color ?? null,
       id,
       userId
-    );
+    ]);
 
-    const updated = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(id) as any;
+    const [updatedRows] = await pool.execute('SELECT * FROM vehicles WHERE id = ?', [id]);
+    const updated = (updatedRows as any[])[0];
     return res.status(200).json(toCamelCase(updated));
   } catch (err: any) {
     console.error('[VEHICLES] Update error:', err);
@@ -168,34 +176,42 @@ router.put('/:id', (req: Request, res: Response) => {
 });
 
 // DELETE /:id - delete vehicle + cascade
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { id } = req.params;
 
     // Verify ownership
-    const existing = db.prepare('SELECT id FROM vehicles WHERE id = ? AND user_id = ?').get(id, userId) as any;
+    const [existingRows] = await pool.execute('SELECT id FROM vehicles WHERE id = ? AND user_id = ?', [id, userId]);
+    const existing = (existingRows as any[])[0];
     if (!existing) {
       return res.status(404).json({ error: 'Vehicle not found' });
     }
 
     // Cascade delete related data
-    const deleteTransaction = db.transaction(() => {
+    const conn = await pool.getConnection();
+    await conn.beginTransaction();
+    try {
       // Delete savings transactions for savings goals of this vehicle
-      db.prepare(`
+      await conn.execute(`
         DELETE FROM savings_transactions WHERE savings_goal_id IN (
           SELECT id FROM savings_goals WHERE vehicle_id = ? AND user_id = ?
         )
-      `).run(id, userId);
+      `, [id, userId]);
 
-      db.prepare('DELETE FROM costs WHERE vehicle_id = ? AND user_id = ?').run(id, userId);
-      db.prepare('DELETE FROM loans WHERE vehicle_id = ? AND user_id = ?').run(id, userId);
-      db.prepare('DELETE FROM repairs WHERE vehicle_id = ? AND user_id = ?').run(id, userId);
-      db.prepare('DELETE FROM savings_goals WHERE vehicle_id = ? AND user_id = ?').run(id, userId);
-      db.prepare('DELETE FROM vehicles WHERE id = ? AND user_id = ?').run(id, userId);
-    });
-
-    deleteTransaction();
+      await conn.execute('DELETE FROM costs WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM loans WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM repairs WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM savings_goals WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM vehicles WHERE id = ? AND user_id = ?', [id, userId]);
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
 
     return res.status(200).json({ message: 'Vehicle and all related data deleted' });
   } catch (err: any) {

@@ -27,9 +27,3 @@ dist-ssr
 .env
 .env.local
 .env.production
-
-# Database
-data/
-*.db
-*.db-journal
-*.db-wal

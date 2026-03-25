@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid';
-import db from './db';
+import { getPool } from './db';
 import { isEmailEnabled, sendReminderEmail } from './email';
 
 const INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -29,9 +29,11 @@ function calculateNextRemindAt(currentRemindAt: string, recurring: string): stri
 
 async function processDueReminders(): Promise<void> {
   try {
-    const dueReminders = db.prepare(
-      "SELECT r.*, u.email FROM reminders r JOIN users u ON u.id = r.user_id WHERE r.remind_at <= datetime('now') AND r.sent = 0 AND r.active = 1"
-    ).all() as any[];
+    const pool = getPool();
+    const [rows] = await pool.execute(
+      "SELECT r.*, u.email FROM reminders r JOIN users u ON u.id = r.user_id WHERE r.remind_at <= NOW() AND r.sent = 0 AND r.active = 1"
+    );
+    const dueReminders = rows as any[];
 
     if (dueReminders.length === 0) {
       return;
@@ -52,26 +54,27 @@ async function processDueReminders(): Promise<void> {
         }
 
         // Mark as sent
-        db.prepare('UPDATE reminders SET sent = 1 WHERE id = ?').run(reminder.id);
+        await pool.execute('UPDATE reminders SET sent = 1 WHERE id = ?', [reminder.id]);
 
         // If recurring, create next reminder
         if (reminder.recurring) {
           const nextRemindAt = calculateNextRemindAt(reminder.remind_at, reminder.recurring);
           if (nextRemindAt) {
             const newId = uuid();
-            db.prepare(
-              'INSERT INTO reminders (id, user_id, title, description, type, entity_type, entity_id, remind_at, recurring, email_notify, sent, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1)'
-            ).run(
-              newId,
-              reminder.user_id,
-              reminder.title,
-              reminder.description,
-              reminder.type,
-              reminder.entity_type,
-              reminder.entity_id,
-              nextRemindAt,
-              reminder.recurring,
-              reminder.email_notify
+            await pool.execute(
+              'INSERT INTO reminders (id, user_id, title, description, type, entity_type, entity_id, remind_at, recurring, email_notify, sent, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1)',
+              [
+                newId,
+                reminder.user_id,
+                reminder.title,
+                reminder.description,
+                reminder.type,
+                reminder.entity_type,
+                reminder.entity_id,
+                nextRemindAt,
+                reminder.recurring,
+                reminder.email_notify
+              ]
             );
             console.log(`[SCHEDULER] Created next recurring reminder ${newId} for ${nextRemindAt}`);
           }

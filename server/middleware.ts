@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
 import { verifyAccessToken, hashToken } from './auth.js';
-import db from './db.js';
+import { getPool } from './db.js';
 
 // Extend Express Request type
 declare global {
@@ -20,7 +20,7 @@ declare global {
  * JWT auth middleware.
  * Checks Authorization: Bearer <jwt> header or access_token cookie.
  */
-export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
+export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
   let token: string | undefined;
 
@@ -41,30 +41,37 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     return;
   }
 
-  // Look up user to get admin status
-  const user = db.prepare('SELECT id, email, is_admin FROM users WHERE id = ?').get(payload.userId) as
-    | { id: string; email: string; is_admin: number }
-    | undefined;
+  try {
+    // Look up user to get admin status
+    const pool = getPool();
+    const [rows] = await pool.execute('SELECT id, email, is_admin FROM users WHERE id = ?', [payload.userId]);
+    const user = (rows as any[])[0] as
+      | { id: string; email: string; is_admin: number }
+      | undefined;
 
-  if (!user) {
-    res.status(401).json({ error: 'User not found' });
-    return;
+    if (!user) {
+      res.status(401).json({ error: 'User not found' });
+      return;
+    }
+
+    req.user = {
+      id: user.id,
+      email: user.email,
+      isAdmin: user.is_admin === 1,
+    };
+
+    next();
+  } catch (err) {
+    console.error('[AUTH] Middleware error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  req.user = {
-    id: user.id,
-    email: user.email,
-    isAdmin: user.is_admin === 1,
-  };
-
-  next();
 }
 
 /**
  * API token auth middleware.
  * Checks Authorization: ApiKey <token>:<secret> header.
  */
-export function apiTokenMiddleware(req: Request, res: Response, next: NextFunction): void {
+export async function apiTokenMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith('ApiKey ')) {
@@ -85,48 +92,55 @@ export function apiTokenMiddleware(req: Request, res: Response, next: NextFuncti
   const tokenHash = hashToken(token);
   const secretHash = hashToken(secret);
 
-  const apiToken = db.prepare(`
-    SELECT at.id, at.user_id, at.secret_hash, at.permissions, at.active,
-           u.email, u.is_admin
-    FROM api_tokens at
-    JOIN users u ON u.id = at.user_id
-    WHERE at.token_hash = ?
-  `).get(tokenHash) as
-    | { id: string; user_id: string; secret_hash: string; permissions: string; active: number; email: string; is_admin: number }
-    | undefined;
+  try {
+    const pool = getPool();
+    const [rows] = await pool.execute(`
+      SELECT at.id, at.user_id, at.secret_hash, at.permissions, at.active,
+             u.email, u.is_admin
+      FROM api_tokens at
+      JOIN users u ON u.id = at.user_id
+      WHERE at.token_hash = ?
+    `, [tokenHash]);
+    const apiToken = (rows as any[])[0] as
+      | { id: string; user_id: string; secret_hash: string; permissions: string; active: number; email: string; is_admin: number }
+      | undefined;
 
-  if (!apiToken || apiToken.active !== 1) {
-    res.status(401).json({ error: 'Invalid or inactive API token' });
-    return;
+    if (!apiToken || apiToken.active !== 1) {
+      res.status(401).json({ error: 'Invalid or inactive API token' });
+      return;
+    }
+
+    if (apiToken.secret_hash !== secretHash) {
+      res.status(401).json({ error: 'Invalid API secret' });
+      return;
+    }
+
+    // Update last_used
+    await pool.execute('UPDATE api_tokens SET last_used = NOW() WHERE id = ?', [apiToken.id]);
+
+    req.user = {
+      id: apiToken.user_id,
+      email: apiToken.email,
+      isAdmin: apiToken.is_admin === 1,
+    };
+
+    next();
+  } catch (err) {
+    console.error('[API-TOKEN] Middleware error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  if (apiToken.secret_hash !== secretHash) {
-    res.status(401).json({ error: 'Invalid API secret' });
-    return;
-  }
-
-  // Update last_used
-  db.prepare('UPDATE api_tokens SET last_used = datetime(\'now\') WHERE id = ?').run(apiToken.id);
-
-  req.user = {
-    id: apiToken.user_id,
-    email: apiToken.email,
-    isAdmin: apiToken.is_admin === 1,
-  };
-
-  next();
 }
 
 /**
  * Combined auth middleware.
  * Tries JWT first, then API token. Returns 401 if neither works.
  */
-export function combinedAuthMiddleware(req: Request, res: Response, next: NextFunction): void {
+export async function combinedAuthMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
 
   // Try JWT (Bearer token or cookie)
   if (authHeader?.startsWith('Bearer ') || req.cookies?.access_token) {
-    authMiddleware(req, res, (err?: unknown) => {
+    await authMiddleware(req, res, (err?: unknown) => {
       if (err || !req.user) {
         // JWT failed, try API token
         apiTokenMiddleware(req, res, next);
@@ -139,7 +153,7 @@ export function combinedAuthMiddleware(req: Request, res: Response, next: NextFu
 
   // Try API token
   if (authHeader?.startsWith('ApiKey ')) {
-    apiTokenMiddleware(req, res, next);
+    await apiTokenMiddleware(req, res, next);
     return;
   }
 

@@ -100,8 +100,8 @@ do_reset() {
     docker compose down || true
 
     echo -e "${BLUE}[2/6]${NC} Removing Docker volume (database)..."
-    docker volume rm "$(basename "$SCRIPT_DIR")_driveledger-data" 2>/dev/null || \
-    docker volume rm "driveledger_driveledger-data" 2>/dev/null || \
+    docker volume rm "$(basename "$SCRIPT_DIR")_driveledger-db" 2>/dev/null || \
+    docker volume rm "driveledger_driveledger-db" 2>/dev/null || \
     echo "  Volume not found, skipping."
 
     echo -e "${BLUE}[3/6]${NC} Pulling latest changes..."

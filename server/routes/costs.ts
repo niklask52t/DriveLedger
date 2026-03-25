@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
-import db from '../db';
+import { getPool } from '../db';
 import { combinedAuthMiddleware } from '../middleware';
 import { toCamelCase, toSnakeCase, rowsToCamelCase } from '../utils';
 
@@ -8,20 +8,25 @@ const router = Router();
 router.use(combinedAuthMiddleware);
 
 // GET / - list all costs, optional ?vehicleId=xxx
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const vehicleId = req.query.vehicleId as string | undefined;
 
     let rows: any[];
     if (vehicleId) {
-      rows = db.prepare(
-        'SELECT * FROM costs WHERE user_id = ? AND vehicle_id = ? ORDER BY created_at DESC'
-      ).all(userId, vehicleId) as any[];
+      const [result] = await pool.execute(
+        'SELECT * FROM costs WHERE user_id = ? AND vehicle_id = ? ORDER BY created_at DESC',
+        [userId, vehicleId]
+      );
+      rows = result as any[];
     } else {
-      rows = db.prepare(
-        'SELECT * FROM costs WHERE user_id = ? ORDER BY created_at DESC'
-      ).all(userId) as any[];
+      const [result] = await pool.execute(
+        'SELECT * FROM costs WHERE user_id = ? ORDER BY created_at DESC',
+        [userId]
+      );
+      rows = result as any[];
     }
 
     return res.status(200).json(rowsToCamelCase(rows));
@@ -32,10 +37,12 @@ router.get('/', (req: Request, res: Response) => {
 });
 
 // GET /:id - single cost
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
-    const row = db.prepare('SELECT * FROM costs WHERE id = ? AND user_id = ?').get(req.params.id, userId) as any;
+    const [rows] = await pool.execute('SELECT * FROM costs WHERE id = ? AND user_id = ?', [req.params.id, userId]);
+    const row = (rows as any[])[0];
 
     if (!row) {
       return res.status(404).json({ error: 'Cost not found' });
@@ -49,8 +56,9 @@ router.get('/:id', (req: Request, res: Response) => {
 });
 
 // POST / - create cost
-router.post('/', (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { vehicleId, name, category, amount } = req.body;
 
@@ -59,7 +67,8 @@ router.post('/', (req: Request, res: Response) => {
     }
 
     // Verify vehicle ownership
-    const vehicle = db.prepare('SELECT id FROM vehicles WHERE id = ? AND user_id = ?').get(vehicleId, userId) as any;
+    const [vehicleRows] = await pool.execute('SELECT id FROM vehicles WHERE id = ? AND user_id = ?', [vehicleId, userId]);
+    const vehicle = (vehicleRows as any[])[0];
     if (!vehicle) {
       return res.status(404).json({ error: 'Vehicle not found' });
     }
@@ -67,10 +76,10 @@ router.post('/', (req: Request, res: Response) => {
     const id = uuid();
     const data = toSnakeCase(req.body);
 
-    db.prepare(`
+    await pool.execute(`
       INSERT INTO costs (id, user_id, vehicle_id, name, category, amount, frequency, paid_by, start_date, end_date, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       id,
       userId,
       data.vehicle_id,
@@ -82,9 +91,10 @@ router.post('/', (req: Request, res: Response) => {
       data.start_date || '',
       data.end_date || '',
       data.notes || ''
-    );
+    ]);
 
-    const created = db.prepare('SELECT * FROM costs WHERE id = ?').get(id) as any;
+    const [createdRows] = await pool.execute('SELECT * FROM costs WHERE id = ?', [id]);
+    const created = (createdRows as any[])[0];
     return res.status(201).json(toCamelCase(created));
   } catch (err: any) {
     console.error('[COSTS] Create error:', err);
@@ -93,19 +103,21 @@ router.post('/', (req: Request, res: Response) => {
 });
 
 // PUT /:id - update cost
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { id } = req.params;
 
-    const existing = db.prepare('SELECT id FROM costs WHERE id = ? AND user_id = ?').get(id, userId) as any;
+    const [existingRows] = await pool.execute('SELECT id FROM costs WHERE id = ? AND user_id = ?', [id, userId]);
+    const existing = (existingRows as any[])[0];
     if (!existing) {
       return res.status(404).json({ error: 'Cost not found' });
     }
 
     const data = toSnakeCase(req.body);
 
-    db.prepare(`
+    await pool.execute(`
       UPDATE costs SET
         name = COALESCE(?, name),
         category = COALESCE(?, category),
@@ -116,7 +128,7 @@ router.put('/:id', (req: Request, res: Response) => {
         end_date = COALESCE(?, end_date),
         notes = COALESCE(?, notes)
       WHERE id = ? AND user_id = ?
-    `).run(
+    `, [
       data.name ?? null,
       data.category ?? null,
       data.amount ?? null,
@@ -127,9 +139,10 @@ router.put('/:id', (req: Request, res: Response) => {
       data.notes ?? null,
       id,
       userId
-    );
+    ]);
 
-    const updated = db.prepare('SELECT * FROM costs WHERE id = ?').get(id) as any;
+    const [updatedRows] = await pool.execute('SELECT * FROM costs WHERE id = ?', [id]);
+    const updated = (updatedRows as any[])[0];
     return res.status(200).json(toCamelCase(updated));
   } catch (err: any) {
     console.error('[COSTS] Update error:', err);
@@ -138,17 +151,19 @@ router.put('/:id', (req: Request, res: Response) => {
 });
 
 // DELETE /:id - delete cost
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { id } = req.params;
 
-    const existing = db.prepare('SELECT id FROM costs WHERE id = ? AND user_id = ?').get(id, userId) as any;
+    const [existingRows] = await pool.execute('SELECT id FROM costs WHERE id = ? AND user_id = ?', [id, userId]);
+    const existing = (existingRows as any[])[0];
     if (!existing) {
       return res.status(404).json({ error: 'Cost not found' });
     }
 
-    db.prepare('DELETE FROM costs WHERE id = ? AND user_id = ?').run(id, userId);
+    await pool.execute('DELETE FROM costs WHERE id = ? AND user_id = ?', [id, userId]);
 
     return res.status(200).json({ message: 'Cost deleted' });
   } catch (err: any) {

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
-import db from '../db';
+import { getPool } from '../db';
 import { authMiddleware } from '../middleware';
 import { generateApiTokenPair, hashToken, hashPassword } from '../auth';
 import { toCamelCase, rowsToCamelCase } from '../utils';
@@ -11,15 +11,17 @@ const router = Router();
 router.use(authMiddleware);
 
 // GET / - list all API tokens for current user (no hashes, only prefix + metadata)
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
 
-    const rows = db.prepare(
-      'SELECT id, user_id, name, token_prefix, permissions, active, last_used, created_at FROM api_tokens WHERE user_id = ? ORDER BY created_at DESC'
-    ).all(userId) as any[];
+    const [rows] = await pool.execute(
+      'SELECT id, user_id, name, token_prefix, permissions, active, last_used, created_at FROM api_tokens WHERE user_id = ? ORDER BY created_at DESC',
+      [userId]
+    );
 
-    return res.status(200).json(rowsToCamelCase(rows));
+    return res.status(200).json(rowsToCamelCase(rows as any[]));
   } catch (err: any) {
     console.error('[API-TOKENS] List error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -29,6 +31,7 @@ router.get('/', (req: Request, res: Response) => {
 // POST / - create new API token pair
 router.post('/', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { name, permissions } = req.body;
 
@@ -46,10 +49,10 @@ router.post('/', async (req: Request, res: Response) => {
 
     const permissionsJson = JSON.stringify(permissions || ['read', 'write', 'delete']);
 
-    db.prepare(`
+    await pool.execute(`
       INSERT INTO api_tokens (id, user_id, name, token_hash, secret_hash, token_prefix, permissions)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, userId, name, tokenHash, secretHash, tokenPrefix, permissionsJson);
+    `, [id, userId, name, tokenHash, secretHash, tokenPrefix, permissionsJson]);
 
     // Return the unhashed token and secret ONLY THIS ONCE
     return res.status(201).json({
@@ -70,20 +73,23 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // DELETE /:id - revoke/delete an API token
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { id } = req.params;
 
-    const existing = db.prepare(
-      'SELECT id FROM api_tokens WHERE id = ? AND user_id = ?'
-    ).get(id, userId) as any;
+    const [existingRows] = await pool.execute(
+      'SELECT id FROM api_tokens WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+    const existing = (existingRows as any[])[0];
 
     if (!existing) {
       return res.status(404).json({ error: 'API token not found' });
     }
 
-    db.prepare('DELETE FROM api_tokens WHERE id = ? AND user_id = ?').run(id, userId);
+    await pool.execute('DELETE FROM api_tokens WHERE id = ? AND user_id = ?', [id, userId]);
 
     return res.status(200).json({ message: 'API token deleted' });
   } catch (err: any) {
@@ -93,25 +99,30 @@ router.delete('/:id', (req: Request, res: Response) => {
 });
 
 // PATCH /:id - toggle active status
-router.patch('/:id', (req: Request, res: Response) => {
+router.patch('/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { id } = req.params;
 
-    const existing = db.prepare(
-      'SELECT id, active FROM api_tokens WHERE id = ? AND user_id = ?'
-    ).get(id, userId) as any;
+    const [existingRows] = await pool.execute(
+      'SELECT id, active FROM api_tokens WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+    const existing = (existingRows as any[])[0];
 
     if (!existing) {
       return res.status(404).json({ error: 'API token not found' });
     }
 
     const newActive = existing.active ? 0 : 1;
-    db.prepare('UPDATE api_tokens SET active = ? WHERE id = ? AND user_id = ?').run(newActive, id, userId);
+    await pool.execute('UPDATE api_tokens SET active = ? WHERE id = ? AND user_id = ?', [newActive, id, userId]);
 
-    const updated = db.prepare(
-      'SELECT id, user_id, name, token_prefix, permissions, active, last_used, created_at FROM api_tokens WHERE id = ?'
-    ).get(id) as any;
+    const [updatedRows] = await pool.execute(
+      'SELECT id, user_id, name, token_prefix, permissions, active, last_used, created_at FROM api_tokens WHERE id = ?',
+      [id]
+    );
+    const updated = (updatedRows as any[])[0];
 
     return res.status(200).json(toCamelCase(updated));
   } catch (err: any) {

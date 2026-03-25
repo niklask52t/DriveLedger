@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ---
 
+## [1.4.0] - 2026-03-25
+
+### Changed
+- **Database: Migrated from SQLite to MariaDB**
+  - Replaced better-sqlite3 with mysql2/promise
+  - All route handlers converted from synchronous to async DB queries
+  - Transactions use connection-based pattern (getConnection/beginTransaction/commit/rollback/release)
+  - SQL syntax updated (NOW(), VARCHAR, DOUBLE, TINYINT, CURRENT_TIMESTAMP)
+  - Connection pool with configurable limits
+  - DB connection retry loop on startup (30 retries, 2s delay)
+- Docker Compose now includes MariaDB 11 service with health checks
+- Dockerfile simplified (removed native build tools, no longer needed without better-sqlite3)
+- dev.bat starts a MariaDB Docker container (`driveledger-dev-db`) automatically
+- clean.bat now stops/removes the dev DB container instead of deleting SQLite files
+- update.sh reset targets MariaDB volume instead of SQLite data dir
+- Login accepts username OR email
+
+### Added
+- `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_ROOT_PASSWORD` env variables
+- MariaDB health check in Docker Compose (app waits for DB to be healthy)
+- Server startup DB connection retry with logging
+
+### Removed
+- better-sqlite3 and @types/better-sqlite3 dependencies
+- SQLite data directory and .db file handling
+- Native build tools from Dockerfile (python3, make, g++)
+
+---
+
 ## [1.3.0] - 2026-03-25
 
 ### Added

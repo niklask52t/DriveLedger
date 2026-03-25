@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
-import db from '../db';
+import { getPool } from '../db';
 import { combinedAuthMiddleware } from '../middleware';
 import { toCamelCase, toSnakeCase, rowsToCamelCase } from '../utils';
 
@@ -10,13 +10,15 @@ router.use(combinedAuthMiddleware);
 // ==================== Savings Goals ====================
 
 // GET /goals - list all savings goals
-router.get('/goals', (req: Request, res: Response) => {
+router.get('/goals', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
-    const rows = db.prepare(
-      'SELECT * FROM savings_goals WHERE user_id = ? ORDER BY created_at DESC'
-    ).all(userId) as any[];
-    return res.status(200).json(rowsToCamelCase(rows));
+    const [rows] = await pool.execute(
+      'SELECT * FROM savings_goals WHERE user_id = ? ORDER BY created_at DESC',
+      [userId]
+    );
+    return res.status(200).json(rowsToCamelCase(rows as any[]));
   } catch (err: any) {
     console.error('[SAVINGS] List goals error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -24,12 +26,15 @@ router.get('/goals', (req: Request, res: Response) => {
 });
 
 // GET /goals/:id - single goal
-router.get('/goals/:id', (req: Request, res: Response) => {
+router.get('/goals/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
-    const row = db.prepare(
-      'SELECT * FROM savings_goals WHERE id = ? AND user_id = ?'
-    ).get(req.params.id, userId) as any;
+    const [rows] = await pool.execute(
+      'SELECT * FROM savings_goals WHERE id = ? AND user_id = ?',
+      [req.params.id, userId]
+    );
+    const row = (rows as any[])[0];
 
     if (!row) {
       return res.status(404).json({ error: 'Savings goal not found' });
@@ -43,8 +48,9 @@ router.get('/goals/:id', (req: Request, res: Response) => {
 });
 
 // POST /goals - create goal
-router.post('/goals', (req: Request, res: Response) => {
+router.post('/goals', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { vehicleId, name } = req.body;
 
@@ -53,7 +59,8 @@ router.post('/goals', (req: Request, res: Response) => {
     }
 
     // Verify vehicle ownership
-    const vehicle = db.prepare('SELECT id FROM vehicles WHERE id = ? AND user_id = ?').get(vehicleId, userId) as any;
+    const [vehicleRows] = await pool.execute('SELECT id FROM vehicles WHERE id = ? AND user_id = ?', [vehicleId, userId]);
+    const vehicle = (vehicleRows as any[])[0];
     if (!vehicle) {
       return res.status(404).json({ error: 'Vehicle not found' });
     }
@@ -61,10 +68,10 @@ router.post('/goals', (req: Request, res: Response) => {
     const id = uuid();
     const data = toSnakeCase(req.body);
 
-    db.prepare(`
+    await pool.execute(`
       INSERT INTO savings_goals (id, user_id, vehicle_id, name, target_amount, monthly_contribution, start_date, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       id,
       userId,
       data.vehicle_id,
@@ -73,9 +80,10 @@ router.post('/goals', (req: Request, res: Response) => {
       data.monthly_contribution || 0,
       data.start_date || '',
       data.notes || ''
-    );
+    ]);
 
-    const created = db.prepare('SELECT * FROM savings_goals WHERE id = ?').get(id) as any;
+    const [createdRows] = await pool.execute('SELECT * FROM savings_goals WHERE id = ?', [id]);
+    const created = (createdRows as any[])[0];
     return res.status(201).json(toCamelCase(created));
   } catch (err: any) {
     console.error('[SAVINGS] Create goal error:', err);
@@ -84,21 +92,24 @@ router.post('/goals', (req: Request, res: Response) => {
 });
 
 // PUT /goals/:id - update goal
-router.put('/goals/:id', (req: Request, res: Response) => {
+router.put('/goals/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { id } = req.params;
 
-    const existing = db.prepare(
-      'SELECT id FROM savings_goals WHERE id = ? AND user_id = ?'
-    ).get(id, userId) as any;
+    const [existingRows] = await pool.execute(
+      'SELECT id FROM savings_goals WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+    const existing = (existingRows as any[])[0];
     if (!existing) {
       return res.status(404).json({ error: 'Savings goal not found' });
     }
 
     const data = toSnakeCase(req.body);
 
-    db.prepare(`
+    await pool.execute(`
       UPDATE savings_goals SET
         name = COALESCE(?, name),
         target_amount = COALESCE(?, target_amount),
@@ -106,7 +117,7 @@ router.put('/goals/:id', (req: Request, res: Response) => {
         start_date = COALESCE(?, start_date),
         notes = COALESCE(?, notes)
       WHERE id = ? AND user_id = ?
-    `).run(
+    `, [
       data.name ?? null,
       data.target_amount ?? null,
       data.monthly_contribution ?? null,
@@ -114,9 +125,10 @@ router.put('/goals/:id', (req: Request, res: Response) => {
       data.notes ?? null,
       id,
       userId
-    );
+    ]);
 
-    const updated = db.prepare('SELECT * FROM savings_goals WHERE id = ?').get(id) as any;
+    const [updatedRows] = await pool.execute('SELECT * FROM savings_goals WHERE id = ?', [id]);
+    const updated = (updatedRows as any[])[0];
     return res.status(200).json(toCamelCase(updated));
   } catch (err: any) {
     console.error('[SAVINGS] Update goal error:', err);
@@ -125,24 +137,33 @@ router.put('/goals/:id', (req: Request, res: Response) => {
 });
 
 // DELETE /goals/:id - delete goal + its transactions
-router.delete('/goals/:id', (req: Request, res: Response) => {
+router.delete('/goals/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { id } = req.params;
 
-    const existing = db.prepare(
-      'SELECT id FROM savings_goals WHERE id = ? AND user_id = ?'
-    ).get(id, userId) as any;
+    const [existingRows] = await pool.execute(
+      'SELECT id FROM savings_goals WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+    const existing = (existingRows as any[])[0];
     if (!existing) {
       return res.status(404).json({ error: 'Savings goal not found' });
     }
 
-    const deleteTransaction = db.transaction(() => {
-      db.prepare('DELETE FROM savings_transactions WHERE savings_goal_id = ? AND user_id = ?').run(id, userId);
-      db.prepare('DELETE FROM savings_goals WHERE id = ? AND user_id = ?').run(id, userId);
-    });
-
-    deleteTransaction();
+    const conn = await pool.getConnection();
+    await conn.beginTransaction();
+    try {
+      await conn.execute('DELETE FROM savings_transactions WHERE savings_goal_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM savings_goals WHERE id = ? AND user_id = ?', [id, userId]);
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
 
     return res.status(200).json({ message: 'Savings goal and its transactions deleted' });
   } catch (err: any) {
@@ -154,24 +175,28 @@ router.delete('/goals/:id', (req: Request, res: Response) => {
 // ==================== Savings Transactions ====================
 
 // GET /goals/:goalId/transactions - list transactions for a goal
-router.get('/goals/:goalId/transactions', (req: Request, res: Response) => {
+router.get('/goals/:goalId/transactions', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { goalId } = req.params;
 
     // Verify goal ownership
-    const goal = db.prepare(
-      'SELECT id FROM savings_goals WHERE id = ? AND user_id = ?'
-    ).get(goalId, userId) as any;
+    const [goalRows] = await pool.execute(
+      'SELECT id FROM savings_goals WHERE id = ? AND user_id = ?',
+      [goalId, userId]
+    );
+    const goal = (goalRows as any[])[0];
     if (!goal) {
       return res.status(404).json({ error: 'Savings goal not found' });
     }
 
-    const rows = db.prepare(
-      'SELECT * FROM savings_transactions WHERE savings_goal_id = ? AND user_id = ? ORDER BY date DESC'
-    ).all(goalId, userId) as any[];
+    const [rows] = await pool.execute(
+      'SELECT * FROM savings_transactions WHERE savings_goal_id = ? AND user_id = ? ORDER BY date DESC',
+      [goalId, userId]
+    );
 
-    return res.status(200).json(rowsToCamelCase(rows));
+    return res.status(200).json(rowsToCamelCase(rows as any[]));
   } catch (err: any) {
     console.error('[SAVINGS] List transactions error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -179,8 +204,9 @@ router.get('/goals/:goalId/transactions', (req: Request, res: Response) => {
 });
 
 // POST /goals/:goalId/transactions - add transaction
-router.post('/goals/:goalId/transactions', (req: Request, res: Response) => {
+router.post('/goals/:goalId/transactions', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { goalId } = req.params;
     const { amount, type } = req.body;
@@ -194,9 +220,11 @@ router.post('/goals/:goalId/transactions', (req: Request, res: Response) => {
     }
 
     // Verify goal ownership
-    const goal = db.prepare(
-      'SELECT id FROM savings_goals WHERE id = ? AND user_id = ?'
-    ).get(goalId, userId) as any;
+    const [goalRows] = await pool.execute(
+      'SELECT id FROM savings_goals WHERE id = ? AND user_id = ?',
+      [goalId, userId]
+    );
+    const goal = (goalRows as any[])[0];
     if (!goal) {
       return res.status(404).json({ error: 'Savings goal not found' });
     }
@@ -204,10 +232,10 @@ router.post('/goals/:goalId/transactions', (req: Request, res: Response) => {
     const id = uuid();
     const data = toSnakeCase(req.body);
 
-    db.prepare(`
+    await pool.execute(`
       INSERT INTO savings_transactions (id, user_id, savings_goal_id, date, amount, type, description)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       id,
       userId,
       goalId,
@@ -215,9 +243,10 @@ router.post('/goals/:goalId/transactions', (req: Request, res: Response) => {
       data.amount,
       data.type,
       data.description || ''
-    );
+    ]);
 
-    const created = db.prepare('SELECT * FROM savings_transactions WHERE id = ?').get(id) as any;
+    const [createdRows] = await pool.execute('SELECT * FROM savings_transactions WHERE id = ?', [id]);
+    const created = (createdRows as any[])[0];
     return res.status(201).json(toCamelCase(created));
   } catch (err: any) {
     console.error('[SAVINGS] Create transaction error:', err);
@@ -226,19 +255,22 @@ router.post('/goals/:goalId/transactions', (req: Request, res: Response) => {
 });
 
 // DELETE /transactions/:id - delete transaction
-router.delete('/transactions/:id', (req: Request, res: Response) => {
+router.delete('/transactions/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { id } = req.params;
 
-    const existing = db.prepare(
-      'SELECT id FROM savings_transactions WHERE id = ? AND user_id = ?'
-    ).get(id, userId) as any;
+    const [existingRows] = await pool.execute(
+      'SELECT id FROM savings_transactions WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+    const existing = (existingRows as any[])[0];
     if (!existing) {
       return res.status(404).json({ error: 'Savings transaction not found' });
     }
 
-    db.prepare('DELETE FROM savings_transactions WHERE id = ? AND user_id = ?').run(id, userId);
+    await pool.execute('DELETE FROM savings_transactions WHERE id = ? AND user_id = ?', [id, userId]);
 
     return res.status(200).json({ message: 'Savings transaction deleted' });
   } catch (err: any) {

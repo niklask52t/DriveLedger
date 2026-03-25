@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
-import db from '../db';
+import { getPool } from '../db';
 import { combinedAuthMiddleware } from '../middleware';
 import {
   hashPassword,
@@ -19,6 +19,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 // POST /register
 router.post('/register', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const { email, username, password, registrationToken } = req.body;
 
     // Validate required fields
@@ -38,18 +39,22 @@ router.post('/register', async (req: Request, res: Response) => {
     }
 
     // Validate registration token
-    const tokenRow = db.prepare(
-      "SELECT * FROM registration_tokens WHERE token = ? AND used = 0 AND expires_at > datetime('now')"
-    ).get(registrationToken) as any;
+    const [tokenRows] = await pool.execute(
+      'SELECT * FROM registration_tokens WHERE token = ? AND used = 0 AND expires_at > NOW()',
+      [registrationToken]
+    );
+    const tokenRow = (tokenRows as any[])[0];
 
     if (!tokenRow) {
       return res.status(400).json({ error: 'Invalid, used, or expired registration token' });
     }
 
     // Check if email or username already exists
-    const existingUser = db.prepare(
-      'SELECT id FROM users WHERE email = ? OR username = ?'
-    ).get(email, username) as any;
+    const [existingRows] = await pool.execute(
+      'SELECT id FROM users WHERE email = ? OR username = ?',
+      [email, username]
+    );
+    const existingUser = (existingRows as any[])[0];
 
     if (existingUser) {
       return res.status(409).json({ error: 'Email or username already in use' });
@@ -70,14 +75,16 @@ router.post('/register', async (req: Request, res: Response) => {
       verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
     }
 
-    db.prepare(
-      'INSERT INTO users (id, email, username, password_hash, email_verified, email_verification_token, email_verification_expires, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(userId, email, username, passwordHash, emailVerified, verificationToken, verificationExpires, now, now);
+    await pool.execute(
+      'INSERT INTO users (id, email, username, password_hash, email_verified, email_verification_token, email_verification_expires, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [userId, email, username, passwordHash, emailVerified, verificationToken, verificationExpires, now, now]
+    );
 
     // Mark registration token as used
-    db.prepare(
-      'UPDATE registration_tokens SET used = 1, used_by = ? WHERE id = ?'
-    ).run(userId, tokenRow.id);
+    await pool.execute(
+      'UPDATE registration_tokens SET used = 1, used_by = ? WHERE id = ?',
+      [userId, tokenRow.id]
+    );
 
     // Send emails
     if (emailEnabled) {
@@ -119,6 +126,7 @@ router.post('/register', async (req: Request, res: Response) => {
 // POST /login
 router.post('/login', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -126,9 +134,11 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     // Find user by email OR username
-    const user = db.prepare(
-      'SELECT * FROM users WHERE email = ? OR username = ?'
-    ).get(email, email) as any;
+    const [userRows] = await pool.execute(
+      'SELECT * FROM users WHERE email = ? OR username = ?',
+      [email, email]
+    );
+    const user = (userRows as any[])[0];
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -171,8 +181,9 @@ router.post('/login', async (req: Request, res: Response) => {
 });
 
 // POST /refresh
-router.post('/refresh', (req: Request, res: Response) => {
+router.post('/refresh', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const refreshToken = req.cookies?.refreshToken;
 
     if (!refreshToken) {
@@ -185,7 +196,11 @@ router.post('/refresh', (req: Request, res: Response) => {
     }
 
     // Look up user to get email
-    const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(payload.userId) as any;
+    const [userRows] = await pool.execute(
+      'SELECT id, email FROM users WHERE id = ?',
+      [payload.userId]
+    );
+    const user = (userRows as any[])[0];
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
     }
@@ -218,6 +233,7 @@ router.post('/logout', (_req: Request, res: Response) => {
 // POST /forgot-password
 router.post('/forgot-password', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const { email } = req.body;
 
     if (!email) {
@@ -232,16 +248,21 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
     }
 
     // Always return success to not leak whether email exists
-    const user = db.prepare('SELECT id FROM users WHERE email = ?').get(email) as any;
+    const [userRows] = await pool.execute(
+      'SELECT id FROM users WHERE email = ?',
+      [email]
+    );
+    const user = (userRows as any[])[0];
 
     if (user) {
       const resetToken = generateSecureToken();
       const id = uuid();
       const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
 
-      db.prepare(
-        'INSERT INTO password_resets (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
-      ).run(id, user.id, resetToken, expiresAt);
+      await pool.execute(
+        'INSERT INTO password_resets (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)',
+        [id, user.id, resetToken, expiresAt]
+      );
 
       const resetUrl = `${FRONTEND_URL}/reset-password`;
       await sendPasswordResetEmail(email, resetToken, resetUrl);
@@ -258,6 +279,7 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
 // POST /reset-password
 router.post('/reset-password', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const { token, newPassword } = req.body;
 
     if (!token || !newPassword) {
@@ -271,9 +293,11 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     }
 
     // Find valid reset token
-    const resetRow = db.prepare(
-      "SELECT * FROM password_resets WHERE token = ? AND used = 0 AND expires_at > datetime('now')"
-    ).get(token) as any;
+    const [resetRows] = await pool.execute(
+      'SELECT * FROM password_resets WHERE token = ? AND used = 0 AND expires_at > NOW()',
+      [token]
+    );
+    const resetRow = (resetRows as any[])[0];
 
     if (!resetRow) {
       return res.status(400).json({ error: 'Invalid, used, or expired reset token' });
@@ -283,14 +307,16 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     const passwordHash = await hashPassword(newPassword);
     const now = new Date().toISOString();
 
-    db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').run(
-      passwordHash,
-      now,
-      resetRow.user_id
+    await pool.execute(
+      'UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?',
+      [passwordHash, now, resetRow.user_id]
     );
 
     // Mark token as used
-    db.prepare('UPDATE password_resets SET used = 1 WHERE id = ?').run(resetRow.id);
+    await pool.execute(
+      'UPDATE password_resets SET used = 1 WHERE id = ?',
+      [resetRow.id]
+    );
 
     return res.status(200).json({ message: 'Password reset successfully' });
   } catch (err: any) {
@@ -300,25 +326,29 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 });
 
 // POST /verify-email
-router.post('/verify-email', (req: Request, res: Response) => {
+router.post('/verify-email', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const { token } = req.body;
 
     if (!token) {
       return res.status(400).json({ error: 'Verification token is required' });
     }
 
-    const user = db.prepare(
-      "SELECT id FROM users WHERE email_verification_token = ? AND email_verification_expires > datetime('now')"
-    ).get(token) as any;
+    const [userRows] = await pool.execute(
+      'SELECT id FROM users WHERE email_verification_token = ? AND email_verification_expires > NOW()',
+      [token]
+    );
+    const user = (userRows as any[])[0];
 
     if (!user) {
       return res.status(400).json({ error: 'Invalid or expired verification token' });
     }
 
-    db.prepare(
-      "UPDATE users SET email_verified = 1, email_verification_token = '', email_verification_expires = '', updated_at = datetime('now') WHERE id = ?"
-    ).run(user.id);
+    await pool.execute(
+      "UPDATE users SET email_verified = 1, email_verification_token = '', email_verification_expires = '', updated_at = NOW() WHERE id = ?",
+      [user.id]
+    );
 
     return res.status(200).json({ message: 'Email verified successfully' });
   } catch (err: any) {
@@ -330,12 +360,18 @@ router.post('/verify-email', (req: Request, res: Response) => {
 // POST /resend-verification
 router.post('/resend-verification', combinedAuthMiddleware, async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
+
     if (!isEmailEnabled()) {
       return res.status(400).json({ error: 'Email is not enabled' });
     }
 
     const userId = (req as any).user.id;
-    const user = db.prepare('SELECT id, email, email_verified FROM users WHERE id = ?').get(userId) as any;
+    const [userRows] = await pool.execute(
+      'SELECT id, email, email_verified FROM users WHERE id = ?',
+      [userId]
+    );
+    const user = (userRows as any[])[0];
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -348,9 +384,10 @@ router.post('/resend-verification', combinedAuthMiddleware, async (req: Request,
     const verificationToken = generateSecureToken();
     const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-    db.prepare(
-      "UPDATE users SET email_verification_token = ?, email_verification_expires = ?, updated_at = datetime('now') WHERE id = ?"
-    ).run(verificationToken, verificationExpires, userId);
+    await pool.execute(
+      'UPDATE users SET email_verification_token = ?, email_verification_expires = ?, updated_at = NOW() WHERE id = ?',
+      [verificationToken, verificationExpires, userId]
+    );
 
     const verifyUrl = `${FRONTEND_URL}/verify-email`;
     await sendVerificationEmail(user.email, verificationToken, verifyUrl);
@@ -363,13 +400,16 @@ router.post('/resend-verification', combinedAuthMiddleware, async (req: Request,
 });
 
 // GET /me - requires auth
-router.get('/me', combinedAuthMiddleware, (req: Request, res: Response) => {
+router.get('/me', combinedAuthMiddleware, async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
 
-    const user = db.prepare(
-      'SELECT id, email, username, is_admin, email_verified, created_at, updated_at FROM users WHERE id = ?'
-    ).get(userId) as any;
+    const [userRows] = await pool.execute(
+      'SELECT id, email, username, is_admin, email_verified, created_at, updated_at FROM users WHERE id = ?',
+      [userId]
+    );
+    const user = (userRows as any[])[0];
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -395,6 +435,7 @@ router.get('/me', combinedAuthMiddleware, (req: Request, res: Response) => {
 // POST /change-password - change password (requires auth)
 router.post('/change-password', combinedAuthMiddleware, async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { currentPassword, newPassword } = req.body;
 
@@ -406,7 +447,11 @@ router.post('/change-password', combinedAuthMiddleware, async (req: Request, res
       return res.status(400).json({ error: 'New password must be at least 8 characters with uppercase, lowercase, and number' });
     }
 
-    const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(userId) as any;
+    const [userRows] = await pool.execute(
+      'SELECT password_hash FROM users WHERE id = ?',
+      [userId]
+    );
+    const user = (userRows as any[])[0];
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -417,7 +462,10 @@ router.post('/change-password', combinedAuthMiddleware, async (req: Request, res
     }
 
     const newHash = await hashPassword(newPassword);
-    db.prepare('UPDATE users SET password_hash = ?, updated_at = datetime(\'now\') WHERE id = ?').run(newHash, userId);
+    await pool.execute(
+      'UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?',
+      [newHash, userId]
+    );
 
     return res.status(200).json({ message: 'Password changed successfully' });
   } catch (err: any) {
@@ -427,26 +475,33 @@ router.post('/change-password', combinedAuthMiddleware, async (req: Request, res
 });
 
 // DELETE /account - delete own account and all data
-router.delete('/account', combinedAuthMiddleware, (req: Request, res: Response) => {
+router.delete('/account', combinedAuthMiddleware, async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
 
-    const deleteAll = db.transaction(() => {
-      db.prepare('DELETE FROM reminders WHERE user_id = ?').run(userId);
-      db.prepare('DELETE FROM savings_transactions WHERE user_id = ?').run(userId);
-      db.prepare('DELETE FROM savings_goals WHERE user_id = ?').run(userId);
-      db.prepare('DELETE FROM repairs WHERE user_id = ?').run(userId);
-      db.prepare('DELETE FROM costs WHERE user_id = ?').run(userId);
-      db.prepare('DELETE FROM loans WHERE user_id = ?').run(userId);
-      db.prepare('DELETE FROM vehicles WHERE user_id = ?').run(userId);
-      db.prepare('DELETE FROM planned_purchases WHERE user_id = ?').run(userId);
-      db.prepare('DELETE FROM persons WHERE user_id = ?').run(userId);
-      db.prepare('DELETE FROM api_tokens WHERE user_id = ?').run(userId);
-      db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(userId);
-      db.prepare('DELETE FROM users WHERE id = ?').run(userId);
-    });
-
-    deleteAll();
+    const conn = await pool.getConnection();
+    await conn.beginTransaction();
+    try {
+      await conn.execute('DELETE FROM reminders WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM savings_transactions WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM savings_goals WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM repairs WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM costs WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM loans WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM vehicles WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM planned_purchases WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM persons WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM api_tokens WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM password_resets WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM users WHERE id = ?', [userId]);
+      await conn.commit();
+    } catch (txErr) {
+      await conn.rollback();
+      throw txErr;
+    } finally {
+      conn.release();
+    }
 
     res.clearCookie('refreshToken');
     return res.status(200).json({ message: 'Account deleted' });

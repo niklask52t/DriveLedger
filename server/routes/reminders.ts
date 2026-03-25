@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
-import db from '../db';
+import { getPool } from '../db';
 import { combinedAuthMiddleware } from '../middleware';
 
 const router = Router();
@@ -9,15 +9,17 @@ const router = Router();
 router.use(combinedAuthMiddleware);
 
 // GET /due - get reminders that are due (must be before /:id to avoid route conflict)
-router.get('/due', (req: Request, res: Response) => {
+router.get('/due', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
 
-    const rows = db.prepare(
-      "SELECT * FROM reminders WHERE user_id = ? AND remind_at <= datetime('now') AND sent = 0 AND active = 1 ORDER BY remind_at ASC"
-    ).all(userId) as any[];
+    const [rows] = await pool.execute(
+      'SELECT * FROM reminders WHERE user_id = ? AND remind_at <= NOW() AND sent = 0 AND active = 1 ORDER BY remind_at ASC',
+      [userId]
+    );
 
-    return res.status(200).json(rows.map(formatReminder));
+    return res.status(200).json((rows as any[]).map(formatReminder));
   } catch (err: any) {
     console.error('[REMINDERS] Get due error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -25,8 +27,9 @@ router.get('/due', (req: Request, res: Response) => {
 });
 
 // GET / - list all reminders for current user
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { active, type } = req.query;
 
@@ -45,9 +48,9 @@ router.get('/', (req: Request, res: Response) => {
 
     query += ' ORDER BY remind_at ASC';
 
-    const rows = db.prepare(query).all(...params) as any[];
+    const [rows] = await pool.execute(query, params);
 
-    return res.status(200).json(rows.map(formatReminder));
+    return res.status(200).json((rows as any[]).map(formatReminder));
   } catch (err: any) {
     console.error('[REMINDERS] List error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -55,12 +58,14 @@ router.get('/', (req: Request, res: Response) => {
 });
 
 // GET /:id - single reminder
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { id } = req.params;
 
-    const row = db.prepare('SELECT * FROM reminders WHERE id = ? AND user_id = ?').get(id, userId) as any;
+    const [rows] = await pool.execute('SELECT * FROM reminders WHERE id = ? AND user_id = ?', [id, userId]);
+    const row = (rows as any[])[0];
 
     if (!row) {
       return res.status(404).json({ error: 'Reminder not found' });
@@ -74,8 +79,9 @@ router.get('/:id', (req: Request, res: Response) => {
 });
 
 // POST / - create reminder
-router.post('/', (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { title, description, type, entity_type, entity_id, remind_at, recurring, email_notify } = req.body;
 
@@ -95,22 +101,24 @@ router.post('/', (req: Request, res: Response) => {
 
     const id = uuid();
 
-    db.prepare(
-      'INSERT INTO reminders (id, user_id, title, description, type, entity_type, entity_id, remind_at, recurring, email_notify) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(
-      id,
-      userId,
-      title,
-      description || '',
-      type,
-      entity_type || '',
-      entity_id || '',
-      remind_at,
-      recurring || '',
-      email_notify !== undefined ? (email_notify ? 1 : 0) : 1
+    await pool.execute(
+      'INSERT INTO reminders (id, user_id, title, description, type, entity_type, entity_id, remind_at, recurring, email_notify) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        id,
+        userId,
+        title,
+        description || '',
+        type,
+        entity_type || '',
+        entity_id || '',
+        remind_at,
+        recurring || '',
+        email_notify !== undefined ? (email_notify ? 1 : 0) : 1
+      ]
     );
 
-    const row = db.prepare('SELECT * FROM reminders WHERE id = ?').get(id) as any;
+    const [createdRows] = await pool.execute('SELECT * FROM reminders WHERE id = ?', [id]);
+    const row = (createdRows as any[])[0];
 
     return res.status(201).json(formatReminder(row));
   } catch (err: any) {
@@ -120,12 +128,14 @@ router.post('/', (req: Request, res: Response) => {
 });
 
 // PUT /:id - update reminder
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { id } = req.params;
 
-    const existing = db.prepare('SELECT * FROM reminders WHERE id = ? AND user_id = ?').get(id, userId) as any;
+    const [existingRows] = await pool.execute('SELECT * FROM reminders WHERE id = ? AND user_id = ?', [id, userId]);
+    const existing = (existingRows as any[])[0];
     if (!existing) {
       return res.status(404).json({ error: 'Reminder not found' });
     }
@@ -146,7 +156,7 @@ router.put('/:id', (req: Request, res: Response) => {
       }
     }
 
-    db.prepare(`
+    await pool.execute(`
       UPDATE reminders SET
         title = ?,
         description = ?,
@@ -158,7 +168,7 @@ router.put('/:id', (req: Request, res: Response) => {
         email_notify = ?,
         active = ?
       WHERE id = ? AND user_id = ?
-    `).run(
+    `, [
       title ?? existing.title,
       description ?? existing.description,
       type ?? existing.type,
@@ -170,9 +180,10 @@ router.put('/:id', (req: Request, res: Response) => {
       active !== undefined ? (active ? 1 : 0) : existing.active,
       id,
       userId
-    );
+    ]);
 
-    const row = db.prepare('SELECT * FROM reminders WHERE id = ?').get(id) as any;
+    const [updatedRows] = await pool.execute('SELECT * FROM reminders WHERE id = ?', [id]);
+    const row = (updatedRows as any[])[0];
 
     return res.status(200).json(formatReminder(row));
   } catch (err: any) {
@@ -182,17 +193,19 @@ router.put('/:id', (req: Request, res: Response) => {
 });
 
 // DELETE /:id - delete reminder
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { id } = req.params;
 
-    const existing = db.prepare('SELECT id FROM reminders WHERE id = ? AND user_id = ?').get(id, userId) as any;
+    const [existingRows] = await pool.execute('SELECT id FROM reminders WHERE id = ? AND user_id = ?', [id, userId]);
+    const existing = (existingRows as any[])[0];
     if (!existing) {
       return res.status(404).json({ error: 'Reminder not found' });
     }
 
-    db.prepare('DELETE FROM reminders WHERE id = ? AND user_id = ?').run(id, userId);
+    await pool.execute('DELETE FROM reminders WHERE id = ? AND user_id = ?', [id, userId]);
 
     return res.status(200).json({ message: 'Reminder deleted' });
   } catch (err: any) {
@@ -202,8 +215,9 @@ router.delete('/:id', (req: Request, res: Response) => {
 });
 
 // POST /:id/snooze - snooze reminder
-router.post('/:id/snooze', (req: Request, res: Response) => {
+router.post('/:id/snooze', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const userId = (req as any).user.id;
     const { id } = req.params;
     const { remind_at } = req.body;
@@ -212,14 +226,16 @@ router.post('/:id/snooze', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'remind_at is required' });
     }
 
-    const existing = db.prepare('SELECT id FROM reminders WHERE id = ? AND user_id = ?').get(id, userId) as any;
+    const [existingRows] = await pool.execute('SELECT id FROM reminders WHERE id = ? AND user_id = ?', [id, userId]);
+    const existing = (existingRows as any[])[0];
     if (!existing) {
       return res.status(404).json({ error: 'Reminder not found' });
     }
 
-    db.prepare('UPDATE reminders SET remind_at = ?, sent = 0 WHERE id = ? AND user_id = ?').run(remind_at, id, userId);
+    await pool.execute('UPDATE reminders SET remind_at = ?, sent = 0 WHERE id = ? AND user_id = ?', [remind_at, id, userId]);
 
-    const row = db.prepare('SELECT * FROM reminders WHERE id = ?').get(id) as any;
+    const [updatedRows] = await pool.execute('SELECT * FROM reminders WHERE id = ?', [id]);
+    const row = (updatedRows as any[])[0];
 
     return res.status(200).json(formatReminder(row));
   } catch (err: any) {

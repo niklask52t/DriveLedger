@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
-import db from '../db';
+import { getPool } from '../db';
 import { combinedAuthMiddleware, adminMiddleware } from '../middleware';
 import { generateSecureToken, hashPassword } from '../auth';
 import { toCamelCase, rowsToCamelCase } from '../utils';
@@ -12,13 +12,14 @@ router.use(combinedAuthMiddleware);
 router.use(adminMiddleware);
 
 // GET /users - list all users
-router.get('/users', (req: Request, res: Response) => {
+router.get('/users', async (req: Request, res: Response) => {
   try {
-    const rows = db.prepare(
+    const pool = getPool();
+    const [rows] = await pool.execute(
       'SELECT id, email, username, is_admin, email_verified, created_at, updated_at FROM users ORDER BY created_at DESC'
-    ).all() as any[];
+    );
 
-    const users = rows.map((row) => ({
+    const users = (rows as any[]).map((row) => ({
       id: row.id,
       email: row.email,
       username: row.username,
@@ -36,8 +37,9 @@ router.get('/users', (req: Request, res: Response) => {
 });
 
 // POST /registration-tokens - generate a new registration token
-router.post('/registration-tokens', (req: Request, res: Response) => {
+router.post('/registration-tokens', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const adminId = (req as any).user.id;
     const id = uuid();
     const token = generateSecureToken();
@@ -46,9 +48,10 @@ router.post('/registration-tokens', (req: Request, res: Response) => {
     const expiresInDays = req.body.expiresInDays || 7;
     const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
 
-    db.prepare(
-      'INSERT INTO registration_tokens (id, token, created_by, expires_at) VALUES (?, ?, ?, ?)'
-    ).run(id, token, adminId, expiresAt);
+    await pool.execute(
+      'INSERT INTO registration_tokens (id, token, created_by, expires_at) VALUES (?, ?, ?, ?)',
+      [id, token, adminId, expiresAt]
+    );
 
     return res.status(201).json({
       id,
@@ -64,13 +67,14 @@ router.post('/registration-tokens', (req: Request, res: Response) => {
 });
 
 // GET /registration-tokens - list all registration tokens
-router.get('/registration-tokens', (req: Request, res: Response) => {
+router.get('/registration-tokens', async (req: Request, res: Response) => {
   try {
-    const rows = db.prepare(
+    const pool = getPool();
+    const [rows] = await pool.execute(
       'SELECT * FROM registration_tokens ORDER BY created_at DESC'
-    ).all() as any[];
+    );
 
-    const tokens = rows.map((row) => ({
+    const tokens = (rows as any[]).map((row) => ({
       id: row.id,
       token: row.token,
       createdBy: row.created_by,
@@ -88,16 +92,18 @@ router.get('/registration-tokens', (req: Request, res: Response) => {
 });
 
 // DELETE /registration-tokens/:id - delete a registration token
-router.delete('/registration-tokens/:id', (req: Request, res: Response) => {
+router.delete('/registration-tokens/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const { id } = req.params;
 
-    const existing = db.prepare('SELECT id FROM registration_tokens WHERE id = ?').get(id) as any;
+    const [existingRows] = await pool.execute('SELECT id FROM registration_tokens WHERE id = ?', [id]);
+    const existing = (existingRows as any[])[0];
     if (!existing) {
       return res.status(404).json({ error: 'Registration token not found' });
     }
 
-    db.prepare('DELETE FROM registration_tokens WHERE id = ?').run(id);
+    await pool.execute('DELETE FROM registration_tokens WHERE id = ?', [id]);
 
     return res.status(200).json({ message: 'Registration token deleted' });
   } catch (err: any) {
@@ -107,8 +113,9 @@ router.delete('/registration-tokens/:id', (req: Request, res: Response) => {
 });
 
 // DELETE /users/:id - delete a user and ALL their data
-router.delete('/users/:id', (req: Request, res: Response) => {
+router.delete('/users/:id', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const { id } = req.params;
     const adminId = (req as any).user.id;
 
@@ -117,33 +124,36 @@ router.delete('/users/:id', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Cannot delete your own account' });
     }
 
-    const user = db.prepare('SELECT id, email, username FROM users WHERE id = ?').get(id) as any;
+    const [userRows] = await pool.execute('SELECT id, email, username FROM users WHERE id = ?', [id]);
+    const user = (userRows as any[])[0];
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Delete all user data in a transaction (foreign keys with CASCADE should handle most,
-    // but we do it explicitly for safety)
-    const deleteTransaction = db.transaction(() => {
+    // Delete all user data in a transaction
+    const conn = await pool.getConnection();
+    await conn.beginTransaction();
+    try {
       // Delete savings transactions first (depends on savings_goals)
-      db.prepare(`
-        DELETE FROM savings_transactions WHERE user_id = ?
-      `).run(id);
-
-      db.prepare('DELETE FROM reminders WHERE user_id = ?').run(id);
-      db.prepare('DELETE FROM savings_goals WHERE user_id = ?').run(id);
-      db.prepare('DELETE FROM costs WHERE user_id = ?').run(id);
-      db.prepare('DELETE FROM loans WHERE user_id = ?').run(id);
-      db.prepare('DELETE FROM repairs WHERE user_id = ?').run(id);
-      db.prepare('DELETE FROM planned_purchases WHERE user_id = ?').run(id);
-      db.prepare('DELETE FROM persons WHERE user_id = ?').run(id);
-      db.prepare('DELETE FROM api_tokens WHERE user_id = ?').run(id);
-      db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(id);
-      db.prepare('DELETE FROM vehicles WHERE user_id = ?').run(id);
-      db.prepare('DELETE FROM users WHERE id = ?').run(id);
-    });
-
-    deleteTransaction();
+      await conn.execute('DELETE FROM savings_transactions WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM reminders WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM savings_goals WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM costs WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM loans WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM repairs WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM planned_purchases WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM persons WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM api_tokens WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM password_resets WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM vehicles WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM users WHERE id = ?', [id]);
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
 
     return res.status(200).json({ message: `User ${user.username} and all their data deleted` });
   } catch (err: any) {
@@ -153,11 +163,13 @@ router.delete('/users/:id', (req: Request, res: Response) => {
 });
 
 // POST /users/:id/reset-password - admin generates a password reset token for a specific user
-router.post('/users/:id/reset-password', (req: Request, res: Response) => {
+router.post('/users/:id/reset-password', async (req: Request, res: Response) => {
   try {
+    const pool = getPool();
     const { id } = req.params;
 
-    const user = db.prepare('SELECT id, email, username FROM users WHERE id = ?').get(id) as any;
+    const [userRows] = await pool.execute('SELECT id, email, username FROM users WHERE id = ?', [id]);
+    const user = (userRows as any[])[0];
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -166,9 +178,10 @@ router.post('/users/:id/reset-password', (req: Request, res: Response) => {
     const tokenId = uuid();
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
 
-    db.prepare(
-      'INSERT INTO password_resets (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
-    ).run(tokenId, user.id, resetToken, expiresAt);
+    await pool.execute(
+      'INSERT INTO password_resets (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)',
+      [tokenId, user.id, resetToken, expiresAt]
+    );
 
     console.log(`[ADMIN] Password reset token generated for user ${user.username} (${user.email})`);
 
