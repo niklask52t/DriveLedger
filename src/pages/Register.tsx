@@ -74,11 +74,11 @@ export default function Register({ onNavigate }: RegisterProps) {
   };
 
   return (
-    <div className="min-h-screen bg-dark-950 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background pattern */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-1/2 -right-1/4 w-[800px] h-[800px] bg-gradient-to-bl from-primary-600/8 via-transparent to-transparent rounded-full blur-3xl" />
-        <div className="absolute -bottom-1/4 -left-1/4 w-[600px] h-[600px] bg-gradient-to-tr from-accent/5 via-transparent to-transparent rounded-full blur-3xl" />
+    <div className="min-h-screen bg-dark-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      {/* Background effects */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-gradient-to-b from-primary-600/10 via-primary-500/5 to-transparent rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-1/4 w-[400px] h-[300px] bg-gradient-to-t from-accent/5 to-transparent rounded-full blur-3xl" />
         <div
           className="absolute inset-0 opacity-[0.03]"
           style={{
@@ -86,23 +86,30 @@ export default function Register({ onNavigate }: RegisterProps) {
             backgroundSize: '60px 60px',
           }}
         />
-        <svg className="absolute bottom-0 left-0 w-full h-40 opacity-[0.04]" viewBox="0 0 1200 160" preserveAspectRatio="none">
-          <path d="M0 160 L600 40 L1200 160" stroke="white" strokeWidth="2" fill="none" />
-          <path d="M0 160 L600 60 L1200 160" stroke="white" strokeWidth="1" fill="none" strokeDasharray="20 15" />
-        </svg>
+        <div
+          className="absolute inset-0 opacity-[0.02]"
+          style={{
+            backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.15) 1px, transparent 0)`,
+            backgroundSize: '40px 40px',
+          }}
+        />
       </div>
 
-      <div className="w-full max-w-md relative z-10">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <img src="/logo.png" alt="DriveLedger" className="w-20 h-20 mx-auto rounded-2xl shadow-lg shadow-primary-600/30 mb-4 object-cover" />
-          <h1 className="text-3xl font-bold text-dark-50 tracking-tight">DriveLedger</h1>
-          <p className="text-dark-400 mt-1">Create your account</p>
+      {/* Banner */}
+      <div className="relative z-10 flex items-center gap-5 mb-10">
+        <img src="/logo.png" alt="DriveLedger" className="w-[72px] h-[72px] rounded-2xl shadow-2xl shadow-primary-600/20 ring-1 ring-white/10" />
+        <div className="flex flex-col">
+          <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-dark-100 to-dark-300 bg-clip-text text-transparent">DriveLedger</h1>
+          <p className="text-dark-400 text-sm mt-0.5 tracking-wide">Your personal vehicle finance manager</p>
         </div>
+      </div>
 
-        {/* Card */}
-        <div className="bg-dark-900/80 backdrop-blur-xl border border-dark-800 rounded-2xl p-8 shadow-2xl shadow-black/30">
-          <h2 className="text-xl font-semibold text-dark-50 mb-6">Register</h2>
+      <div className="w-full max-w-[420px] relative z-10">
+        <div className="bg-dark-900/70 backdrop-blur-2xl border border-dark-700/60 rounded-2xl overflow-hidden shadow-2xl shadow-black/40">
+          <div className="h-1 bg-gradient-to-r from-primary-500 via-primary-400 to-accent" />
+          <div className="p-8">
+          <h2 className="text-xl font-bold text-dark-50 mb-1">Create Account</h2>
+          <p className="text-dark-500 text-sm mb-7">Join DriveLedger with an invite token</p>
 
           {error && (
             <div className="flex items-center gap-2 bg-danger/10 border border-danger/20 rounded-lg px-4 py-3 mb-6">
@@ -245,14 +252,15 @@ export default function Register({ onNavigate }: RegisterProps) {
               )}
             </button>
           </form>
+          </div>
         </div>
 
         {/* Footer */}
-        <p className="text-center mt-6 text-dark-400 text-sm">
+        <p className="text-center mt-6 text-dark-500 text-sm">
           Already have an account?{' '}
           <button
             onClick={() => onNavigate('login')}
-            className="text-primary-400 hover:text-primary-300 font-medium transition-colors"
+            className="text-primary-400 hover:text-primary-300 font-medium transition-colors cursor-pointer"
           >
             Sign In
           </button>
