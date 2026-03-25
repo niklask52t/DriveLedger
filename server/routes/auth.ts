@@ -1,0 +1,370 @@
+import { Router, Request, Response } from 'express';
+import { v4 as uuid } from 'uuid';
+import db from '../db';
+import { combinedAuthMiddleware } from '../middleware';
+import {
+  hashPassword,
+  comparePassword,
+  generateAccessToken,
+  generateRefreshToken,
+  verifyRefreshToken,
+  generateSecureToken,
+} from '../auth';
+import { isValidEmail, isValidPassword, toCamelCase } from '../utils';
+
+const router = Router();
+
+// POST /register
+router.post('/register', async (req: Request, res: Response) => {
+  try {
+    const { email, username, password, registrationToken } = req.body;
+
+    // Validate required fields
+    if (!email || !username || !password || !registrationToken) {
+      return res.status(400).json({ error: 'Email, username, password, and registration token are required' });
+    }
+
+    // Validate email format
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Validate password strength
+    const passwordCheck = isValidPassword(password);
+    if (!passwordCheck.valid) {
+      return res.status(400).json({ error: passwordCheck.message });
+    }
+
+    // Validate registration token
+    const tokenRow = db.prepare(
+      "SELECT * FROM registration_tokens WHERE token = ? AND used = 0 AND expires_at > datetime('now')"
+    ).get(registrationToken) as any;
+
+    if (!tokenRow) {
+      return res.status(400).json({ error: 'Invalid, used, or expired registration token' });
+    }
+
+    // Check if email or username already exists
+    const existingUser = db.prepare(
+      'SELECT id FROM users WHERE email = ? OR username = ?'
+    ).get(email, username) as any;
+
+    if (existingUser) {
+      return res.status(409).json({ error: 'Email or username already in use' });
+    }
+
+    // Hash password and create user
+    const passwordHash = await hashPassword(password);
+    const userId = uuid();
+    const now = new Date().toISOString();
+
+    db.prepare(
+      'INSERT INTO users (id, email, username, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(userId, email, username, passwordHash, now, now);
+
+    // Mark registration token as used
+    db.prepare(
+      'UPDATE registration_tokens SET used = 1, used_by = ? WHERE id = ?'
+    ).run(userId, tokenRow.id);
+
+    // Generate tokens
+    const accessToken = generateAccessToken(userId, email);
+    const refreshToken = generateRefreshToken(userId);
+
+    // Set refresh token as httpOnly cookie
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    // TODO: Send welcome email once email service is configured
+    // await sendWelcomeEmail(email, username);
+
+    return res.status(201).json({
+      user: {
+        id: userId,
+        email,
+        username,
+        isAdmin: false,
+        emailVerified: false,
+        createdAt: now,
+      },
+      accessToken,
+      refreshToken,
+    });
+  } catch (err: any) {
+    console.error('[AUTH] Register error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /login
+router.post('/login', async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // Find user by email
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Compare password
+    const valid = await comparePassword(password, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Generate tokens
+    const accessToken = generateAccessToken(user.id, user.email);
+    const refreshToken = generateRefreshToken(user.id);
+
+    // Set refresh token as httpOnly cookie
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.status(200).json({
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        isAdmin: !!user.is_admin,
+        emailVerified: !!user.email_verified,
+        createdAt: user.created_at,
+      },
+      accessToken,
+      refreshToken,
+    });
+  } catch (err: any) {
+    console.error('[AUTH] Login error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /refresh
+router.post('/refresh', (req: Request, res: Response) => {
+  try {
+    const refreshToken = req.cookies?.refreshToken;
+
+    if (!refreshToken) {
+      return res.status(401).json({ error: 'No refresh token provided' });
+    }
+
+    const payload = verifyRefreshToken(refreshToken);
+    if (!payload) {
+      return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+
+    // Look up user to get email
+    const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(payload.userId) as any;
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const accessToken = generateAccessToken(user.id, user.email);
+
+    return res.status(200).json({ accessToken });
+  } catch (err: any) {
+    console.error('[AUTH] Refresh error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /logout
+router.post('/logout', (_req: Request, res: Response) => {
+  try {
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+    });
+
+    return res.status(200).json({ message: 'Logged out successfully' });
+  } catch (err: any) {
+    console.error('[AUTH] Logout error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /forgot-password
+router.post('/forgot-password', (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Always return success to not leak whether email exists
+    const user = db.prepare('SELECT id FROM users WHERE email = ?').get(email) as any;
+
+    if (user) {
+      const resetToken = generateSecureToken();
+      const id = uuid();
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+
+      db.prepare(
+        'INSERT INTO password_resets (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
+      ).run(id, user.id, resetToken, expiresAt);
+
+      // TODO: Send reset email once email service is configured
+      // await sendPasswordResetEmail(email, resetToken);
+      console.log(`[AUTH] Password reset token generated for ${email}`);
+    }
+
+    return res.status(200).json({ message: 'If that email exists, a reset link has been sent' });
+  } catch (err: any) {
+    console.error('[AUTH] Forgot password error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /reset-password
+router.post('/reset-password', async (req: Request, res: Response) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: 'Token and new password are required' });
+    }
+
+    // Validate password strength
+    const passwordCheck = isValidPassword(newPassword);
+    if (!passwordCheck.valid) {
+      return res.status(400).json({ error: passwordCheck.message });
+    }
+
+    // Find valid reset token
+    const resetRow = db.prepare(
+      "SELECT * FROM password_resets WHERE token = ? AND used = 0 AND expires_at > datetime('now')"
+    ).get(token) as any;
+
+    if (!resetRow) {
+      return res.status(400).json({ error: 'Invalid, used, or expired reset token' });
+    }
+
+    // Hash new password and update user
+    const passwordHash = await hashPassword(newPassword);
+    const now = new Date().toISOString();
+
+    db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').run(
+      passwordHash,
+      now,
+      resetRow.user_id
+    );
+
+    // Mark token as used
+    db.prepare('UPDATE password_resets SET used = 1 WHERE id = ?').run(resetRow.id);
+
+    return res.status(200).json({ message: 'Password reset successfully' });
+  } catch (err: any) {
+    console.error('[AUTH] Reset password error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /me - requires auth
+router.get('/me', combinedAuthMiddleware, (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+
+    const user = db.prepare(
+      'SELECT id, email, username, is_admin, email_verified, created_at, updated_at FROM users WHERE id = ?'
+    ).get(userId) as any;
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    return res.status(200).json({
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        isAdmin: !!user.is_admin,
+        emailVerified: !!user.email_verified,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at,
+      },
+    });
+  } catch (err: any) {
+    console.error('[AUTH] Me error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /change-password - change password (requires auth)
+router.post('/change-password', combinedAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+
+    if (!isValidPassword(newPassword)) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters with uppercase, lowercase, and number' });
+    }
+
+    const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(userId) as any;
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const valid = await comparePassword(currentPassword, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    const newHash = await hashPassword(newPassword);
+    db.prepare('UPDATE users SET password_hash = ?, updated_at = datetime(\'now\') WHERE id = ?').run(newHash, userId);
+
+    return res.status(200).json({ message: 'Password changed successfully' });
+  } catch (err: any) {
+    console.error('[AUTH] Change password error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /account - delete own account and all data
+router.delete('/account', combinedAuthMiddleware, (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+
+    const deleteAll = db.transaction(() => {
+      db.prepare('DELETE FROM savings_transactions WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM savings_goals WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM repairs WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM costs WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM loans WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM vehicles WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM planned_purchases WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM persons WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM api_tokens WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+    });
+
+    deleteAll();
+
+    res.clearCookie('refreshToken');
+    return res.status(200).json({ message: 'Account deleted' });
+  } catch (err: any) {
+    console.error('[AUTH] Delete account error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+export default router;
