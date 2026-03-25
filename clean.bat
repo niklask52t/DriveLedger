@@ -24,7 +24,11 @@ echo [4/6] Removing package-lock.json...
 if exist "package-lock.json" del /q "package-lock.json"
 echo       Done.
 
-echo [5/5] Removing TypeScript build info...
+echo [5/6] Clearing npm cache...
+call npm cache clean --force >nul 2>&1
+echo       Done.
+
+echo [6/6] Removing TypeScript build info...
 if exist "tsconfig.tsbuildinfo" del /q "tsconfig.tsbuildinfo"
 if exist "tsconfig.app.tsbuildinfo" del /q "tsconfig.app.tsbuildinfo"
 if exist "tsconfig.node.tsbuildinfo" del /q "tsconfig.node.tsbuildinfo"
@@ -35,7 +39,6 @@ echo   ======================================
 echo        Clean complete!
 echo   ======================================
 echo.
-echo   Run "npm install" to reinstall dependencies.
 echo   Run "dev.bat" to start development.
 echo.
 pause
