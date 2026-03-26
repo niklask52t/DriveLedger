@@ -37,10 +37,29 @@ import Planner from './pages/Planner';
 function AppContent() {
   const { user, loading: authLoading, logout, refreshUser } = useAuth();
 
+  // Read initial page + vehicleId from URL hash (e.g. #costs or #vehicle-detail/abc123)
+  const getHashState = (): { page: Page; vehicleId: string | null } => {
+    const hash = window.location.hash.slice(1); // remove #
+    if (!hash) return { page: 'dashboard', vehicleId: null };
+    const [page, vehicleId] = hash.split('/');
+    const validPages: Page[] = [
+      'dashboard','vehicles','vehicle-detail','costs','services','fuel','repairs',
+      'inspections','taxes','loans','savings','supplies','equipment','reminders',
+      'planner','purchase-planner','settings','wiki','login','register',
+      'forgot-password','reset-password'
+    ];
+    if (validPages.includes(page as Page)) {
+      return { page: page as Page, vehicleId: vehicleId || null };
+    }
+    return { page: 'dashboard', vehicleId: null };
+  };
+
+  const initialHash = getHashState();
+
   // App state
   const [state, setState] = useState<AppState>(emptyState());
-  const [currentPage, setCurrentPage] = useState<Page>('dashboard');
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState<Page>(initialHash.page);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(initialHash.vehicleId);
   const [dataLoading, setDataLoading] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
   const [appConfig, setAppConfig] = useState<AppConfig>({ emailEnabled: false });
@@ -57,6 +76,17 @@ function AppContent() {
     if (params.get('token') && window.location.pathname.includes('reset-password')) {
       setCurrentPage('reset-password');
     }
+  }, []);
+
+  // Listen for browser back/forward (hash changes)
+  useEffect(() => {
+    const onHashChange = () => {
+      const { page, vehicleId } = getHashState();
+      setCurrentPage(page);
+      if (vehicleId) setSelectedVehicleId(vehicleId);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
   // Load config on mount
@@ -115,19 +145,24 @@ function AppContent() {
     }
   }, []);
 
-  // Navigation
+  // Navigation - syncs to URL hash so Ctrl+R keeps the page
   const navigate = useCallback((page: Page, vehicleId?: string) => {
     setCurrentPage(page);
     if (page === 'vehicle-detail' && vehicleId) {
       setSelectedVehicleId(vehicleId);
+      window.location.hash = `vehicle-detail/${vehicleId}`;
     } else if (page !== 'vehicle-detail') {
       setSelectedVehicleId(null);
+      window.location.hash = page;
+    } else {
+      window.location.hash = page;
     }
   }, []);
 
   const navigateToVehicle = useCallback((vehicleId: string) => {
     setSelectedVehicleId(vehicleId);
     setCurrentPage('vehicle-detail');
+    window.location.hash = `vehicle-detail/${vehicleId}`;
   }, []);
 
   // Logout
@@ -138,6 +173,7 @@ function AppContent() {
     setDueReminders([]);
     setVerificationBannerDismissed(false);
     setResendSuccess(false);
+    window.location.hash = '';
   }, [logout]);
 
   // Resend verification email
