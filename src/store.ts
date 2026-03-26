@@ -3,7 +3,11 @@ import type { AppState, Reminder } from './types';
 
 export async function loadState(): Promise<AppState> {
   // First load everything that's independent
-  const [vehicles, costs, loans, repairs, savingsGoals, plannedPurchases, persons] = await Promise.all([
+  const [
+    vehicles, costs, loans, repairs, savingsGoals, plannedPurchases, persons,
+    serviceRecords, upgradeRecords, fuelRecords, odometerRecords,
+    supplies, equipment, inspections, vehicleNotes, taxRecords, plannerTasks,
+  ] = await Promise.all([
     api.getVehicles(),
     api.getCosts(),
     api.getLoans(),
@@ -11,12 +15,26 @@ export async function loadState(): Promise<AppState> {
     api.getSavingsGoals(),
     api.getPlannedPurchases(),
     api.getPersons(),
+    api.getServices(),
+    api.getUpgrades(),
+    api.getFuelRecords(),
+    api.getOdometerRecords(),
+    api.getSupplies(),
+    api.getEquipment(),
+    api.getInspections(),
+    api.getVehicleNotes(),
+    api.getTaxRecords(),
+    api.getPlannerTasks(),
   ]);
 
   // Then load savings transactions (depends on goals)
   const savingsTransactions = await api.getSavingsTransactions();
 
-  return { vehicles, costs, loans, repairs, savingsGoals, savingsTransactions, plannedPurchases, persons };
+  return {
+    vehicles, costs, loans, repairs, savingsGoals, savingsTransactions, plannedPurchases, persons,
+    serviceRecords, upgradeRecords, fuelRecords, odometerRecords,
+    supplies, equipment, inspections, vehicleNotes, taxRecords, plannerTasks,
+  };
 }
 
 export function emptyState(): AppState {
@@ -29,6 +47,16 @@ export function emptyState(): AppState {
     savingsTransactions: [],
     plannedPurchases: [],
     persons: [],
+    serviceRecords: [],
+    upgradeRecords: [],
+    fuelRecords: [],
+    odometerRecords: [],
+    supplies: [],
+    equipment: [],
+    inspections: [],
+    vehicleNotes: [],
+    taxRecords: [],
+    plannerTasks: [],
   };
 }
 

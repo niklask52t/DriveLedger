@@ -1,264 +1,611 @@
-import { useState } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import { ArrowLeft, Pencil, Trash2, ExternalLink, Fuel, Gauge, Calendar, Car, CreditCard, Wrench, PiggyBank, BarChart3, BadgeInfo, FileText } from 'lucide-react';
+import { useState, useMemo, lazy, Suspense } from 'react';
+import { motion } from 'framer-motion';
+import {
+  ArrowLeft, Pencil, Trash2, DollarSign, Wrench, ArrowUpCircle,
+  CreditCard, PiggyBank, BarChart3, Fuel, Gauge, ClipboardCheck, FileText, Receipt,
+} from 'lucide-react';
 import Modal from '../components/Modal';
-import VehicleCostsTab from '../components/vehicle/VehicleCostsTab';
-import VehicleRepairsTab from '../components/vehicle/VehicleRepairsTab';
-import VehicleLoansTab from '../components/vehicle/VehicleLoansTab';
-import VehicleSavingsTab from '../components/vehicle/VehicleSavingsTab';
-import VehicleStatsTab from '../components/vehicle/VehicleStatsTab';
-import VehicleEditForm from '../components/vehicle/VehicleEditForm';
-import { emptyCost, emptyRepair } from '../components/vehicle/constants';
-import type { AppState, Vehicle, Cost, Repair, Page } from '../types';
-import { formatCurrency, formatDate, formatNumber, getFuelTypeLabel, toMonthly, toYearly } from '../utils';
+import { cn } from '../lib/utils';
+import type { AppState, Page, Vehicle, FuelType, VehicleStatus } from '../types';
+import {
+  formatCurrency, formatDate, formatNumber, getFuelTypeLabel,
+  getTotalMonthlyCosts, getTotalYearlyCosts, getTotalRepairCosts, toMonthly,
+} from '../utils';
+
+const CostsTab = lazy(() => import('../components/vehicle/VehicleCostsTab'));
+const RepairsTab = lazy(() => import('../components/vehicle/VehicleRepairsTab'));
+const LoansTab = lazy(() => import('../components/vehicle/VehicleLoansTab'));
+const SavingsTab = lazy(() => import('../components/vehicle/VehicleSavingsTab'));
+const StatisticsTab = lazy(() => import('../components/vehicle/VehicleStatsTab'));
+const ServicesTab = lazy(() => import('../components/vehicle/VehicleServicesTab'));
+const UpgradesTab = lazy(() => import('../components/vehicle/VehicleUpgradesTab'));
+const FuelTab = lazy(() => import('../components/vehicle/VehicleFuelTab'));
+const OdometerTab = lazy(() => import('../components/vehicle/VehicleOdometerTab'));
+const InspectionsTab = lazy(() => import('../components/vehicle/VehicleInspectionsTab'));
+const NotesTab = lazy(() => import('../components/vehicle/VehicleNotesTab'));
+const TaxesTab = lazy(() => import('../components/vehicle/VehicleTaxesTab'));
 
 interface VehicleDetailProps {
   state: AppState;
-  setState: (state: AppState) => void;
+  setState: (s: AppState) => void;
   vehicleId: string;
   onNavigate: (page: Page, vehicleId?: string) => void;
 }
 
-type TabId = 'costs' | 'repairs' | 'loans' | 'savings' | 'statistics';
+type Tab = 'costs' | 'services' | 'upgrades' | 'repairs' | 'fuel' | 'odometer' | 'loans' | 'savings' | 'inspections' | 'notes' | 'taxes' | 'statistics';
 
-const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
-  { id: 'costs', label: 'Costs', icon: <CreditCard size={16} /> },
-  { id: 'repairs', label: 'Repairs', icon: <Wrench size={16} /> },
-  { id: 'loans', label: 'Loans', icon: <FileText size={16} /> },
-  { id: 'savings', label: 'Savings', icon: <PiggyBank size={16} /> },
-  { id: 'statistics', label: 'Statistics', icon: <BarChart3 size={16} /> },
+const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
+  { key: 'costs', label: 'Costs', icon: DollarSign },
+  { key: 'services', label: 'Services', icon: Wrench },
+  { key: 'upgrades', label: 'Upgrades', icon: ArrowUpCircle },
+  { key: 'repairs', label: 'Repairs', icon: Wrench },
+  { key: 'fuel', label: 'Fuel', icon: Fuel },
+  { key: 'odometer', label: 'Odometer', icon: Gauge },
+  { key: 'loans', label: 'Loans', icon: CreditCard },
+  { key: 'savings', label: 'Savings', icon: PiggyBank },
+  { key: 'inspections', label: 'Inspections', icon: ClipboardCheck },
+  { key: 'notes', label: 'Notes', icon: FileText },
+  { key: 'taxes', label: 'Taxes', icon: Receipt },
+  { key: 'statistics', label: 'Statistics', icon: BarChart3 },
 ];
 
+const fadeUp = {
+  initial: { opacity: 0, y: 12 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.35 },
+};
+
 export default function VehicleDetail({ state, setState, vehicleId, onNavigate }: VehicleDetailProps) {
-  const vehicle = state.vehicles.find((v) => v.id === vehicleId);
-  const [activeTab, setActiveTab] = useState<TabId>('costs');
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showCostModal, setShowCostModal] = useState(false);
-  const [showRepairModal, setShowRepairModal] = useState(false);
+  const vehicle = state.vehicles.find(v => v.id === vehicleId);
+  const [activeTab, setActiveTab] = useState<Tab>('costs');
+  const [showEdit, setShowEdit] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const [editForm, setEditForm] = useState<Omit<Vehicle, 'id' | 'createdAt'> | null>(null);
-  const [costForm, setCostForm] = useState(emptyCost);
-  const [editingCostId, setEditingCostId] = useState<string | null>(null);
-  const [repairForm, setRepairForm] = useState(emptyRepair);
-  const [editingRepairId, setEditingRepairId] = useState<string | null>(null);
+
+  const vehicleCosts = useMemo(
+    () => state.costs.filter(c => c.vehicleId === vehicleId),
+    [state.costs, vehicleId],
+  );
+  const vehicleRepairs = useMemo(
+    () => state.repairs.filter(r => r.vehicleId === vehicleId),
+    [state.repairs, vehicleId],
+  );
+  const vehicleLoans = useMemo(
+    () => state.loans.filter(l => l.vehicleId === vehicleId),
+    [state.loans, vehicleId],
+  );
+  const vehicleSavings = useMemo(
+    () => state.savingsGoals.filter(s => s.vehicleId === vehicleId),
+    [state.savingsGoals, vehicleId],
+  );
+
+  const monthlyCost = useMemo(() => getTotalMonthlyCosts(vehicleCosts), [vehicleCosts]);
+  const yearlyCost = useMemo(() => getTotalYearlyCosts(vehicleCosts), [vehicleCosts]);
+  const repairTotal = useMemo(() => getTotalRepairCosts(vehicleRepairs), [vehicleRepairs]);
 
   if (!vehicle) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-dark-400">
-        <Car size={56} className="mb-4 opacity-40" />
-        <p className="text-lg font-medium mb-1">Vehicle not found</p>
-        <button onClick={() => onNavigate('vehicles')} className="mt-4 px-4 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors cursor-pointer">
+      <div className="space-y-8">
+        <button
+          onClick={() => onNavigate('vehicles')}
+          className="inline-flex items-center gap-2 text-zinc-400 hover:text-zinc-200 text-sm transition-colors"
+        >
+          <ArrowLeft size={16} />
           Back to Vehicles
         </button>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-16 text-center">
+          <p className="text-zinc-400">Vehicle not found</p>
+        </div>
       </div>
     );
   }
 
-  const vehicleCosts = state.costs.filter((c) => c.vehicleId === vehicleId);
-  const vehicleRepairs = state.repairs.filter((r) => r.vehicleId === vehicleId);
-  const vehicleLoans = state.loans.filter((l) => l.vehicleId === vehicleId);
-  const vehicleSavings = state.savingsGoals.filter((s) => s.vehicleId === vehicleId);
-  const totalMonthlyCost = vehicleCosts.reduce((sum, c) => sum + toMonthly(c.amount, c.frequency), 0);
-  const totalYearlyCost = vehicleCosts.reduce((sum, c) => sum + toYearly(c.amount, c.frequency), 0);
-  const totalRepairCost = vehicleRepairs.reduce((sum, r) => sum + r.cost, 0);
-  const fuelCostMonthly = vehicle.annualMileage > 0 ? (vehicle.avgConsumption / 100) * vehicle.fuelPrice * (vehicle.annualMileage / 12) : 0;
+  const openEdit = () => {
+    const { id, createdAt, ...rest } = vehicle;
+    setEditForm(rest);
+    setShowEdit(true);
+  };
 
-  const openEditModal = () => { const { id, createdAt, ...rest } = vehicle; setEditForm(rest); setShowEditModal(true); };
-  const handleSaveVehicle = () => {
-    if (!editForm || !editForm.name.trim()) return;
-    setState({ ...state, vehicles: state.vehicles.map((v) => v.id === vehicleId ? { ...v, ...editForm } : v) });
-    setShowEditModal(false);
+  const handleEditChange = (field: string, value: string | number) => {
+    setEditForm(prev => prev ? { ...prev, [field]: value } : prev);
+  };
+
+  const handleEditSubmit = () => {
+    if (!editForm) return;
+    const updated = state.vehicles.map(v =>
+      v.id === vehicleId ? { ...v, ...editForm } : v,
+    );
+    setState({ ...state, vehicles: updated });
+    setShowEdit(false);
     setEditForm(null);
   };
-  const updateEditForm = <K extends keyof Omit<Vehicle, 'id' | 'createdAt'>>(key: K, value: Omit<Vehicle, 'id' | 'createdAt'>[K]) => {
-    setEditForm((prev) => (prev ? { ...prev, [key]: value } : prev));
-  };
+
   const handleDelete = () => {
     setState({
       ...state,
-      vehicles: state.vehicles.filter((v) => v.id !== vehicleId),
-      costs: state.costs.filter((c) => c.vehicleId !== vehicleId),
-      repairs: state.repairs.filter((r) => r.vehicleId !== vehicleId),
-      loans: state.loans.filter((l) => l.vehicleId !== vehicleId),
-      savingsGoals: state.savingsGoals.filter((s) => s.vehicleId !== vehicleId),
+      vehicles: state.vehicles.filter(v => v.id !== vehicleId),
+      costs: state.costs.filter(c => c.vehicleId !== vehicleId),
+      loans: state.loans.filter(l => l.vehicleId !== vehicleId),
+      repairs: state.repairs.filter(r => r.vehicleId !== vehicleId),
+      savingsGoals: state.savingsGoals.filter(s => s.vehicleId !== vehicleId),
+      serviceRecords: state.serviceRecords.filter(s => s.vehicleId !== vehicleId),
+      upgradeRecords: state.upgradeRecords.filter(u => u.vehicleId !== vehicleId),
+      fuelRecords: state.fuelRecords.filter(f => f.vehicleId !== vehicleId),
+      odometerRecords: state.odometerRecords.filter(o => o.vehicleId !== vehicleId),
+      inspections: state.inspections.filter(i => i.vehicleId !== vehicleId),
+      vehicleNotes: state.vehicleNotes.filter(n => n.vehicleId !== vehicleId),
+      taxRecords: state.taxRecords.filter(t => t.vehicleId !== vehicleId),
     });
     onNavigate('vehicles');
   };
 
-  const openAddCost = () => { setCostForm({ ...emptyCost, vehicleId }); setEditingCostId(null); setShowCostModal(true); };
-  const openEditCost = (cost: Cost) => { const { id, createdAt, ...rest } = cost; setCostForm(rest); setEditingCostId(id); setShowCostModal(true); };
-  const handleSaveCost = () => {
-    if (!costForm.name.trim()) return;
-    if (editingCostId) {
-      setState({ ...state, costs: state.costs.map((c) => c.id === editingCostId ? { ...c, ...costForm } : c) });
-    } else {
-      setState({ ...state, costs: [...state.costs, { ...costForm, vehicleId, id: uuidv4(), createdAt: new Date().toISOString() }] });
-    }
-    setShowCostModal(false);
-    setEditingCostId(null);
-  };
-  const handleDeleteCost = (costId: string) => { setState({ ...state, costs: state.costs.filter((c) => c.id !== costId) }); };
+  const inputCls = 'w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50';
+  const labelCls = 'block text-sm font-medium text-zinc-400 mb-2';
 
-  const openAddRepair = () => { setRepairForm({ ...emptyRepair, vehicleId }); setEditingRepairId(null); setShowRepairModal(true); };
-  const openEditRepair = (repair: Repair) => { const { id, createdAt, ...rest } = repair; setRepairForm(rest); setEditingRepairId(id); setShowRepairModal(true); };
-  const handleSaveRepair = () => {
-    if (!repairForm.description.trim()) return;
-    if (editingRepairId) {
-      setState({ ...state, repairs: state.repairs.map((r) => r.id === editingRepairId ? { ...r, ...repairForm } : r) });
-    } else {
-      setState({ ...state, repairs: [...state.repairs, { ...repairForm, vehicleId, id: uuidv4(), createdAt: new Date().toISOString() }] });
-    }
-    setShowRepairModal(false);
-    setEditingRepairId(null);
-  };
-  const handleDeleteRepair = (repairId: string) => { setState({ ...state, repairs: state.repairs.filter((r) => r.id !== repairId) }); };
-
-  const infoItems = [
-    { label: 'First Registration', value: formatDate(vehicle.firstRegistration), icon: <Calendar size={16} /> },
-    { label: 'Current Mileage', value: `${formatNumber(vehicle.currentMileage)} km`, icon: <Gauge size={16} /> },
-    { label: 'Annual Mileage', value: `${formatNumber(vehicle.annualMileage)} km`, icon: <Gauge size={16} /> },
-    { label: 'Fuel Type', value: getFuelTypeLabel(vehicle.fuelType), icon: <Fuel size={16} /> },
-    { label: 'Consumption', value: `${vehicle.avgConsumption} L/100km`, icon: <Fuel size={16} /> },
-    { label: 'Horse Power', value: `${vehicle.horsePower} PS`, icon: <Car size={16} /> },
-    { label: 'License Plate', value: vehicle.licensePlate || '-', icon: <BadgeInfo size={16} /> },
-    { label: 'HSN / TSN', value: [vehicle.hsn, vehicle.tsn].filter(Boolean).join(' / ') || '-', icon: <BadgeInfo size={16} /> },
-  ];
+  const statusLabel = vehicle.status === 'owned' ? 'Owned' : 'Planned';
+  const statusColor = vehicle.status === 'owned'
+    ? 'bg-emerald-400/10 text-emerald-400'
+    : 'bg-amber-400/10 text-amber-400';
 
   return (
-    <div className="space-y-6">
-      <button onClick={() => onNavigate('vehicles')} className="flex items-center gap-2 text-dark-400 hover:text-dark-100 transition-colors cursor-pointer">
-        <ArrowLeft size={18} />
-        <span className="text-sm font-medium">Back to Vehicles</span>
-      </button>
+    <div className="space-y-8">
+      {/* Back */}
+      <motion.div {...fadeUp}>
+        <button
+          onClick={() => onNavigate('vehicles')}
+          className="inline-flex items-center gap-2 text-zinc-400 hover:text-zinc-200 text-sm transition-colors"
+        >
+          <ArrowLeft size={16} />
+          Back to Vehicles
+        </button>
+      </motion.div>
 
-      {/* Vehicle Header */}
-      <div className="bg-dark-800 border border-dark-700 rounded-xl overflow-hidden">
-        <div className="h-2" style={{ backgroundColor: vehicle.color || '#3b82f6' }} />
-        <div className="p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-lg" style={{ backgroundColor: vehicle.color || '#3b82f6' }}>
-                {vehicle.brand ? vehicle.brand.charAt(0).toUpperCase() : vehicle.name.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-dark-50">{vehicle.name}</h1>
-                <p className="text-dark-400 mt-0.5">{[vehicle.brand, vehicle.model, vehicle.variant].filter(Boolean).join(' ')}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${vehicle.status === 'owned' ? 'bg-success/20 text-success' : 'bg-warning/20 text-warning'}`}>
-                    {vehicle.status === 'owned' ? 'Owned' : 'Planned'}
-                  </span>
-                  {vehicle.purchasePrice > 0 && <span className="text-sm text-dark-400">Purchase: {formatCurrency(vehicle.purchasePrice)}</span>}
+      {/* Header Card */}
+      <motion.div {...fadeUp} transition={{ duration: 0.35, delay: 0.03 }} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden relative">
+        <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: vehicle.color || '#8b5cf6' }} />
+        <div className="p-6 pt-7 flex items-start justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-zinc-50">{vehicle.name}</h2>
+            <p className="text-sm text-zinc-400 mt-0.5">
+              {vehicle.brand} {vehicle.model}{vehicle.variant ? ` ${vehicle.variant}` : ''}
+            </p>
+            <span className={cn('inline-block mt-3 rounded-md px-2.5 py-1 text-xs font-medium', statusColor)}>
+              {statusLabel}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={openEdit}
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-2 transition-colors"
+            >
+              <Pencil size={14} />
+              Edit
+            </button>
+            <button
+              onClick={() => setShowDelete(true)}
+              className="bg-zinc-800 hover:bg-red-500/20 text-red-400 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-2 transition-colors"
+            >
+              <Trash2 size={14} />
+              Delete
+            </button>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Info Card */}
+      <motion.div {...fadeUp} transition={{ duration: 0.35, delay: 0.06 }} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-5">
+          <div>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">License Plate</p>
+            <p className="text-sm text-zinc-50">{vehicle.licensePlate || '-'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Fuel Type</p>
+            <p className="text-sm text-zinc-50">{getFuelTypeLabel(vehicle.fuelType)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Horsepower</p>
+            <p className="text-sm text-zinc-50">{vehicle.horsePower ? `${vehicle.horsePower} HP` : '-'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Purchase Price</p>
+            <p className="text-sm text-zinc-50">{vehicle.purchasePrice ? formatCurrency(vehicle.purchasePrice) : '-'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">First Registration</p>
+            <p className="text-sm text-zinc-50">{vehicle.firstRegistration ? formatDate(vehicle.firstRegistration) : '-'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Current Mileage</p>
+            <p className="text-sm text-zinc-50">{vehicle.currentMileage ? `${formatNumber(vehicle.currentMileage)} km` : '-'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Annual Mileage</p>
+            <p className="text-sm text-zinc-50">{vehicle.annualMileage ? `${formatNumber(vehicle.annualMileage)} km` : '-'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Consumption</p>
+            <p className="text-sm text-zinc-50">{vehicle.avgConsumption ? `${vehicle.avgConsumption} l/100km` : '-'}</p>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Stats Row */}
+      <motion.div {...fadeUp} transition={{ duration: 0.35, delay: 0.09 }} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+        <div className="flex items-center divide-x divide-zinc-800">
+          <div className="flex-1 text-center">
+            <p className="text-2xl font-bold text-emerald-400">{formatCurrency(monthlyCost)}</p>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Monthly</p>
+          </div>
+          <div className="flex-1 text-center">
+            <p className="text-2xl font-bold text-amber-400">{formatCurrency(yearlyCost)}</p>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Yearly</p>
+          </div>
+          <div className="flex-1 text-center">
+            <p className="text-2xl font-bold text-red-400">{formatCurrency(repairTotal)}</p>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Repairs</p>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Tab Bar */}
+      <motion.div {...fadeUp} transition={{ duration: 0.35, delay: 0.12 }}>
+        <div className="flex border-b border-zinc-800 overflow-x-auto flex-nowrap scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          {tabs.map(tab => {
+            const TabIcon = tab.icon;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={cn(
+                  'px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap inline-flex items-center gap-1.5 shrink-0',
+                  activeTab === tab.key
+                    ? 'border-violet-500 text-zinc-50'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-300',
+                )}
+              >
+                <TabIcon size={14} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </motion.div>
+
+      {/* Tab Content */}
+      <Suspense fallback={<div className="text-sm text-zinc-500">Loading...</div>}>
+        {activeTab === 'costs' && (
+          <CostsTab state={state} setState={setState} vehicleId={vehicleId} />
+        )}
+        {activeTab === 'services' && (
+          <ServicesTab vehicleId={vehicleId} state={state} setState={setState} />
+        )}
+        {activeTab === 'upgrades' && (
+          <UpgradesTab vehicleId={vehicleId} state={state} setState={setState} />
+        )}
+        {activeTab === 'repairs' && (
+          <RepairsTab state={state} setState={setState} vehicleId={vehicleId} />
+        )}
+        {activeTab === 'fuel' && (
+          <FuelTab vehicleId={vehicleId} state={state} setState={setState} />
+        )}
+        {activeTab === 'odometer' && (
+          <OdometerTab vehicleId={vehicleId} state={state} setState={setState} />
+        )}
+        {activeTab === 'loans' && (
+          <LoansTab state={state} setState={setState} vehicleId={vehicleId} />
+        )}
+        {activeTab === 'savings' && (
+          <SavingsTab state={state} setState={setState} vehicleId={vehicleId} />
+        )}
+        {activeTab === 'inspections' && (
+          <InspectionsTab vehicleId={vehicleId} state={state} setState={setState} />
+        )}
+        {activeTab === 'notes' && (
+          <NotesTab vehicleId={vehicleId} state={state} setState={setState} />
+        )}
+        {activeTab === 'taxes' && (
+          <TaxesTab vehicleId={vehicleId} state={state} setState={setState} />
+        )}
+        {activeTab === 'statistics' && (
+          <StatisticsTab state={state} vehicleId={vehicleId} />
+        )}
+      </Suspense>
+
+      {/* Edit Modal */}
+      {editForm && (
+        <Modal
+          isOpen={showEdit}
+          onClose={() => { setShowEdit(false); setEditForm(null); }}
+          title="Edit Vehicle"
+          size="3xl"
+          footer={
+            <>
+              <button
+                onClick={() => { setShowEdit(false); setEditForm(null); }}
+                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditSubmit}
+                disabled={!editForm.name.trim()}
+                className="bg-violet-500 hover:bg-violet-400 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg h-10 px-5 text-sm font-medium transition-colors"
+              >
+                Save Changes
+              </button>
+            </>
+          }
+        >
+          <div className="space-y-8">
+            {/* Basic Info */}
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-50 mb-4">Basic Information</h3>
+              <div className="space-y-5">
+                <div className="grid grid-cols-2 gap-5">
+                  <div>
+                    <label className={labelCls}>Name *</label>
+                    <input
+                      className={inputCls}
+                      value={editForm.name}
+                      onChange={e => handleEditChange('name', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Color</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        value={editForm.color}
+                        onChange={e => handleEditChange('color', e.target.value)}
+                        className="w-10 h-10 rounded-lg border border-zinc-800 bg-zinc-950 cursor-pointer"
+                      />
+                      <input
+                        className={inputCls}
+                        value={editForm.color}
+                        onChange={e => handleEditChange('color', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-5">
+                  <div>
+                    <label className={labelCls}>Brand</label>
+                    <input
+                      className={inputCls}
+                      value={editForm.brand}
+                      onChange={e => handleEditChange('brand', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Model</label>
+                    <input
+                      className={inputCls}
+                      value={editForm.model}
+                      onChange={e => handleEditChange('model', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Variant</label>
+                    <input
+                      className={inputCls}
+                      value={editForm.variant}
+                      onChange={e => handleEditChange('variant', e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-5">
+                  <div>
+                    <label className={labelCls}>Fuel Type</label>
+                    <select
+                      className={inputCls}
+                      value={editForm.fuelType}
+                      onChange={e => handleEditChange('fuelType', e.target.value)}
+                    >
+                      <option value="benzin">Gasoline</option>
+                      <option value="diesel">Diesel</option>
+                      <option value="elektro">Electric</option>
+                      <option value="hybrid">Hybrid</option>
+                      <option value="lpg">LPG</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Horsepower</label>
+                    <input
+                      type="number"
+                      className={inputCls}
+                      value={editForm.horsePower || ''}
+                      onChange={e => handleEditChange('horsePower', Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Purchase Price</label>
+                    <input
+                      type="number"
+                      className={inputCls}
+                      value={editForm.purchasePrice || ''}
+                      onChange={e => handleEditChange('purchasePrice', Number(e.target.value))}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {vehicle.mobileDeLink && (
-                <a href={vehicle.mobileDeLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg text-sm text-dark-300 hover:text-dark-100 transition-colors">
-                  <ExternalLink size={14} /> mobile.de
-                </a>
-              )}
-              <button onClick={openEditModal} className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 hover:bg-primary-700 rounded-lg text-sm text-white transition-colors cursor-pointer">
-                <Pencil size={14} /> Edit
-              </button>
-              <button onClick={() => setShowDeleteConfirm(true)} className="flex items-center gap-1.5 px-3 py-2 bg-danger/20 hover:bg-danger/30 rounded-lg text-sm text-danger transition-colors cursor-pointer">
-                <Trash2 size={14} /> Delete
-              </button>
+
+            {/* Registration */}
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-50 mb-4">Registration</h3>
+              <div className="space-y-5">
+                <div className="grid grid-cols-3 gap-5">
+                  <div>
+                    <label className={labelCls}>License Plate</label>
+                    <input
+                      className={inputCls}
+                      value={editForm.licensePlate}
+                      onChange={e => handleEditChange('licensePlate', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>HSN</label>
+                    <input
+                      className={inputCls}
+                      value={editForm.hsn}
+                      onChange={e => handleEditChange('hsn', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>TSN</label>
+                    <input
+                      className={inputCls}
+                      value={editForm.tsn}
+                      onChange={e => handleEditChange('tsn', e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-5">
+                  <div>
+                    <label className={labelCls}>First Registration</label>
+                    <input
+                      type="date"
+                      className={inputCls}
+                      value={editForm.firstRegistration}
+                      onChange={e => handleEditChange('firstRegistration', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Purchase Date</label>
+                    <input
+                      type="date"
+                      className={inputCls}
+                      value={editForm.purchaseDate}
+                      onChange={e => handleEditChange('purchaseDate', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Mileage */}
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-50 mb-4">Mileage & Consumption</h3>
+              <div className="space-y-5">
+                <div className="grid grid-cols-2 gap-5">
+                  <div>
+                    <label className={labelCls}>Current Mileage (km)</label>
+                    <input
+                      type="number"
+                      className={inputCls}
+                      value={editForm.currentMileage || ''}
+                      onChange={e => handleEditChange('currentMileage', Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Annual Mileage (km)</label>
+                    <input
+                      type="number"
+                      className={inputCls}
+                      value={editForm.annualMileage || ''}
+                      onChange={e => handleEditChange('annualMileage', Number(e.target.value))}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-5">
+                  <div>
+                    <label className={labelCls}>Avg. Consumption (l/100km)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      className={inputCls}
+                      value={editForm.avgConsumption || ''}
+                      onChange={e => handleEditChange('avgConsumption', Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Fuel Price (EUR/l)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className={inputCls}
+                      value={editForm.fuelPrice || ''}
+                      onChange={e => handleEditChange('fuelPrice', Number(e.target.value))}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Status */}
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-50 mb-4">Status & Links</h3>
+              <div className="space-y-5">
+                <div className="grid grid-cols-2 gap-5">
+                  <div>
+                    <label className={labelCls}>Status</label>
+                    <select
+                      className={inputCls}
+                      value={editForm.status}
+                      onChange={e => handleEditChange('status', e.target.value)}
+                    >
+                      <option value="owned">Owned</option>
+                      <option value="planned">Planned</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Image URL</label>
+                    <input
+                      className={inputCls}
+                      value={editForm.imageUrl}
+                      onChange={e => handleEditChange('imageUrl', e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className={labelCls}>mobile.de Link</label>
+                  <input
+                    className={inputCls}
+                    value={editForm.mobileDeLink}
+                    onChange={e => handleEditChange('mobileDeLink', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Notes</label>
+                  <textarea
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 min-h-[80px] resize-y"
+                    value={editForm.notes}
+                    onChange={e => handleEditChange('notes', e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Info Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {infoItems.map((item) => (
-          <div key={item.label} className="bg-dark-800 border border-dark-700 rounded-xl p-4">
-            <div className="flex items-center gap-2 text-dark-500 mb-1">
-              {item.icon}
-              <span className="text-xs font-medium uppercase tracking-wider">{item.label}</span>
-            </div>
-            <p className="text-dark-100 font-semibold">{item.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Cost Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-dark-800 border border-dark-700 rounded-xl p-5">
-          <p className="text-sm text-dark-400 mb-1">Monthly Costs</p>
-          <p className="text-2xl font-bold text-dark-50">{formatCurrency(totalMonthlyCost)}</p>
-          <p className="text-xs text-dark-500 mt-1">+ ~{formatCurrency(fuelCostMonthly)} fuel</p>
-        </div>
-        <div className="bg-dark-800 border border-dark-700 rounded-xl p-5">
-          <p className="text-sm text-dark-400 mb-1">Yearly Costs</p>
-          <p className="text-2xl font-bold text-dark-50">{formatCurrency(totalYearlyCost)}</p>
-          <p className="text-xs text-dark-500 mt-1">Total recurring per year</p>
-        </div>
-        <div className="bg-dark-800 border border-dark-700 rounded-xl p-5">
-          <p className="text-sm text-dark-400 mb-1">Total Repairs</p>
-          <p className="text-2xl font-bold text-dark-50">{formatCurrency(totalRepairCost)}</p>
-          <p className="text-xs text-dark-500 mt-1">{vehicleRepairs.length} repair(s)</p>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="border-b border-dark-700">
-        <div className="flex gap-1 overflow-x-auto">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
-                activeTab === tab.id ? 'border-primary-500 text-primary-400' : 'border-transparent text-dark-400 hover:text-dark-200 hover:border-dark-600'
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Tab Content */}
-      <div>
-        {activeTab === 'costs' && (
-          <VehicleCostsTab vehicleCosts={vehicleCosts} showCostModal={showCostModal} setShowCostModal={setShowCostModal}
-            costForm={costForm} setCostForm={setCostForm} editingCostId={editingCostId} setEditingCostId={setEditingCostId}
-            onAddCost={openAddCost} onEditCost={openEditCost} onSaveCost={handleSaveCost} onDeleteCost={handleDeleteCost} />
-        )}
-        {activeTab === 'repairs' && (
-          <VehicleRepairsTab vehicleRepairs={vehicleRepairs} showRepairModal={showRepairModal} setShowRepairModal={setShowRepairModal}
-            repairForm={repairForm} setRepairForm={setRepairForm} editingRepairId={editingRepairId} setEditingRepairId={setEditingRepairId}
-            onAddRepair={openAddRepair} onEditRepair={openEditRepair} onSaveRepair={handleSaveRepair} onDeleteRepair={handleDeleteRepair} />
-        )}
-        {activeTab === 'loans' && <VehicleLoansTab vehicleLoans={vehicleLoans} onNavigate={onNavigate} />}
-        {activeTab === 'savings' && (
-          <VehicleSavingsTab vehicleSavings={vehicleSavings} savingsTransactions={state.savingsTransactions} onNavigate={onNavigate} />
-        )}
-        {activeTab === 'statistics' && <VehicleStatsTab vehicleCosts={vehicleCosts} vehicle={vehicle} />}
-      </div>
-
-      {/* Edit Vehicle Modal */}
-      {editForm && (
-        <Modal isOpen={showEditModal} onClose={() => { setShowEditModal(false); setEditForm(null); }} title="Edit Vehicle" size="3xl"
-          footer={<>
-            <button onClick={() => { setShowEditModal(false); setEditForm(null); }} className="px-4 py-2 rounded-lg text-dark-300 hover:text-dark-100 hover:bg-dark-700 transition-colors cursor-pointer">Cancel</button>
-            <button onClick={handleSaveVehicle} disabled={!editForm.name.trim()} className="px-6 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors cursor-pointer">Save Changes</button>
-          </>}
-        >
-          <VehicleEditForm form={editForm} updateForm={updateEditForm} />
         </Modal>
       )}
 
       {/* Delete Confirmation Modal */}
-      <Modal isOpen={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Vehicle" size="sm"
-        footer={<>
-          <button onClick={() => setShowDeleteConfirm(false)} className="px-4 py-2 rounded-lg text-dark-300 hover:text-dark-100 hover:bg-dark-700 transition-colors cursor-pointer">Cancel</button>
-          <button onClick={handleDelete} className="px-6 py-2 bg-danger hover:bg-red-600 text-white rounded-lg font-medium transition-colors cursor-pointer">Delete</button>
-        </>}
+      <Modal
+        isOpen={showDelete}
+        onClose={() => setShowDelete(false)}
+        title="Delete Vehicle"
+        size="md"
+        footer={
+          <>
+            <button
+              onClick={() => setShowDelete(false)}
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDelete}
+              className="bg-red-400 hover:bg-red-500 text-white rounded-lg h-10 px-5 text-sm font-medium transition-colors"
+            >
+              Delete Vehicle
+            </button>
+          </>
+        }
       >
-        <p className="text-dark-300">
-          Are you sure you want to delete <span className="font-semibold text-dark-100">{vehicle.name}</span>?
-          This will also remove all associated costs, repairs, loans, and savings goals. This action cannot be undone.
+        <p className="text-sm text-zinc-300">
+          Are you sure you want to delete <span className="font-semibold text-zinc-50">{vehicle.name}</span>?
+          This will also remove all associated costs, loans, repairs, savings goals, services, upgrades, fuel records, odometer entries, inspections, notes, and tax records. This action cannot be undone.
         </p>
       </Modal>
     </div>

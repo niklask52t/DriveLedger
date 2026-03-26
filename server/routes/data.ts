@@ -20,6 +20,16 @@ router.get('/export', async (req: Request, res: Response) => {
     const [savingsTransactions] = await pool.execute('SELECT * FROM savings_transactions WHERE user_id = ?', [userId]);
     const [plannedPurchases] = await pool.execute('SELECT * FROM planned_purchases WHERE user_id = ?', [userId]);
     const [persons] = await pool.execute('SELECT * FROM persons WHERE user_id = ?', [userId]);
+    const [serviceRecords] = await pool.execute('SELECT * FROM service_records WHERE user_id = ?', [userId]);
+    const [upgradeRecords] = await pool.execute('SELECT * FROM upgrade_records WHERE user_id = ?', [userId]);
+    const [fuelRecords] = await pool.execute('SELECT * FROM fuel_records WHERE user_id = ?', [userId]);
+    const [odometerRecords] = await pool.execute('SELECT * FROM odometer_records WHERE user_id = ?', [userId]);
+    const [supplies] = await pool.execute('SELECT * FROM supplies WHERE user_id = ?', [userId]);
+    const [equipment] = await pool.execute('SELECT * FROM equipment WHERE user_id = ?', [userId]);
+    const [inspections] = await pool.execute('SELECT * FROM inspections WHERE user_id = ?', [userId]);
+    const [vehicleNotes] = await pool.execute('SELECT * FROM vehicle_notes WHERE user_id = ?', [userId]);
+    const [taxes] = await pool.execute('SELECT * FROM taxes WHERE user_id = ?', [userId]);
+    const [plannerTasks] = await pool.execute('SELECT * FROM planner_tasks WHERE user_id = ?', [userId]);
 
     const data = {
       vehicles: rowsToCamelCase(vehicles as any[]),
@@ -30,6 +40,16 @@ router.get('/export', async (req: Request, res: Response) => {
       savingsTransactions: rowsToCamelCase(savingsTransactions as any[]),
       plannedPurchases: rowsToCamelCase(plannedPurchases as any[]),
       persons: rowsToCamelCase(persons as any[]),
+      serviceRecords: rowsToCamelCase(serviceRecords as any[]),
+      upgradeRecords: rowsToCamelCase(upgradeRecords as any[]),
+      fuelRecords: rowsToCamelCase(fuelRecords as any[]),
+      odometerRecords: rowsToCamelCase(odometerRecords as any[]),
+      supplies: rowsToCamelCase(supplies as any[]),
+      equipment: rowsToCamelCase(equipment as any[]),
+      inspections: rowsToCamelCase(inspections as any[]),
+      vehicleNotes: rowsToCamelCase(vehicleNotes as any[]),
+      taxes: rowsToCamelCase(taxes as any[]),
+      plannerTasks: rowsToCamelCase(plannerTasks as any[]),
     };
 
     return res.status(200).json(data);
@@ -53,7 +73,18 @@ router.post('/import', async (req: Request, res: Response) => {
     const conn = await pool.getConnection();
     await conn.beginTransaction();
     try {
-      // Clear existing data
+      // Clear existing data (new tables first to avoid FK issues)
+      await conn.execute('DELETE FROM attachments WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM planner_tasks WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM taxes WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM vehicle_notes WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM inspections WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM equipment WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM supplies WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM odometer_records WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM fuel_records WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM upgrade_records WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM service_records WHERE user_id = ?', [userId]);
       await conn.execute('DELETE FROM savings_transactions WHERE user_id = ?', [userId]);
       await conn.execute('DELETE FROM savings_goals WHERE user_id = ?', [userId]);
       await conn.execute('DELETE FROM repairs WHERE user_id = ?', [userId]);
@@ -131,6 +162,96 @@ router.post('/import', async (req: Request, res: Response) => {
         for (const p of data.persons) {
           await conn.execute(`INSERT INTO persons (id, user_id, name, color) VALUES (?, ?, ?, ?)`, [
             p.id, userId, p.name || '', p.color || '#3b82f6'
+          ]);
+        }
+      }
+
+      // Import service records
+      if (Array.isArray(data.serviceRecords)) {
+        for (const r of data.serviceRecords) {
+          await conn.execute(`INSERT INTO service_records (id, user_id, vehicle_id, date, description, mileage, cost, notes, tags, category, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+            r.id, userId, r.vehicleId, r.date || '', r.description || '', r.mileage || 0, r.cost || 0, r.notes || '', r.tags ? JSON.stringify(r.tags) : null, r.category || 'other', r.createdAt || new Date().toISOString()
+          ]);
+        }
+      }
+
+      // Import upgrade records
+      if (Array.isArray(data.upgradeRecords)) {
+        for (const r of data.upgradeRecords) {
+          await conn.execute(`INSERT INTO upgrade_records (id, user_id, vehicle_id, date, description, cost, mileage, notes, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+            r.id, userId, r.vehicleId, r.date || '', r.description || '', r.cost || 0, r.mileage || 0, r.notes || '', r.tags ? JSON.stringify(r.tags) : null, r.createdAt || new Date().toISOString()
+          ]);
+        }
+      }
+
+      // Import fuel records
+      if (Array.isArray(data.fuelRecords)) {
+        for (const r of data.fuelRecords) {
+          await conn.execute(`INSERT INTO fuel_records (id, user_id, vehicle_id, date, mileage, fuel_amount, fuel_cost, is_partial_fill, is_missed_entry, fuel_type, station, notes, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+            r.id, userId, r.vehicleId, r.date || '', r.mileage || 0, r.fuelAmount || 0, r.fuelCost || 0, r.isPartialFill ? 1 : 0, r.isMissedEntry ? 1 : 0, r.fuelType || '', r.station || '', r.notes || '', r.tags ? JSON.stringify(r.tags) : null, r.createdAt || new Date().toISOString()
+          ]);
+        }
+      }
+
+      // Import odometer records
+      if (Array.isArray(data.odometerRecords)) {
+        for (const r of data.odometerRecords) {
+          await conn.execute(`INSERT INTO odometer_records (id, user_id, vehicle_id, date, mileage, notes, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
+            r.id, userId, r.vehicleId, r.date || '', r.mileage || 0, r.notes || '', r.tags ? JSON.stringify(r.tags) : null, r.createdAt || new Date().toISOString()
+          ]);
+        }
+      }
+
+      // Import supplies
+      if (Array.isArray(data.supplies)) {
+        for (const r of data.supplies) {
+          await conn.execute(`INSERT INTO supplies (id, user_id, vehicle_id, name, part_number, description, quantity, unit_cost, notes, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+            r.id, userId, r.vehicleId || null, r.name || '', r.partNumber || '', r.description || '', r.quantity || 0, r.unitCost || 0, r.notes || '', r.tags ? JSON.stringify(r.tags) : null, r.createdAt || new Date().toISOString()
+          ]);
+        }
+      }
+
+      // Import equipment
+      if (Array.isArray(data.equipment)) {
+        for (const r of data.equipment) {
+          await conn.execute(`INSERT INTO equipment (id, user_id, vehicle_id, name, description, is_equipped, total_distance, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+            r.id, userId, r.vehicleId || null, r.name || '', r.description || '', r.isEquipped ? 1 : 0, r.totalDistance || 0, r.notes || '', r.createdAt || new Date().toISOString()
+          ]);
+        }
+      }
+
+      // Import inspections
+      if (Array.isArray(data.inspections)) {
+        for (const r of data.inspections) {
+          await conn.execute(`INSERT INTO inspections (id, user_id, vehicle_id, date, title, items, overall_result, mileage, cost, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+            r.id, userId, r.vehicleId, r.date || '', r.title || '', r.items ? JSON.stringify(r.items) : null, r.overallResult || '', r.mileage || 0, r.cost || 0, r.notes || '', r.createdAt || new Date().toISOString()
+          ]);
+        }
+      }
+
+      // Import vehicle notes
+      if (Array.isArray(data.vehicleNotes)) {
+        for (const r of data.vehicleNotes) {
+          await conn.execute(`INSERT INTO vehicle_notes (id, user_id, vehicle_id, title, content, is_pinned, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
+            r.id, userId, r.vehicleId, r.title || '', r.content || '', r.isPinned ? 1 : 0, r.tags ? JSON.stringify(r.tags) : null, r.createdAt || new Date().toISOString()
+          ]);
+        }
+      }
+
+      // Import taxes
+      if (Array.isArray(data.taxes)) {
+        for (const r of data.taxes) {
+          await conn.execute(`INSERT INTO taxes (id, user_id, vehicle_id, date, description, cost, is_recurring, recurring_interval, due_date, notes, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+            r.id, userId, r.vehicleId, r.date || '', r.description || '', r.cost || 0, r.isRecurring ? 1 : 0, r.recurringInterval || '', r.dueDate || '', r.notes || '', r.tags ? JSON.stringify(r.tags) : null, r.createdAt || new Date().toISOString()
+          ]);
+        }
+      }
+
+      // Import planner tasks
+      if (Array.isArray(data.plannerTasks)) {
+        for (const r of data.plannerTasks) {
+          await conn.execute(`INSERT INTO planner_tasks (id, user_id, vehicle_id, title, description, priority, stage, category, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+            r.id, userId, r.vehicleId || null, r.title || '', r.description || '', r.priority || 'normal', r.stage || 'planned', r.category || 'service', r.notes || '', r.createdAt || new Date().toISOString()
           ]);
         }
       }

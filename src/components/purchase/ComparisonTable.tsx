@@ -1,113 +1,183 @@
-import { useState, useMemo } from 'react';
-import { BarChart3, ChevronDown, ChevronUp } from 'lucide-react';
+import { Star } from 'lucide-react';
+import { formatCurrency, formatNumber, getFuelTypeLabel } from '../../utils';
 import type { PlannedPurchase } from '../../types';
-import { formatCurrency, formatNumber, calculateFinancing } from '../../utils';
 
 interface ComparisonTableProps {
   purchases: PlannedPurchase[];
 }
 
+interface ComparisonRow {
+  label: string;
+  values: (string | number | React.ReactNode)[];
+  highlight?: 'lowest' | 'highest';
+}
+
 export default function ComparisonTable({ purchases }: ComparisonTableProps) {
-  const [showComparison, setShowComparison] = useState(false);
+  if (purchases.length < 2) {
+    return (
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
+        <p className="text-zinc-500 text-sm">Add at least 2 purchases to compare them side by side.</p>
+      </div>
+    );
+  }
 
-  const getFinancing = (p: PlannedPurchase) =>
-    calculateFinancing(p.price, p.downPayment, p.financingMonths, p.interestRate);
-
-  const getTotalMonthly = (p: PlannedPurchase) => {
-    const fin = getFinancing(p);
-    return fin.monthlyPayment + p.estimatedInsurance + p.estimatedFuelMonthly + p.estimatedMaintenance;
+  const getMinIdx = (vals: number[]) => {
+    let min = Infinity;
+    let idx = -1;
+    vals.forEach((v, i) => { if (v > 0 && v < min) { min = v; idx = i; } });
+    return idx;
   };
 
-  const getTotalYearly = (p: PlannedPurchase) => {
-    return getTotalMonthly(p) * 12 + p.estimatedTax;
+  const getMaxIdx = (vals: number[]) => {
+    let max = -Infinity;
+    let idx = -1;
+    vals.forEach((v, i) => { if (v > max) { max = v; idx = i; } });
+    return idx;
   };
 
-  const comparisonRows = useMemo(() => {
-    if (purchases.length < 2) return [];
+  const totalMonthlies = purchases.map(
+    (p) =>
+      p.monthlyRate +
+      p.estimatedInsurance +
+      p.estimatedTax / 12 +
+      p.estimatedFuelMonthly +
+      p.estimatedMaintenance
+  );
 
-    const rows: { label: string; values: number[]; format: (n: number) => string; lowerIsBetter: boolean }[] = [
-      { label: 'Price', values: purchases.map((p) => p.price), format: formatCurrency, lowerIsBetter: true },
-      { label: 'Monthly Rate', values: purchases.map((p) => getFinancing(p).monthlyPayment), format: formatCurrency, lowerIsBetter: true },
-      { label: 'Total Finance Cost', values: purchases.map((p) => getFinancing(p).totalCost), format: formatCurrency, lowerIsBetter: true },
-      { label: 'Total Interest', values: purchases.map((p) => getFinancing(p).totalInterest), format: formatCurrency, lowerIsBetter: true },
-      { label: 'Insurance / mo', values: purchases.map((p) => p.estimatedInsurance), format: formatCurrency, lowerIsBetter: true },
-      { label: 'Tax / year', values: purchases.map((p) => p.estimatedTax), format: formatCurrency, lowerIsBetter: true },
-      { label: 'Fuel / mo', values: purchases.map((p) => p.estimatedFuelMonthly), format: formatCurrency, lowerIsBetter: true },
-      { label: 'Maintenance / mo', values: purchases.map((p) => p.estimatedMaintenance), format: formatCurrency, lowerIsBetter: true },
-      { label: 'Total Monthly Cost', values: purchases.map((p) => getTotalMonthly(p)), format: formatCurrency, lowerIsBetter: true },
-      { label: 'Total Yearly Cost', values: purchases.map((p) => getTotalYearly(p)), format: formatCurrency, lowerIsBetter: true },
-      { label: 'Mileage', values: purchases.map((p) => p.mileage), format: (n) => `${formatNumber(n)} km`, lowerIsBetter: true },
-      { label: 'Horse Power', values: purchases.map((p) => p.horsePower), format: (n) => `${n} HP`, lowerIsBetter: false },
-      { label: 'Year', values: purchases.map((p) => p.year), format: (n) => String(n), lowerIsBetter: false },
-      { label: 'Rating', values: purchases.map((p) => p.rating), format: (n) => `${n}/5`, lowerIsBetter: false },
-    ];
+  const prices = purchases.map((p) => p.price);
+  const mileages = purchases.map((p) => p.mileage);
+  const horsePowers = purchases.map((p) => p.horsePower);
+  const ratings = purchases.map((p) => p.rating);
 
-    return rows;
-  }, [purchases]);
+  const bestPriceIdx = getMinIdx(prices);
+  const bestMonthlyIdx = getMinIdx(totalMonthlies);
+  const bestRatingIdx = getMaxIdx(ratings);
 
-  const getCellColor = (row: typeof comparisonRows[0], value: number) => {
-    const nonZero = row.values.filter((v) => v > 0);
-    if (nonZero.length < 2) return '';
-    const best = row.lowerIsBetter ? Math.min(...nonZero) : Math.max(...row.values);
-    const worst = row.lowerIsBetter ? Math.max(...row.values) : Math.min(...nonZero);
-    if (value === best) return 'text-emerald-400 font-semibold';
-    if (value === worst && nonZero.length > 1) return 'text-red-400';
-    return '';
-  };
-
-  if (purchases.length < 2) return null;
+  const rows: ComparisonRow[] = [
+    {
+      label: 'Price',
+      values: purchases.map((p, i) => (
+        <span key={i} className={i === bestPriceIdx ? 'text-emerald-400 font-medium' : 'text-zinc-50'}>
+          {formatCurrency(p.price)}
+        </span>
+      )),
+    },
+    {
+      label: 'Year',
+      values: purchases.map((p) => (p.year > 0 ? String(p.year) : '-')),
+    },
+    {
+      label: 'Mileage',
+      values: purchases.map((p) => (p.mileage > 0 ? `${formatNumber(p.mileage)} km` : '-')),
+    },
+    {
+      label: 'Fuel Type',
+      values: purchases.map((p) => (p.fuelType ? getFuelTypeLabel(p.fuelType) : '-')),
+    },
+    {
+      label: 'Horsepower',
+      values: purchases.map((p) => (p.horsePower > 0 ? `${p.horsePower} PS` : '-')),
+    },
+    {
+      label: 'Down Payment',
+      values: purchases.map((p) => (p.downPayment > 0 ? formatCurrency(p.downPayment) : '-')),
+    },
+    {
+      label: 'Monthly Rate',
+      values: purchases.map((p) => (p.monthlyRate > 0 ? formatCurrency(p.monthlyRate) : '-')),
+    },
+    {
+      label: 'Interest Rate',
+      values: purchases.map((p) => (p.interestRate > 0 ? `${p.interestRate}%` : '-')),
+    },
+    {
+      label: 'Financing Duration',
+      values: purchases.map((p) => (p.financingMonths > 0 ? `${p.financingMonths} mo` : '-')),
+    },
+    {
+      label: 'Insurance/mo',
+      values: purchases.map((p) => (p.estimatedInsurance > 0 ? formatCurrency(p.estimatedInsurance) : '-')),
+    },
+    {
+      label: 'Tax/year',
+      values: purchases.map((p) => (p.estimatedTax > 0 ? formatCurrency(p.estimatedTax) : '-')),
+    },
+    {
+      label: 'Fuel/mo',
+      values: purchases.map((p) => (p.estimatedFuelMonthly > 0 ? formatCurrency(p.estimatedFuelMonthly) : '-')),
+    },
+    {
+      label: 'Maintenance/mo',
+      values: purchases.map((p) => (p.estimatedMaintenance > 0 ? formatCurrency(p.estimatedMaintenance) : '-')),
+    },
+    {
+      label: 'Total Monthly',
+      values: purchases.map((p, i) => (
+        <span key={i} className={i === bestMonthlyIdx ? 'text-emerald-400 font-semibold' : 'text-zinc-50 font-semibold'}>
+          {formatCurrency(totalMonthlies[i])}
+        </span>
+      )),
+    },
+    {
+      label: 'Rating',
+      values: purchases.map((p, i) => (
+        <div key={i} className="flex items-center gap-0.5">
+          {Array.from({ length: 5 }).map((_, j) => (
+            <Star
+              key={j}
+              size={12}
+              className={j < p.rating ? 'text-amber-400 fill-amber-400' : 'text-zinc-700'}
+            />
+          ))}
+        </div>
+      )),
+    },
+  ];
 
   return (
-    <div className="bg-dark-800 border border-dark-700 rounded-2xl overflow-hidden">
-      <button
-        onClick={() => setShowComparison(!showComparison)}
-        className="w-full flex items-center justify-between px-6 py-4 hover:bg-dark-750 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary-500/15">
-            <BarChart3 size={22} className="text-primary-400" />
-          </div>
-          <div className="text-left">
-            <h3 className="text-lg font-semibold text-dark-50">Side-by-Side Comparison</h3>
-            <p className="text-sm text-dark-400">Compare {purchases.length} vehicles across all metrics</p>
-          </div>
-        </div>
-        {showComparison ? <ChevronUp size={20} className="text-dark-400" /> : <ChevronDown size={20} className="text-dark-400" />}
-      </button>
-
-      {showComparison && (
-        <div className="border-t border-dark-700 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-dark-700">
-                <th className="text-left px-4 py-3 text-dark-400 font-medium sticky left-0 bg-dark-800 z-10 min-w-[160px]">
-                  Metric
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-zinc-800">
+              <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium sticky left-0 bg-zinc-900 z-10 min-w-[140px]">
+                Feature
+              </th>
+              {purchases.map((p) => (
+                <th key={p.id} className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium min-w-[160px]">
+                  <div>
+                    <span className="text-zinc-300 normal-case text-sm font-semibold">
+                      {p.brand} {p.model}
+                    </span>
+                    {p.variant && (
+                      <span className="block text-zinc-600 normal-case text-xs font-normal mt-0.5">
+                        {p.variant}
+                      </span>
+                    )}
+                  </div>
                 </th>
-                {purchases.map((p) => (
-                  <th key={p.id} className="text-center px-4 py-3 text-dark-200 font-semibold min-w-[150px]">
-                    <div>{p.brand} {p.model}</div>
-                    {p.variant && <div className="text-xs text-dark-500 font-normal">{p.variant}</div>}
-                  </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, ri) => (
+              <tr
+                key={ri}
+                className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors"
+              >
+                <td className="px-4 py-3.5 text-sm text-zinc-400 sticky left-0 bg-zinc-900 z-10">
+                  {row.label}
+                </td>
+                {row.values.map((val, vi) => (
+                  <td key={vi} className="px-4 py-3.5 text-sm text-zinc-50">
+                    {val}
+                  </td>
                 ))}
               </tr>
-            </thead>
-            <tbody>
-              {comparisonRows.map((row, ri) => (
-                <tr key={row.label} className={ri % 2 === 0 ? 'bg-dark-850/50' : ''}>
-                  <td className="px-4 py-2.5 text-dark-300 font-medium sticky left-0 bg-dark-800 z-10">
-                    {row.label}
-                  </td>
-                  {row.values.map((val, ci) => (
-                    <td key={ci} className={`px-4 py-2.5 text-center ${getCellColor(row, val)}`}>
-                      {row.format(val)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

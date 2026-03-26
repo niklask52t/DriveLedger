@@ -1,18 +1,17 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useCallback, type ReactNode } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
-
-type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
 
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
-  size?: ModalSize;
+  children: ReactNode;
+  footer?: ReactNode;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
 }
 
-const sizeClasses: Record<ModalSize, string> = {
+const sizeMap: Record<string, string> = {
   sm: 'max-w-sm',
   md: 'max-w-md',
   lg: 'max-w-lg',
@@ -22,100 +21,75 @@ const sizeClasses: Record<ModalSize, string> = {
   '4xl': 'max-w-4xl',
 };
 
-export default function Modal({ isOpen, onClose, title, children, footer, size = 'md' }: ModalProps) {
-  const overlayRef = useRef<HTMLDivElement>(null);
-
-  // Close on Escape key
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
+export default function Modal({ isOpen, onClose, title, children, footer, size = 'lg' }: ModalProps) {
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
-    };
+    },
+    [onClose]
+  );
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
-  // Prevent body scroll when open
   useEffect(() => {
     if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
       document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
     }
     return () => {
+      document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === overlayRef.current) onClose();
-  };
+  }, [isOpen, handleKeyDown]);
 
   return (
-    <div
-      ref={overlayRef}
-      onClick={handleOverlayClick}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
-      style={{
-        animation: 'modalFadeIn 200ms ease-out',
-      }}
-    >
-      <div
-        className={`
-          w-full ${sizeClasses[size]} bg-dark-800 rounded-xl border border-dark-700
-          shadow-2xl shadow-black/40 flex flex-col max-h-[85vh]
-        `}
-        style={{
-          animation: 'modalSlideUp 250ms ease-out',
-        }}
-      >
-        {/* Title bar */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-dark-700 shrink-0">
-          <h2 className="text-base font-semibold text-dark-50 truncate pr-4">
-            {title}
-          </h2>
-          <button
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <motion.div
+            className="fixed inset-0 bg-black/60"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
             onClick={onClose}
-            className="p-1.5 rounded-lg text-dark-400 hover:text-dark-200 hover:bg-dark-700 transition-colors cursor-pointer"
+          />
+
+          <motion.div
+            className={`relative z-10 w-full ${sizeMap[size]} mx-4 bg-zinc-900 border border-zinc-800 rounded-xl max-h-[85vh] flex flex-col`}
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.2 }}
           >
-            <X size={18} />
-          </button>
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4">
+              <h2 className="text-lg font-semibold text-zinc-50">{title}</h2>
+              <button
+                onClick={onClose}
+                className="text-zinc-500 hover:text-zinc-300 transition-colors p-1 rounded-lg hover:bg-zinc-800"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="border-b border-zinc-800" />
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto px-6 py-5">
+              {children}
+            </div>
+
+            {/* Footer */}
+            {footer && (
+              <>
+                <div className="border-t border-zinc-800" />
+                <div className="px-6 py-4 flex justify-end gap-3">
+                  {footer}
+                </div>
+              </>
+            )}
+          </motion.div>
         </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          {children}
-        </div>
-
-        {/* Footer */}
-        {footer && (
-          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-dark-700 shrink-0">
-            {footer}
-          </div>
-        )}
-      </div>
-
-      {/* Keyframe animations */}
-      <style>{`
-        @keyframes modalFadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes modalSlideUp {
-          from {
-            opacity: 0;
-            transform: translateY(12px) scale(0.97);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-      `}</style>
-    </div>
+      )}
+    </AnimatePresence>
   );
 }

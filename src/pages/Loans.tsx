@@ -1,24 +1,16 @@
 import { useState, useMemo } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import {
-  Plus, Pencil, Trash2, Landmark,
-  DollarSign, ChevronDown, ChevronUp, CalendarCheck
-} from 'lucide-react';
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Pencil, Trash2, ChevronDown } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import Modal from '../components/Modal';
+import { cn } from '../lib/utils';
+import { formatCurrency, formatDate, formatMonthYear, getLoanProgress, generateLoanSchedule } from '../utils';
 import type { AppState, Loan } from '../types';
-import {
-  formatCurrency, formatDate, formatMonthYear,
-  generateLoanSchedule, getLoanProgress
-} from '../utils';
 
-interface LoansProps {
+interface Props {
   state: AppState;
-  setState: (state: AppState) => void;
+  setState: (s: AppState) => void;
 }
-
-const inputClass = 'w-full bg-dark-900 border border-dark-600 rounded-lg px-3 py-2 text-dark-100 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none';
-const labelClass = 'block text-sm font-medium text-dark-300 mb-1';
 
 const emptyLoan: Omit<Loan, 'id' | 'createdAt'> = {
   vehicleId: '',
@@ -27,452 +19,477 @@ const emptyLoan: Omit<Loan, 'id' | 'createdAt'> = {
   monthlyPayment: 0,
   interestRate: 0,
   startDate: '',
-  durationMonths: 0,
+  durationMonths: 12,
   additionalSavingsPerMonth: 0,
   notes: '',
 };
 
-export default function Loans({ state, setState }: LoansProps) {
-  const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+export default function Loans({ state, setState }: Props) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<Loan | null>(null);
   const [form, setForm] = useState(emptyLoan);
-  const [expandedLoan, setExpandedLoan] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const getVehicleName = (id: string) => {
-    const v = state.vehicles.find(vh => vh.id === id);
-    return v ? `${v.brand} ${v.model}` : 'Unknown';
+  const totalDebt = useMemo(
+    () => state.loans.reduce((sum, l) => sum + getLoanProgress(l).remaining, 0),
+    [state.loans]
+  );
+  const totalMonthly = useMemo(
+    () => state.loans.reduce((sum, l) => sum + l.monthlyPayment + l.additionalSavingsPerMonth, 0),
+    [state.loans]
+  );
+  const activeCount = useMemo(
+    () => state.loans.filter(l => getLoanProgress(l).remaining > 0).length,
+    [state.loans]
+  );
+
+  const getVehicleName = (id: string) => state.vehicles.find(v => v.id === id)?.name || '-';
+
+  const openAdd = () => {
+    setEditing(null);
+    setForm({ ...emptyLoan, vehicleId: state.vehicles[0]?.id || '' });
+    setModalOpen(true);
   };
 
-  const openAddModal = () => {
-    setEditingId(null);
+  const openEdit = (loan: Loan) => {
+    setEditing(loan);
     setForm({
-      ...emptyLoan,
-      vehicleId: state.vehicles[0]?.id || '',
-      startDate: new Date().toISOString().split('T')[0],
+      vehicleId: loan.vehicleId,
+      name: loan.name,
+      totalAmount: loan.totalAmount,
+      monthlyPayment: loan.monthlyPayment,
+      interestRate: loan.interestRate,
+      startDate: loan.startDate,
+      durationMonths: loan.durationMonths,
+      additionalSavingsPerMonth: loan.additionalSavingsPerMonth,
+      notes: loan.notes,
     });
-    setShowModal(true);
-  };
-
-  const openEditModal = (loan: Loan) => {
-    setEditingId(loan.id);
-    setForm({
-      vehicleId: loan.vehicleId, name: loan.name, totalAmount: loan.totalAmount,
-      monthlyPayment: loan.monthlyPayment, interestRate: loan.interestRate,
-      startDate: loan.startDate, durationMonths: loan.durationMonths,
-      additionalSavingsPerMonth: loan.additionalSavingsPerMonth, notes: loan.notes,
-    });
-    setShowModal(true);
+    setModalOpen(true);
   };
 
   const handleSave = () => {
-    if (!form.name || !form.vehicleId || form.totalAmount <= 0 || form.monthlyPayment <= 0) return;
-    if (editingId) {
-      setState({ ...state, loans: state.loans.map(l => l.id === editingId ? { ...l, ...form } : l) });
+    if (!form.name.trim() || !form.vehicleId) return;
+    if (editing) {
+      setState({
+        ...state,
+        loans: state.loans.map(l =>
+          l.id === editing.id ? { ...l, ...form } : l
+        ),
+      });
     } else {
-      const newLoan: Loan = { id: uuidv4(), ...form, createdAt: new Date().toISOString() };
+      const newLoan: Loan = {
+        ...form,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+      };
       setState({ ...state, loans: [...state.loans, newLoan] });
     }
-    setShowModal(false);
+    setModalOpen(false);
   };
 
   const handleDelete = (id: string) => {
     setState({ ...state, loans: state.loans.filter(l => l.id !== id) });
   };
 
-  // Summary calculations
-  const totalDebt = state.loans.reduce((sum, l) => {
-    const progress = getLoanProgress(l);
-    return sum + progress.remaining;
-  }, 0);
+  const selectClasses = "w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 outline-none focus:border-violet-500/50 appearance-none";
+  const chevronBg = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") no-repeat right 10px center`;
 
-  const totalMonthlyPayments = state.loans.reduce((sum, l) => sum + l.monthlyPayment + l.additionalSavingsPerMonth, 0);
-
-  const ProgressCircle = ({ percent }: { percent: number }) => {
-    const radius = 36;
-    const circumference = 2 * Math.PI * radius;
-    const strokeDashoffset = circumference - (Math.min(percent, 100) / 100) * circumference;
+  const CircleProgress = ({ percent }: { percent: number }) => {
+    const r = 38;
+    const circ = 2 * Math.PI * r;
+    const offset = circ - (Math.min(percent, 100) / 100) * circ;
     return (
-      <div className="relative w-24 h-24">
-        <svg className="w-24 h-24 -rotate-90" viewBox="0 0 80 80">
-          <circle cx="40" cy="40" r={radius} stroke="currentColor" strokeWidth="6" fill="none" className="text-dark-700" />
-          <circle cx="40" cy="40" r={radius} stroke="currentColor" strokeWidth="6" fill="none"
-            className="text-primary-500 transition-all duration-700"
-            strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round" />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-sm font-bold text-dark-100">{Math.min(percent, 100).toFixed(0)}%</span>
-        </div>
-      </div>
-    );
-  };
-
-  const LoanCard = ({ loan }: { loan: Loan }) => {
-    const progress = getLoanProgress(loan);
-    const schedule = useMemo(() => generateLoanSchedule(loan), [loan]);
-    const isExpanded = expandedLoan === loan.id;
-    const monthsRemaining = Math.max(0, loan.durationMonths - progress.monthsElapsed);
-
-
-    // Chart data - sample every few rows for large schedules
-    const chartData = useMemo(() => {
-      if (schedule.length <= 60) return schedule;
-      const step = Math.ceil(schedule.length / 60);
-      return schedule.filter((_, i) => i % step === 0 || i === schedule.length - 1);
-    }, [schedule]);
-
-    return (
-      <div className="bg-dark-800 border border-dark-700 rounded-xl overflow-hidden">
-        {/* Loan Header */}
-        <div className="p-6">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-1">
-                <h3 className="text-lg font-semibold text-dark-50">{loan.name}</h3>
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-dark-700 text-dark-300">{getVehicleName(loan.vehicleId)}</span>
-              </div>
-              <p className="text-sm text-dark-400">Started {formatDate(loan.startDate)}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => openEditModal(loan)} className="p-2 rounded-lg text-dark-400 hover:text-primary-400 hover:bg-dark-700 transition-colors">
-                <Pencil size={16} />
-              </button>
-              <button onClick={() => handleDelete(loan.id)} className="p-2 rounded-lg text-dark-400 hover:text-danger hover:bg-dark-700 transition-colors">
-                <Trash2 size={16} />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-8">
-            <ProgressCircle percent={progress.percent} />
-            <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <div>
-                <p className="text-xs text-dark-500 mb-1">Total Amount</p>
-                <p className="text-sm font-semibold text-dark-100">{formatCurrency(loan.totalAmount)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-dark-500 mb-1">Monthly Payment</p>
-                <p className="text-sm font-semibold text-primary-400">{formatCurrency(loan.monthlyPayment)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-dark-500 mb-1">Months Remaining</p>
-                <p className="text-sm font-semibold text-dark-100">{monthsRemaining}</p>
-              </div>
-              <div>
-                <p className="text-xs text-dark-500 mb-1">Amount Paid</p>
-                <p className="text-sm font-semibold text-success">{formatCurrency(progress.paid)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-dark-500 mb-1">Amount Remaining</p>
-                <p className="text-sm font-semibold text-warning">{formatCurrency(progress.remaining)}</p>
-              </div>
-              {loan.additionalSavingsPerMonth > 0 && (
-                <div>
-                  <p className="text-xs text-dark-500 mb-1">Add. Savings/mo</p>
-                  <p className="text-sm font-semibold text-info">{formatCurrency(loan.additionalSavingsPerMonth)}</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="mt-5">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs text-dark-400">Progress</span>
-              <span className="text-xs text-dark-400">{formatCurrency(progress.paid)} / {formatCurrency(loan.totalAmount)}</span>
-            </div>
-            <div className="h-2.5 bg-dark-900 rounded-full overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-primary-600 to-primary-400 transition-all duration-700"
-                style={{ width: `${Math.min(progress.percent, 100)}%` }} />
-            </div>
-          </div>
-        </div>
-
-        {/* Expand/Collapse */}
-        <button
-          onClick={() => setExpandedLoan(isExpanded ? null : loan.id)}
-          className="w-full px-6 py-3 flex items-center justify-center gap-2 border-t border-dark-700 text-sm text-dark-400 hover:text-dark-200 hover:bg-dark-850 transition-colors"
-        >
-          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          {isExpanded ? 'Hide Details' : 'Show Amortization Schedule & Chart'}
-        </button>
-
-        {/* Expanded Content */}
-        {isExpanded && (
-          <div className="border-t border-dark-700">
-            {/* Debt Chart */}
-            <div className="p-6">
-              <h4 className="text-sm font-semibold text-dark-200 mb-4">Remaining Debt Over Time</h4>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                    <defs>
-                      <linearGradient id={`debtGrad-${loan.id}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id={`savingsGrad-${loan.id}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="date" tickFormatter={(d: string) => formatMonthYear(d)} tick={{ fill: '#94a3b8', fontSize: 11 }}
-                      interval={Math.max(0, Math.floor(chartData.length / 8))} stroke="#475569" />
-                    <YAxis tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} tick={{ fill: '#94a3b8', fontSize: 11 }} stroke="#475569" />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
-                      labelStyle={{ color: '#f1f5f9' }}
-                      formatter={(value, name) => [formatCurrency(Number(value)), String(name) === 'remainingDebt' ? 'Remaining Debt' : 'Total Saved']}
-                      labelFormatter={(label) => formatMonthYear(String(label))}
-                    />
-                    <Area type="monotone" dataKey="remainingDebt" stroke="#3b82f6" strokeWidth={2}
-                      fill={`url(#debtGrad-${loan.id})`} name="remainingDebt" />
-                    {loan.additionalSavingsPerMonth > 0 && (
-                      <Area type="monotone" dataKey="totalSaved" stroke="#10b981" strokeWidth={2}
-                        fill={`url(#savingsGrad-${loan.id})`} name="totalSaved" />
-                    )}
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Amortization Schedule Table */}
-            <div className="px-6 pb-6">
-              <h4 className="text-sm font-semibold text-dark-200 mb-3">Amortization Schedule</h4>
-              <div className="max-h-80 overflow-y-auto rounded-lg border border-dark-700">
-                <table className="w-full text-sm">
-                  <thead className="bg-dark-850 sticky top-0">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-dark-400">Nr</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-dark-400">Date</th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-dark-400">Payment</th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-dark-400">Principal</th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-dark-400">Savings</th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-dark-400">Remaining</th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-dark-400">Total Saved</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-dark-700/50">
-                    {schedule.map(row => (
-                      <tr key={row.nr} className={`hover:bg-dark-850/50 ${row.nr === progress.monthsElapsed ? 'bg-primary-500/5 border-l-2 border-l-primary-500' : ''}`}>
-                        <td className="px-3 py-2 text-dark-300">{row.nr}</td>
-                        <td className="px-3 py-2 text-dark-200">{formatMonthYear(row.date)}</td>
-                        <td className="px-3 py-2 text-right text-dark-100">{formatCurrency(row.payment)}</td>
-                        <td className="px-3 py-2 text-right text-dark-200">{formatCurrency(row.principal)}</td>
-                        <td className="px-3 py-2 text-right text-success">{formatCurrency(row.savings)}</td>
-                        <td className="px-3 py-2 text-right font-medium text-dark-100">{formatCurrency(row.remainingDebt)}</td>
-                        <td className="px-3 py-2 text-right text-info">{formatCurrency(row.totalSaved)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      <svg width="96" height="96" viewBox="0 0 96 96" className="flex-shrink-0">
+        <circle cx="48" cy="48" r={r} fill="none" stroke="#27272a" strokeWidth="6" />
+        <motion.circle
+          cx="48" cy="48" r={r} fill="none"
+          stroke="#8b5cf6"
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          initial={{ strokeDashoffset: circ }}
+          animate={{ strokeDashoffset: offset }}
+          transition={{ duration: 0.8 }}
+          transform="rotate(-90 48 48)"
+        />
+        <text x="48" y="48" textAnchor="middle" dominantBaseline="central" className="fill-zinc-50 text-sm font-semibold">
+          {Math.round(percent)}%
+        </text>
+      </svg>
     );
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-dark-50">Loans</h1>
-          <p className="text-dark-400 mt-1">Track and manage vehicle financing</p>
+    <div className="space-y-8">
+      {/* Stats + Add */}
+      <div className="flex items-start justify-between">
+        <div className="grid grid-cols-3 gap-6">
+          {[
+            { label: 'Total Debt', value: formatCurrency(totalDebt), color: 'text-red-400' },
+            { label: 'Monthly Payments', value: formatCurrency(totalMonthly), color: 'text-violet-400' },
+            { label: 'Active Loans', value: String(activeCount), color: 'text-emerald-400' },
+          ].map(s => (
+            <div key={s.label}>
+              <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{s.label}</p>
+              <p className={cn('text-2xl font-semibold', s.color)}>{s.value}</p>
+            </div>
+          ))}
         </div>
-        <button onClick={openAddModal} className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-500 transition-colors font-medium">
-          <Plus size={18} /> Add Loan
+        <button onClick={openAdd} className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2">
+          <Plus size={16} />
+          Add Loan
         </button>
       </div>
 
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-dark-800 border border-dark-700 rounded-xl p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2.5 bg-danger/10 rounded-lg"><Landmark size={20} className="text-danger" /></div>
-            <span className="text-sm text-dark-400">Total Debt</span>
+      {/* Loan cards */}
+      <div className="space-y-5">
+        {state.loans.length === 0 && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
+            <p className="text-sm text-zinc-500">No loans yet. Add your first loan to track your financing.</p>
           </div>
-          <p className="text-2xl font-bold text-dark-50">{formatCurrency(totalDebt)}</p>
-          <p className="text-xs text-dark-500 mt-1">remaining across {state.loans.length} loan{state.loans.length !== 1 ? 's' : ''}</p>
-        </div>
-        <div className="bg-dark-800 border border-dark-700 rounded-xl p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2.5 bg-primary-500/10 rounded-lg"><DollarSign size={20} className="text-primary-400" /></div>
-            <span className="text-sm text-dark-400">Monthly Payments</span>
-          </div>
-          <p className="text-2xl font-bold text-dark-50">{formatCurrency(totalMonthlyPayments)}</p>
-          <p className="text-xs text-dark-500 mt-1">total monthly obligations</p>
-        </div>
-        <div className="bg-dark-800 border border-dark-700 rounded-xl p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2.5 bg-success/10 rounded-lg"><CalendarCheck size={20} className="text-success" /></div>
-            <span className="text-sm text-dark-400">Active Loans</span>
-          </div>
-          <p className="text-2xl font-bold text-dark-50">{state.loans.filter(l => getLoanProgress(l).remaining > 0).length}</p>
-          <p className="text-xs text-dark-500 mt-1">of {state.loans.length} total</p>
-        </div>
+        )}
+        {state.loans.map(loan => {
+          const progress = getLoanProgress(loan);
+          const schedule = generateLoanSchedule(loan);
+          const isExpanded = expandedId === loan.id;
+          const vehicleName = getVehicleName(loan.vehicleId);
+
+          return (
+            <motion.div
+              key={loan.id}
+              layout
+              className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden"
+            >
+              <div className="p-6">
+                {/* Header */}
+                <div className="flex items-start justify-between mb-5">
+                  <div>
+                    <div className="flex items-center gap-3 mb-1">
+                      <h3 className="text-base font-semibold text-zinc-50">{loan.name}</h3>
+                      <span className="px-2.5 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-400 border border-zinc-700">
+                        {vehicleName}
+                      </span>
+                    </div>
+                    <p className="text-sm text-zinc-500">
+                      Started {formatDate(loan.startDate)} &middot; {loan.durationMonths} months &middot; {loan.interestRate}% interest
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => openEdit(loan)} className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center">
+                      <Pencil size={14} />
+                    </button>
+                    <button onClick={() => handleDelete(loan.id)} className="text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Body */}
+                <div className="flex items-center gap-6">
+                  <CircleProgress percent={progress.percent} />
+                  <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-5">
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-0.5">Total</p>
+                      <p className="text-sm font-medium text-zinc-50">{formatCurrency(loan.totalAmount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-0.5">Paid</p>
+                      <p className="text-sm font-medium text-emerald-400">{formatCurrency(progress.paid)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-0.5">Remaining</p>
+                      <p className="text-sm font-medium text-red-400">{formatCurrency(progress.remaining)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-0.5">Monthly</p>
+                      <p className="text-sm font-medium text-violet-400">{formatCurrency(loan.monthlyPayment + loan.additionalSavingsPerMonth)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="mt-5">
+                  <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                    <motion.div
+                      className="h-full rounded-full bg-violet-500"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min(progress.percent, 100)}%` }}
+                      transition={{ duration: 0.6 }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-1.5">
+                    <span className="text-xs text-zinc-500">{progress.monthsElapsed} months elapsed</span>
+                    <span className="text-xs text-zinc-500">{Math.max(0, loan.durationMonths - progress.monthsElapsed)} months remaining</span>
+                  </div>
+                </div>
+
+                {/* Expand toggle */}
+                <button
+                  onClick={() => setExpandedId(isExpanded ? null : loan.id)}
+                  className="mt-4 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center gap-1.5 transition-colors"
+                >
+                  <ChevronDown size={14} className={cn('transition-transform', isExpanded && 'rotate-180')} />
+                  {isExpanded ? 'Hide Details' : 'Show Details'}
+                </button>
+              </div>
+
+              {/* Expanded content */}
+              <AnimatePresence>
+                {isExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="border-t border-zinc-800 p-6 space-y-6">
+                      {/* Chart */}
+                      <div>
+                        <h4 className="text-sm font-medium text-zinc-50 mb-4">Repayment Schedule</h4>
+                        <div className="h-64">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={schedule}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                              <XAxis
+                                dataKey="nr"
+                                tick={{ fontSize: 11, fill: '#71717a' }}
+                                axisLine={{ stroke: '#3f3f46' }}
+                                tickLine={false}
+                              />
+                              <YAxis
+                                tick={{ fontSize: 11, fill: '#71717a' }}
+                                axisLine={{ stroke: '#3f3f46' }}
+                                tickLine={false}
+                                tickFormatter={v => `${(v / 1000).toFixed(0)}k`}
+                              />
+                              <Tooltip
+                                contentStyle={{ backgroundColor: '#18181b', border: '1px solid #3f3f46', borderRadius: '0.5rem', fontSize: '0.8rem' }}
+                                labelStyle={{ color: '#a1a1aa' }}
+                                formatter={(val: number) => formatCurrency(val)}
+                              />
+                              <Area type="monotone" dataKey="remainingDebt" name="Remaining Debt" stroke="#f87171" fill="#f87171" fillOpacity={0.1} />
+                              <Area type="monotone" dataKey="totalSaved" name="Savings" stroke="#34d399" fill="#34d399" fillOpacity={0.1} />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      {/* Schedule table */}
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="bg-zinc-950/50">
+                            <tr>
+                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">#</th>
+                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">Date</th>
+                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Payment</th>
+                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Principal</th>
+                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Savings</th>
+                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Remaining</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {schedule.map(row => (
+                              <tr key={row.nr} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
+                                <td className="px-4 py-3.5 text-sm text-zinc-500">{row.nr}</td>
+                                <td className="px-4 py-3.5 text-sm text-zinc-400">{formatMonthYear(row.date)}</td>
+                                <td className="px-4 py-3.5 text-sm text-zinc-50 text-right">{formatCurrency(row.payment)}</td>
+                                <td className="px-4 py-3.5 text-sm text-violet-400 text-right">{formatCurrency(row.principal)}</td>
+                                <td className="px-4 py-3.5 text-sm text-emerald-400 text-right">{formatCurrency(row.savings)}</td>
+                                <td className="px-4 py-3.5 text-sm text-red-400 text-right">{formatCurrency(row.remainingDebt)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          );
+        })}
       </div>
 
-      {/* Loan Cards */}
-      {state.loans.length === 0 ? (
-        <div className="bg-dark-800 border border-dark-700 rounded-xl p-12 text-center">
-          <Landmark size={48} className="text-dark-600 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-dark-300 mb-2">No loans yet</h3>
-          <p className="text-dark-500 mb-6">Add your first vehicle loan to start tracking your payments.</p>
-          <button onClick={openAddModal} className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-500 transition-colors font-medium">
-            <Plus size={18} /> Add Loan
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {state.loans.map(loan => <LoanCard key={loan.id} loan={loan} />)}
-        </div>
-      )}
-
-      {/* Summary Footer */}
-      {state.loans.length > 0 && (
-        <div className="bg-dark-800 border border-dark-700 rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-dark-100 mb-4">Loan Summary</h3>
+      {/* Summary table */}
+      {state.loans.length > 1 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+          <div className="px-6 py-4">
+            <h3 className="text-sm font-medium text-zinc-50">Loan Summary</h3>
+          </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-dark-700">
-                  <th className="px-3 py-2 text-left text-xs font-medium text-dark-400">Loan</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-dark-400">Vehicle</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-dark-400">Total</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-dark-400">Monthly</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-dark-400">Remaining</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-dark-400">Progress</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-dark-400">Projected Payoff</th>
+            <table className="w-full">
+              <thead className="bg-zinc-950/50">
+                <tr>
+                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">Name</th>
+                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">Vehicle</th>
+                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Total</th>
+                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Monthly</th>
+                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Remaining</th>
+                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Progress</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-dark-700/50">
+              <tbody>
                 {state.loans.map(loan => {
-                  const progress = getLoanProgress(loan);
-                  const monthsRemaining = Math.max(0, loan.durationMonths - progress.monthsElapsed);
-                  const payoffDate = new Date();
-                  payoffDate.setMonth(payoffDate.getMonth() + monthsRemaining);
-
+                  const p = getLoanProgress(loan);
                   return (
-                    <tr key={loan.id} className="hover:bg-dark-850/50">
-                      <td className="px-3 py-3 font-medium text-dark-100">{loan.name}</td>
-                      <td className="px-3 py-3 text-dark-300">{getVehicleName(loan.vehicleId)}</td>
-                      <td className="px-3 py-3 text-right text-dark-200">{formatCurrency(loan.totalAmount)}</td>
-                      <td className="px-3 py-3 text-right text-primary-400">{formatCurrency(loan.monthlyPayment + loan.additionalSavingsPerMonth)}</td>
-                      <td className="px-3 py-3 text-right text-warning">{formatCurrency(progress.remaining)}</td>
-                      <td className="px-3 py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="w-16 h-1.5 bg-dark-900 rounded-full overflow-hidden">
-                            <div className="h-full rounded-full bg-primary-500" style={{ width: `${Math.min(progress.percent, 100)}%` }} />
+                    <tr key={loan.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
+                      <td className="px-4 py-3.5 text-sm text-zinc-50 font-medium">{loan.name}</td>
+                      <td className="px-4 py-3.5 text-sm text-zinc-400">{getVehicleName(loan.vehicleId)}</td>
+                      <td className="px-4 py-3.5 text-sm text-zinc-50 text-right">{formatCurrency(loan.totalAmount)}</td>
+                      <td className="px-4 py-3.5 text-sm text-violet-400 text-right">{formatCurrency(loan.monthlyPayment + loan.additionalSavingsPerMonth)}</td>
+                      <td className="px-4 py-3.5 text-sm text-red-400 text-right">{formatCurrency(p.remaining)}</td>
+                      <td className="px-4 py-3.5 text-right">
+                        <div className="inline-flex items-center gap-2">
+                          <div className="w-24 h-2 bg-zinc-800 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full bg-violet-500" style={{ width: `${Math.min(p.percent, 100)}%` }} />
                           </div>
-                          <span className="text-dark-300 text-xs w-10 text-right">{progress.percent.toFixed(0)}%</span>
+                          <span className="text-xs text-zinc-400 w-10 text-right">{Math.round(p.percent)}%</span>
                         </div>
-                      </td>
-                      <td className="px-3 py-3 text-right text-dark-200">
-                        {progress.remaining <= 0 ? (
-                          <span className="text-success font-medium">Paid off</span>
-                        ) : (
-                          formatMonthYear(payoffDate.toISOString())
-                        )}
                       </td>
                     </tr>
                   );
                 })}
-              </tbody>
-              <tfoot className="border-t-2 border-dark-600">
-                <tr>
-                  <td colSpan={2} className="px-3 py-3 font-semibold text-dark-100">Total</td>
-                  <td className="px-3 py-3 text-right font-semibold text-dark-100">
+                <tr className="bg-zinc-950/30">
+                  <td className="px-4 py-3.5 text-sm text-zinc-50 font-semibold">Total</td>
+                  <td className="px-4 py-3.5" />
+                  <td className="px-4 py-3.5 text-sm text-zinc-50 font-semibold text-right">
                     {formatCurrency(state.loans.reduce((s, l) => s + l.totalAmount, 0))}
                   </td>
-                  <td className="px-3 py-3 text-right font-semibold text-primary-400">
-                    {formatCurrency(totalMonthlyPayments)}
+                  <td className="px-4 py-3.5 text-sm text-violet-400 font-semibold text-right">
+                    {formatCurrency(totalMonthly)}
                   </td>
-                  <td className="px-3 py-3 text-right font-semibold text-warning">
+                  <td className="px-4 py-3.5 text-sm text-red-400 font-semibold text-right">
                     {formatCurrency(totalDebt)}
                   </td>
-                  <td colSpan={2}></td>
+                  <td className="px-4 py-3.5" />
                 </tr>
-              </tfoot>
+              </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* Add/Edit Loan Modal */}
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingId ? 'Edit Loan' : 'Add Loan'}>
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* Add/Edit Modal */}
+      <Modal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editing ? 'Edit Loan' : 'Add Loan'}
+        size="lg"
+        footer={
+          <>
+            <button onClick={() => setModalOpen(false)} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm">
+              Cancel
+            </button>
+            <button onClick={handleSave} className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium">
+              {editing ? 'Save Changes' : 'Add Loan'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className={labelClass}>Vehicle *</label>
-              <select value={form.vehicleId} onChange={e => setForm({ ...form, vehicleId: e.target.value })} className={inputClass}>
-                <option value="">Select vehicle...</option>
-                {state.vehicles.map(v => <option key={v.id} value={v.id}>{v.brand} {v.model}</option>)}
+              <label className="block text-sm font-medium text-zinc-400 mb-2">Vehicle</label>
+              <select
+                value={form.vehicleId}
+                onChange={e => setForm({ ...form, vehicleId: e.target.value })}
+                className={selectClasses}
+                style={{ background: chevronBg }}
+              >
+                <option value="">Select vehicle</option>
+                {state.vehicles.map(v => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
               </select>
             </div>
             <div>
-              <label className={labelClass}>Name *</label>
-              <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder="e.g. Auto Credit" />
-            </div>
-            <div>
-              <label className={labelClass}>Total Amount (EUR) *</label>
-              <input type="number" value={form.totalAmount || ''} onChange={e => setForm({ ...form, totalAmount: parseFloat(e.target.value) || 0 })} className={inputClass} placeholder="0.00" min="0" step="0.01" />
-            </div>
-            <div>
-              <label className={labelClass}>Monthly Payment (EUR) *</label>
-              <input type="number" value={form.monthlyPayment || ''} onChange={e => setForm({ ...form, monthlyPayment: parseFloat(e.target.value) || 0 })} className={inputClass} placeholder="0.00" min="0" step="0.01" />
-            </div>
-            <div>
-              <label className={labelClass}>Interest Rate (%)</label>
-              <input type="number" value={form.interestRate || ''} onChange={e => setForm({ ...form, interestRate: parseFloat(e.target.value) || 0 })} className={inputClass} placeholder="0.0" min="0" step="0.1" />
-            </div>
-            <div>
-              <label className={labelClass}>Start Date *</label>
-              <input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Duration (Months) *</label>
-              <input type="number" value={form.durationMonths || ''} onChange={e => setForm({ ...form, durationMonths: parseInt(e.target.value) || 0 })} className={inputClass} placeholder="e.g. 48" min="1" />
-            </div>
-            <div>
-              <label className={labelClass}>Add. Savings / Month</label>
-              <input type="number" value={form.additionalSavingsPerMonth || ''} onChange={e => setForm({ ...form, additionalSavingsPerMonth: parseFloat(e.target.value) || 0 })} className={inputClass} placeholder="0.00" min="0" step="0.01" />
+              <label className="block text-sm font-medium text-zinc-400 mb-2">Name</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+                placeholder="e.g. Car Loan"
+                className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
+              />
             </div>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">Total Amount</label>
+              <input
+                type="number"
+                value={form.totalAmount || ''}
+                onChange={e => setForm({ ...form, totalAmount: parseFloat(e.target.value) || 0 })}
+                placeholder="0.00"
+                className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">Monthly Payment</label>
+              <input
+                type="number"
+                value={form.monthlyPayment || ''}
+                onChange={e => setForm({ ...form, monthlyPayment: parseFloat(e.target.value) || 0 })}
+                placeholder="0.00"
+                className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">Interest Rate (%)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={form.interestRate || ''}
+                onChange={e => setForm({ ...form, interestRate: parseFloat(e.target.value) || 0 })}
+                placeholder="0.0"
+                className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">Duration (months)</label>
+              <input
+                type="number"
+                value={form.durationMonths || ''}
+                onChange={e => setForm({ ...form, durationMonths: parseInt(e.target.value) || 0 })}
+                placeholder="12"
+                className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">Extra Savings/mo</label>
+              <input
+                type="number"
+                value={form.additionalSavingsPerMonth || ''}
+                onChange={e => setForm({ ...form, additionalSavingsPerMonth: parseFloat(e.target.value) || 0 })}
+                placeholder="0.00"
+                className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
+              />
+            </div>
+          </div>
+
           <div>
-            <label className={labelClass}>Notes</label>
-            <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className={`${inputClass} resize-none`} rows={3} placeholder="Optional notes..." />
+            <label className="block text-sm font-medium text-zinc-400 mb-2">Start Date</label>
+            <input
+              type="date"
+              value={form.startDate}
+              onChange={e => setForm({ ...form, startDate: e.target.value })}
+              className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
+            />
           </div>
 
-          {/* Preview calculations */}
-          {form.totalAmount > 0 && form.monthlyPayment > 0 && form.durationMonths > 0 && (
-            <div className="bg-dark-900 border border-dark-700 rounded-lg p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-dark-400">Total payments over term</span>
-                <span className="text-sm font-semibold text-dark-100">{formatCurrency(form.monthlyPayment * form.durationMonths)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-dark-400">Total with savings</span>
-                <span className="text-sm font-semibold text-dark-100">{formatCurrency((form.monthlyPayment + form.additionalSavingsPerMonth) * form.durationMonths)}</span>
-              </div>
-              {form.additionalSavingsPerMonth > 0 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-dark-400">Total saved at end</span>
-                  <span className="text-sm font-semibold text-success">{formatCurrency(form.additionalSavingsPerMonth * form.durationMonths)}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button onClick={() => setShowModal(false)} className="px-4 py-2.5 bg-dark-700 text-dark-200 rounded-xl hover:bg-dark-600 transition-colors">Cancel</button>
-            <button onClick={handleSave}
-              disabled={!form.name || !form.vehicleId || form.totalAmount <= 0 || form.monthlyPayment <= 0 || form.durationMonths <= 0}
-              className="px-6 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-500 transition-colors font-medium disabled:opacity-40 disabled:cursor-not-allowed">
-              {editingId ? 'Save Changes' : 'Add Loan'}
-            </button>
+          <div>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={e => setForm({ ...form, notes: e.target.value })}
+              placeholder="Optional notes..."
+              className="w-full min-h-[100px] h-auto bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 resize-none"
+            />
           </div>
         </div>
       </Modal>

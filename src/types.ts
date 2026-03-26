@@ -2,7 +2,7 @@ export type FuelType = 'diesel' | 'benzin' | 'elektro' | 'hybrid' | 'lpg';
 export type VehicleStatus = 'owned' | 'planned';
 export type CostFrequency = 'einmalig' | 'monatlich' | 'quartal' | 'halbjaehrlich' | 'jaehrlich';
 export type CostCategory = 'steuer' | 'versicherung' | 'sprit' | 'pflege' | 'reparatur' | 'tuev' | 'finanzierung' | 'sparen' | 'sonstiges';
-export type Page = 'dashboard' | 'vehicles' | 'vehicle-detail' | 'costs' | 'loans' | 'savings' | 'repairs' | 'reminders' | 'purchase-planner' | 'login' | 'register' | 'forgot-password' | 'reset-password' | 'settings' | 'wiki';
+export type Page = 'dashboard' | 'vehicles' | 'vehicle-detail' | 'costs' | 'loans' | 'savings' | 'repairs' | 'reminders' | 'purchase-planner' | 'login' | 'register' | 'forgot-password' | 'reset-password' | 'settings' | 'wiki' | 'services' | 'fuel' | 'inspections' | 'taxes' | 'supplies' | 'equipment' | 'planner';
 
 export interface Vehicle {
   id: string;
@@ -41,6 +41,7 @@ export interface Cost {
   startDate: string;
   endDate: string;
   notes: string;
+  tags?: string[];
   createdAt: string;
 }
 
@@ -55,6 +56,7 @@ export interface Loan {
   durationMonths: number;
   additionalSavingsPerMonth: number;
   notes: string;
+  tags?: string[];
   createdAt: string;
 }
 
@@ -68,6 +70,7 @@ export interface Repair {
   cost: number;
   mileage: number;
   workshop: string;
+  tags?: string[];
   createdAt: string;
 }
 
@@ -79,6 +82,7 @@ export interface SavingsGoal {
   monthlyContribution: number;
   startDate: string;
   notes: string;
+  tags?: string[];
   createdAt: string;
 }
 
@@ -167,11 +171,57 @@ export interface Reminder {
   emailNotify: boolean;
   sent: boolean;
   active: boolean;
+  mileageThreshold?: number;
+  currentMileageAtCreation?: number;
   createdAt: string;
 }
 
 export interface AppConfig {
   emailEnabled: boolean;
+}
+
+export type ServiceCategory = 'oil' | 'brakes' | 'filters' | 'tires' | 'fluids' | 'electrical' | 'body' | 'other';
+export type TaskPriority = 'critical' | 'normal' | 'low';
+export type TaskStage = 'planned' | 'doing' | 'testing' | 'done';
+export type TaskCategory = 'service' | 'repair' | 'upgrade';
+export type InspectionResult = 'pass' | 'fail' | 'na';
+
+export interface ServiceRecord {
+  id: string; vehicleId: string; date: string; description: string; mileage: number; cost: number; notes: string; tags: string[]; category: ServiceCategory; createdAt: string;
+}
+export interface UpgradeRecord {
+  id: string; vehicleId: string; date: string; description: string; cost: number; mileage: number; notes: string; tags: string[]; createdAt: string;
+}
+export interface FuelRecord {
+  id: string; vehicleId: string; date: string; mileage: number; fuelAmount: number; fuelCost: number; isPartialFill: boolean; isMissedEntry: boolean; fuelType: string; station: string; notes: string; tags: string[]; createdAt: string;
+}
+export interface OdometerRecord {
+  id: string; vehicleId: string; date: string; mileage: number; notes: string; tags: string[]; createdAt: string;
+}
+export interface Supply {
+  id: string; vehicleId: string | null; name: string; partNumber: string; description: string; quantity: number; unitCost: number; notes: string; tags: string[]; createdAt: string;
+}
+export interface Equipment {
+  id: string; vehicleId: string | null; name: string; description: string; isEquipped: boolean; totalDistance: number; notes: string; createdAt: string;
+}
+export interface InspectionItem { name: string; result: InspectionResult; notes: string; }
+export interface Inspection {
+  id: string; vehicleId: string; date: string; title: string; items: InspectionItem[]; overallResult: string; mileage: number; cost: number; notes: string; createdAt: string;
+}
+export interface VehicleNote {
+  id: string; vehicleId: string; title: string; content: string; isPinned: boolean; tags: string[]; createdAt: string;
+}
+export interface TaxRecord {
+  id: string; vehicleId: string; date: string; description: string; cost: number; isRecurring: boolean; recurringInterval: string; dueDate: string; notes: string; tags: string[]; createdAt: string;
+}
+export interface PlannerTask {
+  id: string; vehicleId: string | null; title: string; description: string; priority: TaskPriority; stage: TaskStage; category: TaskCategory; notes: string; createdAt: string;
+}
+export interface Attachment {
+  id: string; recordType: string; recordId: string; fileName: string; filePath: string; mimeType: string; fileSize: number; uploadedAt: string;
+}
+export interface SearchResult {
+  type: string; id: string; title: string; snippet: string; vehicleId?: string; date?: string;
 }
 
 export interface AppState {
@@ -183,4 +233,14 @@ export interface AppState {
   savingsTransactions: SavingsTransaction[];
   plannedPurchases: PlannedPurchase[];
   persons: Person[];
+  serviceRecords: ServiceRecord[];
+  upgradeRecords: UpgradeRecord[];
+  fuelRecords: FuelRecord[];
+  odometerRecords: OdometerRecord[];
+  supplies: Supply[];
+  equipment: Equipment[];
+  inspections: Inspection[];
+  vehicleNotes: VehicleNote[];
+  taxRecords: TaxRecord[];
+  plannerTasks: PlannerTask[];
 }

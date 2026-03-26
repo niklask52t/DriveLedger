@@ -1,0 +1,100 @@
+{
+  "vehicles": [
+    {
+      "name": "Mercedes C220d T",
+      "brand": "Mercedes-Benz",
+      "model": "C220d T",
+      "variant": "AMG-Line, 194 PS",
+      "licensePlate": "",
+      "hsn": "1313",
+      "tsn": "HSO",
+      "firstRegistration": "2019-04-08",
+      "purchasePrice": 0,
+      "purchaseDate": "",
+      "currentMileage": 0,
+      "annualMileage": 32000,
+      "fuelType": "diesel",
+      "avgConsumption": 6.5,
+      "fuelPrice": 1.669,
+      "horsePower": 194,
+      "imageUrl": "",
+      "status": "owned",
+      "mobileDeLink": "",
+      "notes": "S205",
+      "color": "#1a1a2e"
+    }
+  ],
+  "costs": [
+    {
+      "vehicleName": "Mercedes C220d T",
+      "name": "Kfz-Steuer",
+      "category": "steuer",
+      "amount": 239.00,
+      "frequency": "jaehrlich",
+      "paidByName": "Papa",
+      "startDate": "2025-01-01",
+      "endDate": "",
+      "notes": ""
+    },
+    {
+      "vehicleName": "Mercedes C220d T",
+      "name": "Vollkaskoversicherung",
+      "category": "versicherung",
+      "amount": 2820.16,
+      "frequency": "jaehrlich",
+      "paidByName": "Papa",
+      "startDate": "2025-01-01",
+      "endDate": "",
+      "notes": ""
+    },
+    {
+      "vehicleName": "Mercedes C220d T",
+      "name": "Spritkosten",
+      "category": "sprit",
+      "amount": 289.29,
+      "frequency": "monatlich",
+      "paidByName": "Niklas",
+      "startDate": "2025-01-01",
+      "endDate": "",
+      "notes": "Basierend auf 32.000 km/Jahr, 6.5 L/100km, 1.669 €/L"
+    },
+    {
+      "vehicleName": "Mercedes C220d T",
+      "name": "Pflege & Wäsche",
+      "category": "pflege",
+      "amount": 20.00,
+      "frequency": "monatlich",
+      "paidByName": "Niklas",
+      "startDate": "2025-01-01",
+      "endDate": "",
+      "notes": ""
+    },
+    {
+      "vehicleName": "Mercedes C220d T",
+      "name": "Rücklagen Reparaturen",
+      "category": "reparatur",
+      "amount": 183.33,
+      "frequency": "monatlich",
+      "paidByName": "Mama",
+      "startDate": "2025-01-01",
+      "endDate": "",
+      "notes": "Rücklagen für anfallende Reparaturen"
+    },
+    {
+      "vehicleName": "Mercedes C220d T",
+      "name": "Darlehen (Papa)",
+      "category": "finanzierung",
+      "amount": 116.67,
+      "frequency": "monatlich",
+      "paidByName": "Mama",
+      "startDate": "2025-01-01",
+      "endDate": "",
+      "notes": "1.400 €/Jahr Darlehen"
+    }
+  ],
+  "persons": [
+    { "name": "Papa", "color": "#3b82f6" },
+    { "name": "Mama", "color": "#ec4899" },
+    { "name": "Niklas", "color": "#8b5cf6" }
+  ]
+}

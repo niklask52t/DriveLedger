@@ -1,8 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
+import QRCode from 'qrcode';
 import { getPool } from '../db';
 import { combinedAuthMiddleware } from '../middleware';
 import { toCamelCase, toSnakeCase, rowsToCamelCase } from '../utils';
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 const router = Router();
 router.use(combinedAuthMiddleware);
@@ -175,6 +178,36 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
+// GET /:id/qr - Generate QR code PNG for the vehicle's detail URL
+router.get('/:id/qr', async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    const userId = (req as any).user.id;
+    const { id } = req.params;
+
+    // Verify ownership
+    const [existingRows] = await pool.execute('SELECT id FROM vehicles WHERE id = ? AND user_id = ?', [id, userId]);
+    const existing = (existingRows as any[])[0];
+    if (!existing) {
+      return res.status(404).json({ error: 'Vehicle not found' });
+    }
+
+    const url = `${FRONTEND_URL}/vehicle/${id}`;
+    const qrBuffer = await QRCode.toBuffer(url, {
+      type: 'png',
+      width: 300,
+      margin: 2,
+    });
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Disposition', `inline; filename="vehicle-${id}-qr.png"`);
+    return res.status(200).send(qrBuffer);
+  } catch (err: any) {
+    console.error('[VEHICLES] QR error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // DELETE /:id - delete vehicle + cascade
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
@@ -204,6 +237,17 @@ router.delete('/:id', async (req: Request, res: Response) => {
       await conn.execute('DELETE FROM loans WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
       await conn.execute('DELETE FROM repairs WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
       await conn.execute('DELETE FROM savings_goals WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM service_records WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM upgrade_records WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM fuel_records WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM odometer_records WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM inspections WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM vehicle_notes WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM taxes WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM planner_tasks WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM supplies WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM equipment WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM vehicle_shares WHERE vehicle_id = ?', [id]);
       await conn.execute('DELETE FROM vehicles WHERE id = ? AND user_id = ?', [id, userId]);
       await conn.commit();
     } catch (err) {

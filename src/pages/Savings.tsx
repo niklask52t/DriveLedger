@@ -1,110 +1,58 @@
 import { useState, useMemo } from 'react';
-import {
-  PiggyBank, Plus, Trash2, Edit3, ChevronDown, ChevronUp,
-  ArrowUpCircle, ArrowDownCircle, Target, Calendar, TrendingUp, Wallet
-} from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { addMonths, format, parseISO, differenceInMonths } from 'date-fns';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Pencil, Trash2, ChevronDown, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import Modal from '../components/Modal';
+import { cn } from '../lib/utils';
 import { formatCurrency, formatDate, getSavingsBalance, getSavingsProgress } from '../utils';
+import { addMonths, format, parseISO } from 'date-fns';
 import type { AppState, SavingsGoal, SavingsTransaction } from '../types';
 
-interface SavingsProps {
+interface Props {
   state: AppState;
-  setState: (state: AppState) => void;
+  setState: (s: AppState) => void;
 }
-
-const inputClass = 'w-full bg-dark-900 border border-dark-600 rounded-lg px-3 py-2 text-dark-100 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none';
 
 const emptyGoal: Omit<SavingsGoal, 'id' | 'createdAt'> = {
   vehicleId: '',
   name: '',
   targetAmount: 0,
   monthlyContribution: 0,
-  startDate: new Date().toISOString().split('T')[0],
+  startDate: '',
   notes: '',
 };
 
-const emptyTransaction: Omit<SavingsTransaction, 'id' | 'savingsGoalId'> = {
-  date: new Date().toISOString().split('T')[0],
+const emptyTransaction: Omit<SavingsTransaction, 'id'> = {
+  savingsGoalId: '',
+  date: '',
   amount: 0,
   type: 'deposit',
   description: '',
 };
 
-export default function Savings({ state, setState }: SavingsProps) {
-  const [showGoalModal, setShowGoalModal] = useState(false);
-  const [showTxnModal, setShowTxnModal] = useState(false);
+export default function Savings({ state, setState }: Props) {
+  const [goalModalOpen, setGoalModalOpen] = useState(false);
+  const [txnModalOpen, setTxnModalOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
   const [goalForm, setGoalForm] = useState(emptyGoal);
   const [txnForm, setTxnForm] = useState(emptyTransaction);
-  const [txnGoalId, setTxnGoalId] = useState('');
-  const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set());
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const vehicles = state.vehicles;
-  const goals = state.savingsGoals;
-  const transactions = state.savingsTransactions;
-
-  // Overview stats
   const totalSaved = useMemo(
-    () => goals.reduce((sum, g) => sum + getSavingsBalance(g, transactions), 0),
-    [goals, transactions]
+    () => state.savingsGoals.reduce((sum, g) => sum + Math.max(0, getSavingsBalance(g, state.savingsTransactions)), 0),
+    [state.savingsGoals, state.savingsTransactions]
   );
   const totalTarget = useMemo(
-    () => goals.reduce((sum, g) => sum + g.targetAmount, 0),
-    [goals]
+    () => state.savingsGoals.reduce((sum, g) => sum + g.targetAmount, 0),
+    [state.savingsGoals]
   );
 
-  // Savings projection chart data
-  const projectionData = useMemo(() => {
-    if (goals.length === 0) return [];
-    const data: { month: string; balance: number }[] = [];
-    const now = new Date();
-    for (let i = 0; i <= 24; i++) {
-      const date = addMonths(now, i);
-      let total = 0;
-      for (const g of goals) {
-        const start = parseISO(g.startDate);
-        const monthsFromStart = Math.max(0, differenceInMonths(date, start));
-        const autoContrib = monthsFromStart * g.monthlyContribution;
-        const goalTxns = transactions.filter(t => t.savingsGoalId === g.id);
-        const txnTotal = goalTxns.reduce((s, t) => s + (t.type === 'deposit' ? t.amount : -t.amount), 0);
-        total += Math.min(g.targetAmount, autoContrib + txnTotal);
-      }
-      data.push({ month: format(date, 'MMM yy'), balance: Math.round(total * 100) / 100 });
-    }
-    return data;
-  }, [goals, transactions]);
+  const getVehicleName = (id: string) => state.vehicles.find(v => v.id === id)?.name || '-';
 
-  // Helpers
-  const getVehicleName = (id: string) => vehicles.find(v => v.id === id)?.name || 'General';
-
-  const getEstimatedCompletion = (goal: SavingsGoal): string => {
-    const balance = getSavingsBalance(goal, transactions);
-    const remaining = goal.targetAmount - balance;
-    if (remaining <= 0) return 'Reached!';
-    if (goal.monthlyContribution <= 0) return 'N/A';
-    const monthsLeft = Math.ceil(remaining / goal.monthlyContribution);
-    const completionDate = addMonths(new Date(), monthsLeft);
-    return format(completionDate, 'MMM yyyy');
-  };
-
-  const toggleExpanded = (id: string) => {
-    setExpandedGoals(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  // Goal CRUD
   const openAddGoal = () => {
     setEditingGoal(null);
-    setGoalForm(emptyGoal);
-    setShowGoalModal(true);
+    setGoalForm({ ...emptyGoal, vehicleId: state.vehicles[0]?.id || '' });
+    setGoalModalOpen(true);
   };
 
   const openEditGoal = (goal: SavingsGoal) => {
@@ -117,508 +65,435 @@ export default function Savings({ state, setState }: SavingsProps) {
       startDate: goal.startDate,
       notes: goal.notes,
     });
-    setShowGoalModal(true);
+    setGoalModalOpen(true);
   };
 
-  const saveGoal = () => {
+  const handleSaveGoal = () => {
     if (!goalForm.name.trim()) return;
     if (editingGoal) {
       setState({
         ...state,
-        savingsGoals: goals.map(g =>
+        savingsGoals: state.savingsGoals.map(g =>
           g.id === editingGoal.id ? { ...g, ...goalForm } : g
         ),
       });
     } else {
       const newGoal: SavingsGoal = {
         ...goalForm,
-        id: uuidv4(),
+        id: crypto.randomUUID(),
         createdAt: new Date().toISOString(),
       };
-      setState({ ...state, savingsGoals: [...goals, newGoal] });
+      setState({ ...state, savingsGoals: [...state.savingsGoals, newGoal] });
     }
-    setShowGoalModal(false);
+    setGoalModalOpen(false);
   };
 
-  const deleteGoal = (id: string) => {
+  const handleDeleteGoal = (id: string) => {
     setState({
       ...state,
-      savingsGoals: goals.filter(g => g.id !== id),
-      savingsTransactions: transactions.filter(t => t.savingsGoalId !== id),
+      savingsGoals: state.savingsGoals.filter(g => g.id !== id),
+      savingsTransactions: state.savingsTransactions.filter(t => t.savingsGoalId !== id),
     });
-    setDeleteConfirm(null);
   };
 
-  // Transaction CRUD
-  const openAddTxn = (goalId: string, type: 'deposit' | 'withdrawal') => {
-    setTxnGoalId(goalId);
-    setTxnForm({ ...emptyTransaction, type });
-    setShowTxnModal(true);
+  const openTxnModal = (goalId: string, type: 'deposit' | 'withdrawal') => {
+    setTxnForm({
+      savingsGoalId: goalId,
+      date: new Date().toISOString().split('T')[0],
+      amount: 0,
+      type,
+      description: '',
+    });
+    setTxnModalOpen(true);
   };
 
-  const saveTxn = () => {
+  const handleSaveTxn = () => {
     if (txnForm.amount <= 0) return;
     const newTxn: SavingsTransaction = {
       ...txnForm,
-      id: uuidv4(),
-      savingsGoalId: txnGoalId,
+      id: crypto.randomUUID(),
     };
-    setState({ ...state, savingsTransactions: [...transactions, newTxn] });
-    setShowTxnModal(false);
+    setState({ ...state, savingsTransactions: [...state.savingsTransactions, newTxn] });
+    setTxnModalOpen(false);
   };
 
-  const deleteTxn = (id: string) => {
-    setState({ ...state, savingsTransactions: transactions.filter(t => t.id !== id) });
+  const handleDeleteTxn = (id: string) => {
+    setState({ ...state, savingsTransactions: state.savingsTransactions.filter(t => t.id !== id) });
   };
+
+  // Projection chart data
+  const projectionData = useMemo(() => {
+    if (state.savingsGoals.length === 0) return [];
+    const months = 24;
+    const data: { month: string; total: number }[] = [];
+    const now = new Date();
+    for (let i = 0; i <= months; i++) {
+      const date = addMonths(now, i);
+      let total = 0;
+      for (const goal of state.savingsGoals) {
+        const balance = getSavingsBalance(goal, state.savingsTransactions);
+        total += Math.max(0, balance + goal.monthlyContribution * i);
+      }
+      data.push({ month: format(date, 'MMM yy'), total });
+    }
+    return data;
+  }, [state.savingsGoals, state.savingsTransactions]);
+
+  const selectClasses = "w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 outline-none focus:border-violet-500/50 appearance-none";
+  const chevronBg = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") no-repeat right 10px center`;
 
   return (
-    <div className="space-y-6">
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-dark-800 border border-dark-700 rounded-xl p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2.5 rounded-lg bg-emerald-500/15">
-              <Wallet size={20} className="text-emerald-400" />
+    <div className="space-y-8">
+      {/* Stats + Add */}
+      <div className="flex items-start justify-between">
+        <div className="grid grid-cols-3 gap-6">
+          {[
+            { label: 'Total Saved', value: formatCurrency(totalSaved), color: 'text-emerald-400' },
+            { label: 'Total Target', value: formatCurrency(totalTarget), color: 'text-violet-400' },
+            { label: 'Goals', value: String(state.savingsGoals.length), color: 'text-sky-400' },
+          ].map(s => (
+            <div key={s.label}>
+              <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{s.label}</p>
+              <p className={cn('text-2xl font-semibold', s.color)}>{s.value}</p>
             </div>
-            <span className="text-sm text-dark-400">Total Saved</span>
-          </div>
-          <p className="text-2xl font-bold text-dark-50">{formatCurrency(totalSaved)}</p>
-          {totalTarget > 0 && (
-            <div className="mt-2">
-              <div className="w-full h-1.5 bg-dark-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-emerald-500 rounded-full transition-all"
-                  style={{ width: `${Math.min(100, (totalSaved / totalTarget) * 100)}%` }}
-                />
-              </div>
-              <p className="text-xs text-dark-500 mt-1">{((totalSaved / totalTarget) * 100).toFixed(1)}% of target</p>
-            </div>
-          )}
+          ))}
         </div>
-
-        <div className="bg-dark-800 border border-dark-700 rounded-xl p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2.5 rounded-lg bg-blue-500/15">
-              <Target size={20} className="text-blue-400" />
-            </div>
-            <span className="text-sm text-dark-400">Total Target</span>
-          </div>
-          <p className="text-2xl font-bold text-dark-50">{formatCurrency(totalTarget)}</p>
-          <p className="text-xs text-dark-500 mt-1">{formatCurrency(totalTarget - totalSaved)} remaining</p>
-        </div>
-
-        <div className="bg-dark-800 border border-dark-700 rounded-xl p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2.5 rounded-lg bg-purple-500/15">
-              <PiggyBank size={20} className="text-purple-400" />
-            </div>
-            <span className="text-sm text-dark-400">Savings Goals</span>
-          </div>
-          <p className="text-2xl font-bold text-dark-50">{goals.length}</p>
-          <p className="text-xs text-dark-500 mt-1">
-            {goals.filter(g => getSavingsProgress(g, transactions) >= 100).length} completed
-          </p>
-        </div>
-      </div>
-
-      {/* Add Goal Button */}
-      <div className="flex justify-end">
-        <button
-          onClick={openAddGoal}
-          className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-medium text-sm transition-colors cursor-pointer"
-        >
-          <Plus size={18} />
-          Add Savings Goal
+        <button onClick={openAddGoal} className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2">
+          <Plus size={16} />
+          Add Goal
         </button>
       </div>
 
-      {/* Goals Grid */}
-      {goals.length === 0 ? (
-        <div className="text-center py-16 text-dark-500">
-          <PiggyBank size={48} className="mx-auto mb-4 opacity-40" />
-          <p className="text-lg">No savings goals yet</p>
-          <p className="text-sm mt-1">Create your first savings goal to start tracking</p>
+      {/* Goals grid */}
+      {state.savingsGoals.length === 0 ? (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
+          <p className="text-sm text-zinc-500">No savings goals yet. Create one to start tracking your progress.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {goals.map(goal => {
-            const balance = getSavingsBalance(goal, transactions);
-            const progress = getSavingsProgress(goal, transactions);
-            const goalTxns = transactions
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {state.savingsGoals.map(goal => {
+            const balance = Math.max(0, getSavingsBalance(goal, state.savingsTransactions));
+            const progress = getSavingsProgress(goal, state.savingsTransactions);
+            const goalTxns = state.savingsTransactions
               .filter(t => t.savingsGoalId === goal.id)
               .sort((a, b) => b.date.localeCompare(a.date));
-            const isExpanded = expandedGoals.has(goal.id);
+            const isExpanded = expandedId === goal.id;
+            const vehicleName = getVehicleName(goal.vehicleId);
 
             return (
-              <div
+              <motion.div
                 key={goal.id}
-                className="bg-dark-800 border border-dark-700 rounded-xl overflow-hidden"
+                layout
+                className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden"
               >
-                <div className="p-5">
+                <div className="p-6">
                   {/* Header */}
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h3 className="font-semibold text-dark-50 text-lg">{goal.name}</h3>
-                      <p className="text-sm text-dark-400 mt-0.5">{getVehicleName(goal.vehicleId)}</p>
+                      <div className="flex items-center gap-3 mb-1">
+                        <h3 className="text-base font-semibold text-zinc-50">{goal.name}</h3>
+                        {goal.vehicleId && (
+                          <span className="px-2.5 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-400 border border-zinc-700">
+                            {vehicleName}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-zinc-500">
+                        {formatCurrency(goal.monthlyContribution)}/mo &middot; Started {formatDate(goal.startDate)}
+                      </p>
                     </div>
                     <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => openEditGoal(goal)}
-                        className="p-1.5 rounded-lg text-dark-400 hover:text-dark-200 hover:bg-dark-700 transition-colors cursor-pointer"
-                        title="Edit"
-                      >
-                        <Edit3 size={16} />
+                      <button onClick={() => openEditGoal(goal)} className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center">
+                        <Pencil size={14} />
                       </button>
-                      {deleteConfirm === goal.id ? (
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => deleteGoal(goal.id)}
-                            className="px-2 py-1 text-xs bg-red-600 text-white rounded cursor-pointer"
-                          >
-                            Confirm
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirm(null)}
-                            className="px-2 py-1 text-xs bg-dark-700 text-dark-300 rounded cursor-pointer"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setDeleteConfirm(goal.id)}
-                          className="p-1.5 rounded-lg text-dark-400 hover:text-red-400 hover:bg-dark-700 transition-colors cursor-pointer"
-                          title="Delete"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
+                      <button onClick={() => handleDeleteGoal(goal.id)} className="text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center">
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </div>
 
-                  {/* Progress Bar */}
+                  {/* Progress */}
                   <div className="mb-4">
-                    <div className="flex justify-between text-sm mb-1.5">
-                      <span className="text-dark-300">{formatCurrency(balance)}</span>
-                      <span className="text-dark-400">{formatCurrency(goal.targetAmount)}</span>
+                    <div className="flex items-end justify-between mb-2">
+                      <span className="text-lg font-semibold text-emerald-400">{formatCurrency(balance)}</span>
+                      <span className="text-sm text-zinc-500">of {formatCurrency(goal.targetAmount)}</span>
                     </div>
-                    <div className="w-full h-3 bg-dark-700 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          progress >= 100
-                            ? 'bg-emerald-500'
-                            : progress >= 50
-                              ? 'bg-blue-500'
-                              : 'bg-primary-500'
-                        }`}
-                        style={{ width: `${Math.min(100, progress)}%` }}
+                    <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                      <motion.div
+                        className={cn(
+                          'h-full rounded-full',
+                          progress >= 100 ? 'bg-emerald-400' : 'bg-violet-500'
+                        )}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${Math.min(progress, 100)}%` }}
+                        transition={{ duration: 0.6 }}
                       />
                     </div>
-                    <p className="text-xs text-dark-500 mt-1 text-right">{progress.toFixed(1)}%</p>
+                    <p className="text-xs text-zinc-500 mt-1.5 text-right">{progress.toFixed(1)}%</p>
                   </div>
 
-                  {/* Info Grid */}
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="flex items-center gap-2 text-dark-400">
-                      <TrendingUp size={14} className="text-emerald-400" />
-                      <span>{formatCurrency(goal.monthlyContribution)}/mo</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-dark-400">
-                      <Calendar size={14} className="text-blue-400" />
-                      <span>{getEstimatedCompletion(goal)}</span>
-                    </div>
-                  </div>
-
-                  {/* Quick Actions */}
-                  <div className="flex gap-2 mt-4">
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={() => openAddTxn(goal.id, 'deposit')}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600/15 text-emerald-400 rounded-lg text-sm font-medium hover:bg-emerald-600/25 transition-colors cursor-pointer"
+                      onClick={() => openTxnModal(goal.id, 'deposit')}
+                      className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-1.5 flex-1 justify-center"
                     >
-                      <ArrowUpCircle size={16} />
+                      <ArrowDownLeft size={14} className="text-emerald-400" />
                       Deposit
                     </button>
                     <button
-                      onClick={() => openAddTxn(goal.id, 'withdrawal')}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-red-600/15 text-red-400 rounded-lg text-sm font-medium hover:bg-red-600/25 transition-colors cursor-pointer"
+                      onClick={() => openTxnModal(goal.id, 'withdrawal')}
+                      className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-1.5 flex-1 justify-center"
                     >
-                      <ArrowDownCircle size={16} />
+                      <ArrowUpRight size={14} className="text-red-400" />
                       Withdraw
                     </button>
                   </div>
-                </div>
 
-                {/* Transaction History (Expandable) */}
-                <div className="border-t border-dark-700">
-                  <button
-                    onClick={() => toggleExpanded(goal.id)}
-                    className="w-full flex items-center justify-between px-5 py-3 text-sm text-dark-400 hover:text-dark-200 hover:bg-dark-850 transition-colors cursor-pointer"
-                  >
-                    <span>Transaction History ({goalTxns.length})</span>
-                    {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </button>
-                  {isExpanded && (
-                    <div className="px-5 pb-4">
-                      {goalTxns.length === 0 ? (
-                        <p className="text-sm text-dark-500 py-2">No transactions yet</p>
-                      ) : (
-                        <div className="space-y-2 max-h-48 overflow-y-auto">
-                          {goalTxns.map(txn => (
-                            <div
-                              key={txn.id}
-                              className="flex items-center justify-between py-2 px-3 bg-dark-850 rounded-lg"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className={`p-1 rounded-full ${
-                                  txn.type === 'deposit' ? 'bg-emerald-500/15' : 'bg-red-500/15'
-                                }`}>
-                                  {txn.type === 'deposit'
-                                    ? <ArrowUpCircle size={14} className="text-emerald-400" />
-                                    : <ArrowDownCircle size={14} className="text-red-400" />
-                                  }
-                                </div>
-                                <div>
-                                  <p className="text-sm text-dark-200">{txn.description || txn.type}</p>
-                                  <p className="text-xs text-dark-500">{formatDate(txn.date)}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className={`text-sm font-medium ${
-                                  txn.type === 'deposit' ? 'text-emerald-400' : 'text-red-400'
-                                }`}>
-                                  {txn.type === 'deposit' ? '+' : '-'}{formatCurrency(txn.amount)}
-                                </span>
-                                <button
-                                  onClick={() => deleteTxn(txn.id)}
-                                  className="p-1 rounded text-dark-500 hover:text-red-400 transition-colors cursor-pointer"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                  {/* Expand */}
+                  {goalTxns.length > 0 && (
+                    <button
+                      onClick={() => setExpandedId(isExpanded ? null : goal.id)}
+                      className="mt-3 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center gap-1.5 transition-colors"
+                    >
+                      <ChevronDown size={14} className={cn('transition-transform', isExpanded && 'rotate-180')} />
+                      {goalTxns.length} Transaction{goalTxns.length !== 1 ? 's' : ''}
+                    </button>
                   )}
                 </div>
-              </div>
+
+                {/* Expanded transactions */}
+                <AnimatePresence>
+                  {isExpanded && goalTxns.length > 0 && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="border-t border-zinc-800">
+                        {goalTxns.map(txn => (
+                          <div
+                            key={txn.id}
+                            className="flex items-center justify-between px-6 py-3 border-b border-zinc-800/50 last:border-b-0 hover:bg-zinc-800/30 transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                'w-8 h-8 rounded-full flex items-center justify-center',
+                                txn.type === 'deposit' ? 'bg-emerald-400/10' : 'bg-red-400/10'
+                              )}>
+                                {txn.type === 'deposit' ? (
+                                  <ArrowDownLeft size={14} className="text-emerald-400" />
+                                ) : (
+                                  <ArrowUpRight size={14} className="text-red-400" />
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-sm text-zinc-50">{txn.description || (txn.type === 'deposit' ? 'Deposit' : 'Withdrawal')}</p>
+                                <p className="text-xs text-zinc-500">{formatDate(txn.date)}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className={cn(
+                                'text-sm font-medium',
+                                txn.type === 'deposit' ? 'text-emerald-400' : 'text-red-400'
+                              )}>
+                                {txn.type === 'deposit' ? '+' : '-'}{formatCurrency(txn.amount)}
+                              </span>
+                              <button
+                                onClick={() => handleDeleteTxn(txn.id)}
+                                className="text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
             );
           })}
         </div>
       )}
 
-      {/* Savings Growth Projection Chart */}
+      {/* Projection chart */}
       {projectionData.length > 0 && (
-        <div className="bg-dark-800 border border-dark-700 rounded-xl p-5">
-          <h3 className="text-lg font-semibold text-dark-50 mb-4">Savings Growth Projection (24 Months)</h3>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <h3 className="text-sm font-medium text-zinc-50 mb-5">24-Month Projection</h3>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={projectionData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                <defs>
-                  <linearGradient id="savingsGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <AreaChart data={projectionData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
                 <XAxis
                   dataKey="month"
-                  tick={{ fill: '#9ca3af', fontSize: 12 }}
-                  axisLine={{ stroke: '#374151' }}
-                  tickLine={{ stroke: '#374151' }}
+                  tick={{ fontSize: 11, fill: '#71717a' }}
+                  axisLine={{ stroke: '#3f3f46' }}
+                  tickLine={false}
+                  interval="preserveStartEnd"
                 />
                 <YAxis
-                  tick={{ fill: '#9ca3af', fontSize: 12 }}
-                  axisLine={{ stroke: '#374151' }}
-                  tickLine={{ stroke: '#374151' }}
-                  tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                  tick={{ fontSize: 11, fill: '#71717a' }}
+                  axisLine={{ stroke: '#3f3f46' }}
+                  tickLine={false}
+                  tickFormatter={v => `${(v / 1000).toFixed(0)}k`}
                 />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1f2937',
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#f3f4f6',
-                  }}
-                  formatter={(value) => [formatCurrency(Number(value)), 'Balance']}
+                  contentStyle={{ backgroundColor: '#18181b', border: '1px solid #3f3f46', borderRadius: '0.5rem', fontSize: '0.8rem' }}
+                  labelStyle={{ color: '#a1a1aa' }}
+                  formatter={(val: number) => formatCurrency(val)}
                 />
-                <Area
-                  type="monotone"
-                  dataKey="balance"
-                  stroke="#10b981"
-                  strokeWidth={2}
-                  fill="url(#savingsGradient)"
-                />
+                <defs>
+                  <linearGradient id="savingsGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <Area type="monotone" dataKey="total" name="Total Savings" stroke="#8b5cf6" fill="url(#savingsGrad)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
       )}
 
-      {/* Add/Edit Goal Modal */}
+      {/* Goal Modal */}
       <Modal
-        isOpen={showGoalModal}
-        onClose={() => setShowGoalModal(false)}
+        isOpen={goalModalOpen}
+        onClose={() => setGoalModalOpen(false)}
         title={editingGoal ? 'Edit Savings Goal' : 'New Savings Goal'}
         size="lg"
         footer={
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowGoalModal(false)}
-              className="px-4 py-2 text-sm rounded-lg bg-dark-700 text-dark-300 hover:bg-dark-600 transition-colors cursor-pointer"
-            >
+          <>
+            <button onClick={() => setGoalModalOpen(false)} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm">
               Cancel
             </button>
-            <button
-              onClick={saveGoal}
-              className="px-4 py-2 text-sm rounded-lg bg-primary-600 text-white hover:bg-primary-500 transition-colors cursor-pointer font-medium"
-            >
+            <button onClick={handleSaveGoal} className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium">
               {editingGoal ? 'Save Changes' : 'Create Goal'}
             </button>
-          </div>
+          </>
         }
       >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-dark-300 mb-1">Vehicle</label>
-            <select
-              value={goalForm.vehicleId}
-              onChange={e => setGoalForm({ ...goalForm, vehicleId: e.target.value })}
-              className={inputClass}
-            >
-              <option value="">General (no vehicle)</option>
-              {vehicles.map(v => (
-                <option key={v.id} value={v.id}>{v.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-dark-300 mb-1">Goal Name *</label>
-            <input
-              type="text"
-              value={goalForm.name}
-              onChange={e => setGoalForm({ ...goalForm, name: e.target.value })}
-              placeholder="e.g. Down payment, New tires fund"
-              className={inputClass}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-dark-300 mb-1">Target Amount</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">Name</label>
+              <input
+                type="text"
+                value={goalForm.name}
+                onChange={e => setGoalForm({ ...goalForm, name: e.target.value })}
+                placeholder="e.g. New Tires"
+                className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">Vehicle</label>
+              <select
+                value={goalForm.vehicleId}
+                onChange={e => setGoalForm({ ...goalForm, vehicleId: e.target.value })}
+                className={selectClasses}
+                style={{ background: chevronBg }}
+              >
+                <option value="">No vehicle</option>
+                {state.vehicles.map(v => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">Target Amount</label>
               <input
                 type="number"
                 value={goalForm.targetAmount || ''}
                 onChange={e => setGoalForm({ ...goalForm, targetAmount: parseFloat(e.target.value) || 0 })}
                 placeholder="0.00"
-                min="0"
-                step="0.01"
-                className={inputClass}
+                className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-dark-300 mb-1">Monthly Contribution</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">Monthly Contribution</label>
               <input
                 type="number"
                 value={goalForm.monthlyContribution || ''}
                 onChange={e => setGoalForm({ ...goalForm, monthlyContribution: parseFloat(e.target.value) || 0 })}
                 placeholder="0.00"
-                min="0"
-                step="0.01"
-                className={inputClass}
+                className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
               />
             </div>
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-dark-300 mb-1">Start Date</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">Start Date</label>
             <input
               type="date"
               value={goalForm.startDate}
               onChange={e => setGoalForm({ ...goalForm, startDate: e.target.value })}
-              className={inputClass}
+              className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-dark-300 mb-1">Notes</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">Notes</label>
             <textarea
               value={goalForm.notes}
               onChange={e => setGoalForm({ ...goalForm, notes: e.target.value })}
-              rows={3}
               placeholder="Optional notes..."
-              className={inputClass + ' resize-none'}
+              className="w-full min-h-[100px] h-auto bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 resize-none"
             />
           </div>
         </div>
       </Modal>
 
-      {/* Add Transaction Modal */}
+      {/* Transaction Modal */}
       <Modal
-        isOpen={showTxnModal}
-        onClose={() => setShowTxnModal(false)}
+        isOpen={txnModalOpen}
+        onClose={() => setTxnModalOpen(false)}
         title={txnForm.type === 'deposit' ? 'Add Deposit' : 'Add Withdrawal'}
         size="sm"
         footer={
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowTxnModal(false)}
-              className="px-4 py-2 text-sm rounded-lg bg-dark-700 text-dark-300 hover:bg-dark-600 transition-colors cursor-pointer"
-            >
+          <>
+            <button onClick={() => setTxnModalOpen(false)} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm">
               Cancel
             </button>
-            <button
-              onClick={saveTxn}
-              className={`px-4 py-2 text-sm rounded-lg text-white font-medium transition-colors cursor-pointer ${
-                txnForm.type === 'deposit'
-                  ? 'bg-emerald-600 hover:bg-emerald-500'
-                  : 'bg-red-600 hover:bg-red-500'
-              }`}
-            >
-              {txnForm.type === 'deposit' ? 'Add Deposit' : 'Add Withdrawal'}
+            <button onClick={handleSaveTxn} className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium">
+              {txnForm.type === 'deposit' ? 'Deposit' : 'Withdraw'}
             </button>
-          </div>
+          </>
         }
       >
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-dark-300 mb-1">Type</label>
-            <select
-              value={txnForm.type}
-              onChange={e => setTxnForm({ ...txnForm, type: e.target.value as 'deposit' | 'withdrawal' })}
-              className={inputClass}
-            >
-              <option value="deposit">Deposit</option>
-              <option value="withdrawal">Withdrawal</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-dark-300 mb-1">Amount *</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">Amount</label>
             <input
               type="number"
               value={txnForm.amount || ''}
               onChange={e => setTxnForm({ ...txnForm, amount: parseFloat(e.target.value) || 0 })}
               placeholder="0.00"
-              min="0"
-              step="0.01"
-              className={inputClass}
+              className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-dark-300 mb-1">Date</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">Date</label>
             <input
               type="date"
               value={txnForm.date}
               onChange={e => setTxnForm({ ...txnForm, date: e.target.value })}
-              className={inputClass}
+              className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-dark-300 mb-1">Description</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">Description</label>
             <input
               type="text"
               value={txnForm.description}
               onChange={e => setTxnForm({ ...txnForm, description: e.target.value })}
               placeholder="Optional description"
-              className={inputClass}
+              className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
             />
           </div>
         </div>

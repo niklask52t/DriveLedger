@@ -1,16 +1,17 @@
-import { useState, type FormEvent } from 'react';
-import {
-  AlertCircle, Loader2, Eye, EyeOff, CheckCircle,
-} from 'lucide-react';
-import { api, ApiError } from '../../api';
+import { useState } from 'react';
+import { Eye, EyeOff, Loader2, Shield, Mail, User as UserIcon } from 'lucide-react';
+import { api } from '../../api';
+import { formatDate } from '../../utils';
 import type { User } from '../../types';
-import { format } from 'date-fns';
 
-const inputClass = 'w-full bg-dark-800 border border-dark-700 rounded-lg px-4 py-2.5 text-dark-100 placeholder-dark-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none transition-colors';
+const inputClass =
+  'w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50';
+
+const labelClass = 'block text-sm font-medium text-zinc-400 mb-2';
 
 interface ProfileTabProps {
-  user: User | null;
-  refreshUser: () => Promise<void>;
+  user: User;
+  refreshUser: () => void;
 }
 
 export default function ProfileTab({ user, refreshUser }: ProfileTabProps) {
@@ -19,34 +20,36 @@ export default function ProfileTab({ user, refreshUser }: ProfileTabProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const handleChangePassword = async (e: FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
+  const handleChangePassword = async () => {
+    setMessage(null);
 
+    if (!currentPassword || !newPassword) {
+      setMessage({ type: 'error', text: 'Please fill in all password fields.' });
+      return;
+    }
     if (newPassword !== confirmPassword) {
-      setError('New passwords do not match.');
+      setMessage({ type: 'error', text: 'New passwords do not match.' });
       return;
     }
     if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters.');
+      setMessage({ type: 'error', text: 'Password must be at least 8 characters.' });
       return;
     }
 
     setLoading(true);
     try {
       await api.changePassword(currentPassword, newPassword);
-      setSuccess('Password changed successfully.');
+      setMessage({ type: 'success', text: 'Password changed successfully.' });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      await refreshUser();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to change password.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to change password.';
+      setMessage({ type: 'error', text: msg });
     } finally {
       setLoading(false);
     }
@@ -54,98 +57,134 @@ export default function ProfileTab({ user, refreshUser }: ProfileTabProps) {
 
   return (
     <div className="space-y-6">
-      {/* User info card */}
-      <div className="bg-dark-900 border border-dark-800 rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-dark-50 mb-4">Profile Information</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <span className="text-sm text-dark-400">Username</span>
-            <p className="text-dark-100 font-medium">{user?.username || '-'}</p>
+      {/* Profile Info */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+        <h3 className="text-sm font-semibold text-zinc-300 mb-4">Profile Information</h3>
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-zinc-800 flex items-center justify-center">
+              <UserIcon size={16} className="text-zinc-400" />
+            </div>
+            <div>
+              <p className="text-xs text-zinc-500">Username</p>
+              <p className="text-sm text-zinc-50">{user.username}</p>
+            </div>
           </div>
-          <div>
-            <span className="text-sm text-dark-400">Email</span>
-            <p className="text-dark-100 font-medium">{user?.email || '-'}</p>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-zinc-800 flex items-center justify-center">
+              <Mail size={16} className="text-zinc-400" />
+            </div>
+            <div>
+              <p className="text-xs text-zinc-500">Email</p>
+              <p className="text-sm text-zinc-50">
+                {user.email}
+                {user.emailVerified && (
+                  <span className="ml-2 text-xs text-emerald-400">Verified</span>
+                )}
+                {!user.emailVerified && (
+                  <span className="ml-2 text-xs text-amber-400">Not verified</span>
+                )}
+              </p>
+            </div>
           </div>
-          <div>
-            <span className="text-sm text-dark-400">Role</span>
-            <p className="text-dark-100 font-medium">{user?.isAdmin ? 'Administrator' : 'User'}</p>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-zinc-800 flex items-center justify-center">
+              <Shield size={16} className="text-zinc-400" />
+            </div>
+            <div>
+              <p className="text-xs text-zinc-500">Role</p>
+              <p className="text-sm text-zinc-50">{user.isAdmin ? 'Administrator' : 'User'}</p>
+            </div>
           </div>
-          <div>
-            <span className="text-sm text-dark-400">Member since</span>
-            <p className="text-dark-100 font-medium">
-              {user?.createdAt ? format(new Date(user.createdAt), 'MMM d, yyyy') : '-'}
-            </p>
+          <div className="pt-2 border-t border-zinc-800">
+            <p className="text-xs text-zinc-500">Member since {formatDate(user.createdAt)}</p>
           </div>
         </div>
       </div>
 
-      {/* Change password */}
-      <div className="bg-dark-900 border border-dark-800 rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-dark-50 mb-4">Change Password</h3>
-
-        {error && (
-          <div className="flex items-center gap-2 bg-danger/10 border border-danger/20 rounded-lg px-4 py-3 mb-4">
-            <AlertCircle size={18} className="text-danger shrink-0" />
-            <p className="text-sm text-danger">{error}</p>
-          </div>
-        )}
-        {success && (
-          <div className="flex items-center gap-2 bg-success/10 border border-success/20 rounded-lg px-4 py-3 mb-4">
-            <CheckCircle size={18} className="text-success shrink-0" />
-            <p className="text-sm text-success">{success}</p>
-          </div>
-        )}
-
-        <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
+      {/* Change Password */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+        <h3 className="text-sm font-semibold text-zinc-300 mb-4">Change Password</h3>
+        <div className="space-y-5 max-w-md">
           <div>
-            <label className="block text-sm font-medium text-dark-300 mb-1.5">Current Password</label>
+            <label className={labelClass}>Current Password</label>
             <div className="relative">
               <input
                 type={showCurrent ? 'text' : 'password'}
+                className={inputClass}
+                placeholder="Enter current password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                required
-                className={`${inputClass} pr-11`}
               />
-              <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-400 hover:text-dark-200">
-                {showCurrent ? <EyeOff size={18} /> : <Eye size={18} />}
+              <button
+                type="button"
+                onClick={() => setShowCurrent(!showCurrent)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+              >
+                {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-dark-300 mb-1.5">New Password</label>
+            <label className={labelClass}>New Password</label>
             <div className="relative">
               <input
                 type={showNew ? 'text' : 'password'}
+                className={inputClass}
+                placeholder="Enter new password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                required
-                minLength={8}
-                className={`${inputClass} pr-11`}
               />
-              <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-400 hover:text-dark-200">
-                {showNew ? <EyeOff size={18} /> : <Eye size={18} />}
+              <button
+                type="button"
+                onClick={() => setShowNew(!showNew)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+              >
+                {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-dark-300 mb-1.5">Confirm New Password</label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              className={inputClass}
-            />
+            <label className={labelClass}>Confirm New Password</label>
+            <div className="relative">
+              <input
+                type={showConfirm ? 'text' : 'password'}
+                className={inputClass}
+                placeholder="Confirm new password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm(!showConfirm)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+              >
+                {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
+
+          {message && (
+            <div
+              className={`text-sm px-3 py-2 rounded-lg ${
+                message.type === 'success'
+                  ? 'bg-emerald-400/10 text-emerald-400'
+                  : 'bg-red-400/10 text-red-400'
+              }`}
+            >
+              {message.text}
+            </div>
+          )}
+
           <button
-            type="submit"
+            onClick={handleChangePassword}
             disabled={loading}
-            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-500 text-white font-medium rounded-lg px-5 py-2.5 transition-colors disabled:opacity-50 cursor-pointer"
+            className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2 transition-colors disabled:opacity-50"
           >
-            {loading ? <Loader2 size={18} className="animate-spin" /> : 'Update Password'}
+            {loading && <Loader2 size={16} className="animate-spin" />}
+            Change Password
           </button>
-        </form>
+        </div>
       </div>
     </div>
   );

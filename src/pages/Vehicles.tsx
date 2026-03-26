@@ -1,24 +1,13 @@
 import { useState } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import {
-  Plus,
-  Car,
-  Fuel,
-  Gauge,
-  DollarSign,
-  ImageIcon,
-} from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Plus, Car } from 'lucide-react';
 import Modal from '../components/Modal';
-import type { AppState, Vehicle, FuelType, VehicleStatus, Page } from '../types';
-import {
-  formatCurrency,
-  getFuelTypeLabel,
-  toMonthly,
-} from '../utils';
+import type { AppState, Page, Vehicle, FuelType, VehicleStatus } from '../types';
+import { formatCurrency, getFuelTypeLabel, toMonthly } from '../utils';
 
 interface VehiclesProps {
   state: AppState;
-  setState: (state: AppState) => void;
+  setState: (s: AppState) => void;
   onNavigate: (page: Page, vehicleId?: string) => void;
 }
 
@@ -34,464 +23,405 @@ const emptyVehicle: Omit<Vehicle, 'id' | 'createdAt'> = {
   purchasePrice: 0,
   purchaseDate: '',
   currentMileage: 0,
-  annualMileage: 15000,
+  annualMileage: 0,
   fuelType: 'benzin',
-  avgConsumption: 7,
-  fuelPrice: 1.75,
+  avgConsumption: 0,
+  fuelPrice: 0,
   horsePower: 0,
   imageUrl: '',
   status: 'owned',
   mobileDeLink: '',
   notes: '',
-  color: '#3b82f6',
+  color: '#8b5cf6',
 };
 
-const inputClass =
-  'w-full bg-dark-900 border border-dark-600 rounded-lg px-3 py-2 text-dark-100 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none transition-colors';
+const fuelColors: Record<FuelType, string> = {
+  diesel: 'text-amber-400',
+  benzin: 'text-red-400',
+  elektro: 'text-emerald-400',
+  hybrid: 'text-sky-400',
+  lpg: 'text-violet-400',
+};
 
-const labelClass = 'block text-sm font-medium text-dark-300 mb-1';
-
-const fuelTypeOptions: { value: FuelType; label: string }[] = [
-  { value: 'benzin', label: 'Gasoline' },
-  { value: 'diesel', label: 'Diesel' },
-  { value: 'elektro', label: 'Electric' },
-  { value: 'hybrid', label: 'Hybrid' },
-  { value: 'lpg', label: 'LPG' },
-];
-
-const statusOptions: { value: VehicleStatus; label: string }[] = [
-  { value: 'owned', label: 'Owned' },
-  { value: 'planned', label: 'Planned' },
-];
-
-function getFuelBadgeColor(ft: FuelType): string {
-  switch (ft) {
-    case 'diesel': return 'bg-yellow-500/20 text-yellow-400';
-    case 'benzin': return 'bg-red-500/20 text-red-400';
-    case 'elektro': return 'bg-green-500/20 text-green-400';
-    case 'hybrid': return 'bg-cyan-500/20 text-cyan-400';
-    case 'lpg': return 'bg-purple-500/20 text-purple-400';
-  }
-}
-
-function getStatusBadge(status: VehicleStatus) {
-  if (status === 'owned') {
-    return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-success/20 text-success">Owned</span>;
-  }
-  return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-warning/20 text-warning">Planned</span>;
-}
-
-interface VehicleFormProps {
-  form: Omit<Vehicle, 'id' | 'createdAt'>;
-  updateForm: <K extends keyof Omit<Vehicle, 'id' | 'createdAt'>>(key: K, value: Omit<Vehicle, 'id' | 'createdAt'>[K]) => void;
-}
-
-function VehicleForm({ form, updateForm }: VehicleFormProps) {
-  return (
-    <div className="space-y-6">
-      {/* Basic Info */}
-      <div>
-        <h3 className="text-sm font-semibold text-dark-200 uppercase tracking-wider mb-3">Basic Information</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={labelClass}>Name *</label>
-            <input
-              type="text"
-              className={inputClass}
-              placeholder="e.g. My BMW"
-              value={form.name}
-              onChange={(e) => updateForm('name', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Brand</label>
-            <input
-              type="text"
-              className={inputClass}
-              placeholder="e.g. BMW"
-              value={form.brand}
-              onChange={(e) => updateForm('brand', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Model</label>
-            <input
-              type="text"
-              className={inputClass}
-              placeholder="e.g. 3 Series"
-              value={form.model}
-              onChange={(e) => updateForm('model', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Variant</label>
-            <input
-              type="text"
-              className={inputClass}
-              placeholder="e.g. 320d xDrive"
-              value={form.variant}
-              onChange={(e) => updateForm('variant', e.target.value)}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Registration & Purchase */}
-      <div>
-        <h3 className="text-sm font-semibold text-dark-200 uppercase tracking-wider mb-3">Registration & Purchase</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={labelClass}>License Plate</label>
-            <input
-              type="text"
-              className={inputClass}
-              placeholder="e.g. B-AB 1234"
-              value={form.licensePlate}
-              onChange={(e) => updateForm('licensePlate', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>First Registration</label>
-            <input
-              type="date"
-              className={inputClass}
-              value={form.firstRegistration}
-              onChange={(e) => updateForm('firstRegistration', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>HSN</label>
-            <input
-              type="text"
-              className={inputClass}
-              placeholder="Manufacturer key"
-              value={form.hsn}
-              onChange={(e) => updateForm('hsn', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>TSN</label>
-            <input
-              type="text"
-              className={inputClass}
-              placeholder="Type key"
-              value={form.tsn}
-              onChange={(e) => updateForm('tsn', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Purchase Date</label>
-            <input
-              type="date"
-              className={inputClass}
-              value={form.purchaseDate}
-              onChange={(e) => updateForm('purchaseDate', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Purchase Price</label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="0"
-              value={form.purchasePrice || ''}
-              onChange={(e) => updateForm('purchasePrice', parseFloat(e.target.value) || 0)}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Mileage & Fuel */}
-      <div>
-        <h3 className="text-sm font-semibold text-dark-200 uppercase tracking-wider mb-3">Mileage & Fuel</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={labelClass}>Current Mileage (km)</label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="0"
-              value={form.currentMileage || ''}
-              onChange={(e) => updateForm('currentMileage', parseFloat(e.target.value) || 0)}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Annual Mileage (km)</label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="15000"
-              value={form.annualMileage || ''}
-              onChange={(e) => updateForm('annualMileage', parseFloat(e.target.value) || 0)}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Fuel Type</label>
-            <select
-              className={inputClass}
-              value={form.fuelType}
-              onChange={(e) => updateForm('fuelType', e.target.value as FuelType)}
-            >
-              {fuelTypeOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>Avg. Consumption (L/100km)</label>
-            <input
-              type="number"
-              step="0.1"
-              className={inputClass}
-              placeholder="7.0"
-              value={form.avgConsumption || ''}
-              onChange={(e) => updateForm('avgConsumption', parseFloat(e.target.value) || 0)}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Fuel Price (EUR/L)</label>
-            <input
-              type="number"
-              step="0.01"
-              className={inputClass}
-              placeholder="1.75"
-              value={form.fuelPrice || ''}
-              onChange={(e) => updateForm('fuelPrice', parseFloat(e.target.value) || 0)}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Horse Power (PS)</label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="0"
-              value={form.horsePower || ''}
-              onChange={(e) => updateForm('horsePower', parseFloat(e.target.value) || 0)}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Status & Extras */}
-      <div>
-        <h3 className="text-sm font-semibold text-dark-200 uppercase tracking-wider mb-3">Status & Extras</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={labelClass}>Status</label>
-            <select
-              className={inputClass}
-              value={form.status}
-              onChange={(e) => updateForm('status', e.target.value as VehicleStatus)}
-            >
-              {statusOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>Color</label>
-            <div className="flex items-center gap-3">
-              <input
-                type="color"
-                className="w-10 h-10 rounded-lg border border-dark-600 cursor-pointer bg-dark-900 shrink-0"
-                value={form.color}
-                onChange={(e) => updateForm('color', e.target.value)}
-              />
-              <input
-                type="text"
-                className={inputClass}
-                value={form.color}
-                onChange={(e) => updateForm('color', e.target.value)}
-              />
-            </div>
-          </div>
-          <div>
-            <label className={labelClass}>mobile.de Link</label>
-            <input
-              type="url"
-              className={inputClass}
-              placeholder="https://www.mobile.de/..."
-              value={form.mobileDeLink}
-              onChange={(e) => updateForm('mobileDeLink', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Image URL</label>
-            <div className="flex items-center gap-2">
-              <ImageIcon size={16} className="text-dark-500 shrink-0" />
-              <input
-                type="url"
-                className={inputClass}
-                placeholder="https://..."
-                value={form.imageUrl}
-                onChange={(e) => updateForm('imageUrl', e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="sm:col-span-2">
-            <label className={labelClass}>Notes</label>
-            <textarea
-              className={`${inputClass} resize-none`}
-              rows={3}
-              placeholder="Any additional notes..."
-              value={form.notes}
-              onChange={(e) => updateForm('notes', e.target.value)}
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+const fadeUp = {
+  initial: { opacity: 0, y: 12 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.35 },
+};
 
 export default function Vehicles({ state, setState, onNavigate }: VehiclesProps) {
-  const [showModal, setShowModal] = useState(false);
+  const { vehicles, costs } = state;
+  const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(emptyVehicle);
 
-  const getVehicleMonthlyCost = (vehicleId: string) => {
-    const costs = state.costs.filter((c) => c.vehicleId === vehicleId);
-    return costs.reduce((sum, c) => sum + toMonthly(c.amount, c.frequency), 0);
+  const getMonthly = (vehicleId: string) => {
+    const vCosts = costs.filter(c => c.vehicleId === vehicleId);
+    return vCosts.reduce((sum, c) => sum + toMonthly(c.amount, c.frequency), 0);
+  };
+
+  const handleChange = (field: string, value: string | number) => {
+    setForm(prev => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = () => {
-    if (!form.name.trim()) return;
     const newVehicle: Vehicle = {
       ...form,
-      id: uuidv4(),
+      id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
     };
-    setState({ ...state, vehicles: [...state.vehicles, newVehicle] });
+    setState({ ...state, vehicles: [...vehicles, newVehicle] });
     setForm(emptyVehicle);
-    setShowModal(false);
+    setShowAdd(false);
   };
 
-  const updateForm = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  };
+  const inputCls = 'w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50';
+  const labelCls = 'block text-sm font-medium text-zinc-400 mb-2';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-dark-50">Vehicles</h1>
-          <p className="text-dark-400 mt-1">Manage your vehicles and track costs</p>
-        </div>
+      <motion.div {...fadeUp} className="flex items-center justify-between">
+        <p className="text-sm text-zinc-400">
+          Manage your vehicles and track their costs
+        </p>
         <button
-          onClick={() => {
-            setForm(emptyVehicle);
-            setShowModal(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors shadow-lg shadow-primary-600/20 cursor-pointer"
+          onClick={() => setShowAdd(true)}
+          className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2 transition-colors"
         >
-          <Plus size={18} />
+          <Plus size={16} />
           Add Vehicle
         </button>
-      </div>
+      </motion.div>
 
       {/* Vehicle Grid */}
-      {state.vehicles.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-dark-400">
-          <Car size={56} className="mb-4 opacity-40" />
-          <p className="text-lg font-medium mb-1">No vehicles yet</p>
-          <p className="text-sm">Add your first vehicle to get started</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {state.vehicles.map((v) => {
-            const monthlyCost = getVehicleMonthlyCost(v.id);
-            return (
+      {vehicles.length > 0 ? (
+        <motion.div {...fadeUp} transition={{ duration: 0.35, delay: 0.05 }} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {vehicles.map(v => (
+            <div
+              key={v.id}
+              onClick={() => onNavigate('vehicle-detail', v.id)}
+              className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 cursor-pointer hover:border-zinc-700 transition-colors overflow-hidden relative"
+            >
+              {/* Color bar */}
               <div
-                key={v.id}
-                onClick={() => onNavigate('vehicle-detail', v.id)}
-                className="bg-dark-800 border border-dark-700 rounded-xl overflow-hidden hover:border-dark-500 transition-all cursor-pointer group hover:shadow-lg hover:shadow-black/20"
-              >
-                {/* Accent bar */}
-                <div className="h-1.5" style={{ backgroundColor: v.color || '#3b82f6' }} />
+                className="absolute top-0 left-0 right-0 h-1"
+                style={{ backgroundColor: v.color || '#8b5cf6' }}
+              />
 
-                <div className="p-5">
-                  <div className="flex items-start gap-4">
-                    {/* Brand logo circle */}
-                    <div
-                      className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-lg"
-                      style={{ backgroundColor: v.color || '#3b82f6' }}
-                    >
-                      {v.brand ? v.brand.charAt(0).toUpperCase() : v.name.charAt(0).toUpperCase()}
-                    </div>
+              <div className="mt-1">
+                <h3 className="font-semibold text-zinc-50">{v.name}</h3>
+                <p className="text-sm text-zinc-400 mt-0.5">
+                  {v.brand} {v.model}
+                </p>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <h3 className="font-semibold text-dark-50 truncate group-hover:text-primary-400 transition-colors">
-                            {v.name}
-                          </h3>
-                          <p className="text-sm text-dark-400 truncate">
-                            {[v.brand, v.model, v.variant].filter(Boolean).join(' ')}
-                          </p>
-                        </div>
-                        {getStatusBadge(v.status)}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Details */}
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="flex items-center gap-2 text-sm text-dark-300">
-                      <Fuel size={14} className="text-dark-500" />
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getFuelBadgeColor(v.fuelType)}`}>
-                        {getFuelTypeLabel(v.fuelType)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-dark-300">
-                      <Gauge size={14} className="text-dark-500" />
-                      <span>{v.annualMileage.toLocaleString('de-DE')} km/yr</span>
-                    </div>
-                  </div>
-
-                  {/* Monthly Cost Summary */}
-                  <div className="mt-4 pt-4 border-t border-dark-700 flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm text-dark-400">
-                      <DollarSign size={14} />
-                      <span>Monthly costs</span>
-                    </div>
-                    <span className="font-semibold text-dark-100">{formatCurrency(monthlyCost)}</span>
-                  </div>
+                <div className="flex items-center gap-2 mt-3">
+                  <span className={`bg-zinc-800 rounded-md px-2 py-0.5 text-xs ${fuelColors[v.fuelType]}`}>
+                    {getFuelTypeLabel(v.fuelType)}
+                  </span>
                 </div>
+
+                <p className="text-sm font-medium text-emerald-400 mt-3">
+                  {formatCurrency(getMonthly(v.id))}/mo
+                </p>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          ))}
+        </motion.div>
+      ) : (
+        <motion.div {...fadeUp} transition={{ duration: 0.35, delay: 0.05 }} className="bg-zinc-900 border border-zinc-800 rounded-xl p-16 text-center">
+          <Car className="mx-auto text-zinc-600 mb-4" size={40} />
+          <p className="text-zinc-400 mb-1">No vehicles yet</p>
+          <p className="text-sm text-zinc-600 mb-5">Add your first vehicle to start tracking costs</p>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2 transition-colors"
+          >
+            <Plus size={16} />
+            Add Vehicle
+          </button>
+        </motion.div>
       )}
 
       {/* Add Vehicle Modal */}
       <Modal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
+        isOpen={showAdd}
+        onClose={() => { setShowAdd(false); setForm(emptyVehicle); }}
         title="Add Vehicle"
         size="3xl"
         footer={
           <>
             <button
-              onClick={() => setShowModal(false)}
-              className="px-4 py-2 rounded-lg text-dark-300 hover:text-dark-100 hover:bg-dark-700 transition-colors cursor-pointer"
+              onClick={() => { setShowAdd(false); setForm(emptyVehicle); }}
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
               disabled={!form.name.trim()}
-              className="px-6 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors cursor-pointer"
+              className="bg-violet-500 hover:bg-violet-400 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg h-10 px-5 text-sm font-medium transition-colors"
             >
               Add Vehicle
             </button>
           </>
         }
       >
-        <VehicleForm form={form} updateForm={updateForm} />
+        <div className="space-y-8">
+          {/* Basic Info */}
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-50 mb-4">Basic Information</h3>
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-5">
+                <div>
+                  <label className={labelCls}>Name *</label>
+                  <input
+                    className={inputCls}
+                    placeholder="e.g. My BMW"
+                    value={form.name}
+                    onChange={e => handleChange('name', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Color</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={form.color}
+                      onChange={e => handleChange('color', e.target.value)}
+                      className="w-10 h-10 rounded-lg border border-zinc-800 bg-zinc-950 cursor-pointer"
+                    />
+                    <input
+                      className={inputCls}
+                      value={form.color}
+                      onChange={e => handleChange('color', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-5">
+                <div>
+                  <label className={labelCls}>Brand</label>
+                  <input
+                    className={inputCls}
+                    placeholder="e.g. BMW"
+                    value={form.brand}
+                    onChange={e => handleChange('brand', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Model</label>
+                  <input
+                    className={inputCls}
+                    placeholder="e.g. 320d"
+                    value={form.model}
+                    onChange={e => handleChange('model', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Variant</label>
+                  <input
+                    className={inputCls}
+                    placeholder="e.g. xDrive"
+                    value={form.variant}
+                    onChange={e => handleChange('variant', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-5">
+                <div>
+                  <label className={labelCls}>Fuel Type</label>
+                  <select
+                    className={inputCls}
+                    value={form.fuelType}
+                    onChange={e => handleChange('fuelType', e.target.value)}
+                  >
+                    <option value="benzin">Gasoline</option>
+                    <option value="diesel">Diesel</option>
+                    <option value="elektro">Electric</option>
+                    <option value="hybrid">Hybrid</option>
+                    <option value="lpg">LPG</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Horsepower</label>
+                  <input
+                    type="number"
+                    className={inputCls}
+                    placeholder="0"
+                    value={form.horsePower || ''}
+                    onChange={e => handleChange('horsePower', Number(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Purchase Price</label>
+                  <input
+                    type="number"
+                    className={inputCls}
+                    placeholder="0.00"
+                    value={form.purchasePrice || ''}
+                    onChange={e => handleChange('purchasePrice', Number(e.target.value))}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Registration */}
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-50 mb-4">Registration</h3>
+            <div className="space-y-5">
+              <div className="grid grid-cols-3 gap-5">
+                <div>
+                  <label className={labelCls}>License Plate</label>
+                  <input
+                    className={inputCls}
+                    placeholder="e.g. M-AB 1234"
+                    value={form.licensePlate}
+                    onChange={e => handleChange('licensePlate', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>HSN</label>
+                  <input
+                    className={inputCls}
+                    placeholder="e.g. 0005"
+                    value={form.hsn}
+                    onChange={e => handleChange('hsn', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>TSN</label>
+                  <input
+                    className={inputCls}
+                    placeholder="e.g. BNA"
+                    value={form.tsn}
+                    onChange={e => handleChange('tsn', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-5">
+                <div>
+                  <label className={labelCls}>First Registration</label>
+                  <input
+                    type="date"
+                    className={inputCls}
+                    value={form.firstRegistration}
+                    onChange={e => handleChange('firstRegistration', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Purchase Date</label>
+                  <input
+                    type="date"
+                    className={inputCls}
+                    value={form.purchaseDate}
+                    onChange={e => handleChange('purchaseDate', e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Mileage */}
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-50 mb-4">Mileage & Consumption</h3>
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-5">
+                <div>
+                  <label className={labelCls}>Current Mileage (km)</label>
+                  <input
+                    type="number"
+                    className={inputCls}
+                    placeholder="0"
+                    value={form.currentMileage || ''}
+                    onChange={e => handleChange('currentMileage', Number(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Annual Mileage (km)</label>
+                  <input
+                    type="number"
+                    className={inputCls}
+                    placeholder="0"
+                    value={form.annualMileage || ''}
+                    onChange={e => handleChange('annualMileage', Number(e.target.value))}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-5">
+                <div>
+                  <label className={labelCls}>Avg. Consumption (l/100km)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    className={inputCls}
+                    placeholder="0.0"
+                    value={form.avgConsumption || ''}
+                    onChange={e => handleChange('avgConsumption', Number(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Fuel Price (EUR/l)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className={inputCls}
+                    placeholder="0.00"
+                    value={form.fuelPrice || ''}
+                    onChange={e => handleChange('fuelPrice', Number(e.target.value))}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Status & Notes */}
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-50 mb-4">Status & Links</h3>
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-5">
+                <div>
+                  <label className={labelCls}>Status</label>
+                  <select
+                    className={inputCls}
+                    value={form.status}
+                    onChange={e => handleChange('status', e.target.value)}
+                  >
+                    <option value="owned">Owned</option>
+                    <option value="planned">Planned</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Image URL</label>
+                  <input
+                    className={inputCls}
+                    placeholder="https://..."
+                    value={form.imageUrl}
+                    onChange={e => handleChange('imageUrl', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>mobile.de Link</label>
+                <input
+                  className={inputCls}
+                  placeholder="https://www.mobile.de/..."
+                  value={form.mobileDeLink}
+                  onChange={e => handleChange('mobileDeLink', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Notes</label>
+                <textarea
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 min-h-[80px] resize-y"
+                  placeholder="Additional notes..."
+                  value={form.notes}
+                  onChange={e => handleChange('notes', e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       </Modal>
     </div>
   );

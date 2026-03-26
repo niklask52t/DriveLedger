@@ -83,7 +83,7 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
     const userId = (req as any).user.id;
-    const { title, description, type, entity_type, entity_id, remind_at, recurring, email_notify } = req.body;
+    const { title, description, type, entity_type, entity_id, remind_at, recurring, email_notify, mileage_threshold, current_mileage_at_creation } = req.body;
 
     if (!title || !type || !remind_at) {
       return res.status(400).json({ error: 'title, type, and remind_at are required' });
@@ -102,7 +102,7 @@ router.post('/', async (req: Request, res: Response) => {
     const id = uuid();
 
     await pool.execute(
-      'INSERT INTO reminders (id, user_id, title, description, type, entity_type, entity_id, remind_at, recurring, email_notify) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO reminders (id, user_id, title, description, type, entity_type, entity_id, remind_at, recurring, email_notify, mileage_threshold, current_mileage_at_creation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         id,
         userId,
@@ -113,7 +113,9 @@ router.post('/', async (req: Request, res: Response) => {
         entity_id || '',
         remind_at,
         recurring || '',
-        email_notify !== undefined ? (email_notify ? 1 : 0) : 1
+        email_notify !== undefined ? (email_notify ? 1 : 0) : 1,
+        mileage_threshold ?? null,
+        current_mileage_at_creation ?? null
       ]
     );
 
@@ -140,7 +142,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Reminder not found' });
     }
 
-    const { title, description, type, entity_type, entity_id, remind_at, recurring, email_notify, active } = req.body;
+    const { title, description, type, entity_type, entity_id, remind_at, recurring, email_notify, active, mileage_threshold, current_mileage_at_creation } = req.body;
 
     if (type) {
       const validTypes = ['cost_due', 'loan_payment', 'inspection', 'insurance', 'savings_goal', 'custom'];
@@ -166,7 +168,9 @@ router.put('/:id', async (req: Request, res: Response) => {
         remind_at = ?,
         recurring = ?,
         email_notify = ?,
-        active = ?
+        active = ?,
+        mileage_threshold = ?,
+        current_mileage_at_creation = ?
       WHERE id = ? AND user_id = ?
     `, [
       title ?? existing.title,
@@ -178,6 +182,8 @@ router.put('/:id', async (req: Request, res: Response) => {
       recurring ?? existing.recurring,
       email_notify !== undefined ? (email_notify ? 1 : 0) : existing.email_notify,
       active !== undefined ? (active ? 1 : 0) : existing.active,
+      mileage_threshold !== undefined ? mileage_threshold : existing.mileage_threshold,
+      current_mileage_at_creation !== undefined ? current_mileage_at_creation : existing.current_mileage_at_creation,
       id,
       userId
     ]);
@@ -258,6 +264,8 @@ function formatReminder(row: any) {
     emailNotify: !!row.email_notify,
     sent: !!row.sent,
     active: !!row.active,
+    mileageThreshold: row.mileage_threshold ?? null,
+    currentMileageAtCreation: row.current_mileage_at_creation ?? null,
     createdAt: row.created_at,
   };
 }

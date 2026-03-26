@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { Eye, EyeOff, LogIn, AlertCircle, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { ApiError } from '../api';
 import type { Page } from '../types';
@@ -16,133 +16,127 @@ export default function Login({ onNavigate }: LoginProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!identifier.trim() || !password) return;
+
     setError('');
     setLoading(true);
+
     try {
-      await login(identifier, password);
+      await login(identifier.trim(), password);
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.status === 401 ? 'Invalid credentials.' : err.message);
+        setError(err.message);
       } else {
         setError('An unexpected error occurred. Please try again.');
       }
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <div className="min-h-screen bg-dark-950 flex flex-col items-center justify-center px-4 py-12 relative overflow-hidden">
-      {/* Background glow */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-gradient-to-b from-primary-600/8 to-transparent rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-10%] left-1/3 w-[500px] h-[300px] bg-gradient-to-t from-accent/4 to-transparent rounded-full blur-[100px]" />
-      </div>
-
-      {/* Banner */}
-      <div className="relative z-10 flex items-center gap-4 mb-12">
-        <img
-          src="/logo.png"
-          alt="DriveLedger"
-          className="w-16 h-16 rounded-2xl shadow-xl shadow-black/30"
-        />
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white to-dark-300 bg-clip-text text-transparent">
-            DriveLedger
+    <div className="min-h-screen flex">
+      {/* Left branding panel */}
+      <div className="hidden lg:flex w-[480px] shrink-0 bg-zinc-900 border-r border-zinc-800 flex-col items-center justify-center px-12">
+        <div className="max-w-xs text-center">
+          <img src="/logo.png" alt="DriveLedger" className="h-16 w-auto object-contain mx-auto mb-8" />
+          <h1 className="text-3xl font-bold text-zinc-50 mb-4">
+            Keep track of every euro.
           </h1>
-          <p className="text-dark-500 text-sm tracking-wide">
-            Vehicle finance manager
+          <p className="text-zinc-400 text-base leading-relaxed">
+            Manage vehicle costs, loans, repairs and savings -- all in one place.
           </p>
         </div>
       </div>
 
-      {/* Card */}
-      <div className="w-full max-w-sm relative z-10">
-        <div className="rounded-2xl bg-dark-900 p-8 shadow-2xl shadow-black/50">
-          <h2 className="text-lg font-semibold text-dark-50 mb-6">Sign in to your account</h2>
+      {/* Right form panel */}
+      <div className="flex-1 flex items-center justify-center px-6 py-12 bg-zinc-950">
+        <div className="w-full max-w-sm">
+          {/* Mobile logo */}
+          <div className="lg:hidden flex justify-center mb-10">
+            <img src="/logo.png" alt="DriveLedger" className="h-9 w-auto object-contain" />
+          </div>
+
+          <h2 className="text-2xl font-semibold text-zinc-50 mb-1">Sign in</h2>
+          <p className="text-sm text-zinc-500 mb-8">Enter your credentials to access your account.</p>
 
           {error && (
-            <div className="flex items-center gap-2 bg-danger/10 border border-danger/30 rounded-lg px-3 py-2.5 mb-5">
-              <AlertCircle size={16} className="text-danger shrink-0" />
-              <p className="text-sm text-danger">{error}</p>
+            <div className="bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-3 mb-6">
+              <p className="text-sm text-red-400">{error}</p>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-dark-400 mb-1">
-                Email or Username
+              <label className="block text-sm font-medium text-zinc-400 mb-2">
+                Email or username
               </label>
               <input
                 type="text"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                required
+                placeholder="you@example.com"
+                className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 transition-colors"
                 autoComplete="username"
-                placeholder="you@example.com or username"
-                className="w-full bg-dark-950 border border-dark-700 rounded-lg px-3.5 py-2.5 text-dark-100 placeholder-dark-600 focus:border-primary-500 focus:ring-1 focus:ring-primary-500/30 outline-none transition-colors text-sm"
+                autoFocus
               />
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-sm font-medium text-dark-400">Password</label>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('forgot-password')}
-                  className="text-xs text-primary-400 hover:text-primary-300 transition-colors cursor-pointer"
-                >
-                  Forgot?
-                </button>
-              </div>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">
+                Password
+              </label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
                   placeholder="Enter your password"
-                  className="w-full bg-dark-950 border border-dark-700 rounded-lg px-3.5 py-2.5 pr-10 text-dark-100 placeholder-dark-600 focus:border-primary-500 focus:ring-1 focus:ring-primary-500/30 outline-none transition-colors text-sm"
+                  className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 pr-10 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 transition-colors"
+                  autoComplete="current-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-dark-600 hover:text-dark-400 transition-colors cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
 
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => onNavigate('forgot-password')}
+                className="text-sm text-violet-400 hover:text-violet-300 transition-colors cursor-pointer"
+              >
+                Forgot password?
+              </button>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-500 text-white font-semibold rounded-lg px-4 py-2.5 transition-colors shadow-md shadow-primary-600/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer mt-2"
+              className="w-full bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
             >
-              {loading ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <>
-                  <LogIn size={16} />
-                  Sign In
-                </>
-              )}
+              {loading && <Loader2 size={16} className="animate-spin" />}
+              Sign in
             </button>
           </form>
-        </div>
 
-        <p className="text-center mt-5 text-dark-500 text-sm">
-          Don&apos;t have an account?{' '}
-          <button
-            onClick={() => onNavigate('register')}
-            className="text-primary-400 hover:text-primary-300 font-medium transition-colors cursor-pointer"
-          >
-            Register
-          </button>
-        </p>
+          <p className="mt-8 text-center text-sm text-zinc-500">
+            Don't have an account?{' '}
+            <button
+              onClick={() => onNavigate('register')}
+              className="text-violet-400 hover:text-violet-300 transition-colors font-medium cursor-pointer"
+            >
+              Create one
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );

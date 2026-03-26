@@ -1,7 +1,9 @@
 import type {
   Vehicle, Cost, Loan, Repair, SavingsGoal, SavingsTransaction,
   PlannedPurchase, Person, User, ApiToken, RegistrationToken,
-  Reminder, AppConfig,
+  Reminder, AppConfig, ServiceRecord, UpgradeRecord, FuelRecord,
+  OdometerRecord, Supply, Equipment, Inspection, VehicleNote,
+  TaxRecord, PlannerTask, Attachment, SearchResult, TaskStage,
 } from './types';
 
 const API_BASE = '/api';
@@ -396,6 +398,242 @@ class ApiClient {
 
   async deleteAccount(): Promise<void> {
     return this.request<void>('DELETE', '/auth/account');
+  }
+
+  // ─── Services ─────────────────────────────────────────
+
+  async getServices(): Promise<ServiceRecord[]> {
+    return this.request<ServiceRecord[]>('GET', '/services');
+  }
+
+  async createService(data: Partial<ServiceRecord>): Promise<ServiceRecord> {
+    return this.request<ServiceRecord>('POST', '/services', data);
+  }
+
+  async updateService(id: string, data: Partial<ServiceRecord>): Promise<ServiceRecord> {
+    return this.request<ServiceRecord>('PUT', `/services/${id}`, data);
+  }
+
+  async deleteService(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/services/${id}`);
+  }
+
+  // ─── Upgrades ─────────────────────────────────────────
+
+  async getUpgrades(): Promise<UpgradeRecord[]> {
+    return this.request<UpgradeRecord[]>('GET', '/upgrades');
+  }
+
+  async createUpgrade(data: Partial<UpgradeRecord>): Promise<UpgradeRecord> {
+    return this.request<UpgradeRecord>('POST', '/upgrades', data);
+  }
+
+  async updateUpgrade(id: string, data: Partial<UpgradeRecord>): Promise<UpgradeRecord> {
+    return this.request<UpgradeRecord>('PUT', `/upgrades/${id}`, data);
+  }
+
+  async deleteUpgrade(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/upgrades/${id}`);
+  }
+
+  // ─── Fuel Records ────────────────────────────────────
+
+  async getFuelRecords(): Promise<FuelRecord[]> {
+    return this.request<FuelRecord[]>('GET', '/fuel-records');
+  }
+
+  async createFuelRecord(data: Partial<FuelRecord>): Promise<FuelRecord> {
+    return this.request<FuelRecord>('POST', '/fuel-records', data);
+  }
+
+  async updateFuelRecord(id: string, data: Partial<FuelRecord>): Promise<FuelRecord> {
+    return this.request<FuelRecord>('PUT', `/fuel-records/${id}`, data);
+  }
+
+  async deleteFuelRecord(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/fuel-records/${id}`);
+  }
+
+  async getFuelConsumption(vehicleId: string): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/fuel-records/consumption/${vehicleId}`);
+  }
+
+  // ─── Odometer Records ────────────────────────────────
+
+  async getOdometerRecords(): Promise<OdometerRecord[]> {
+    return this.request<OdometerRecord[]>('GET', '/odometer-records');
+  }
+
+  async createOdometerRecord(data: Partial<OdometerRecord>): Promise<OdometerRecord> {
+    return this.request<OdometerRecord>('POST', '/odometer-records', data);
+  }
+
+  async updateOdometerRecord(id: string, data: Partial<OdometerRecord>): Promise<OdometerRecord> {
+    return this.request<OdometerRecord>('PUT', `/odometer-records/${id}`, data);
+  }
+
+  async deleteOdometerRecord(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/odometer-records/${id}`);
+  }
+
+  // ─── Supplies ─────────────────────────────────────────
+
+  async getSupplies(): Promise<Supply[]> {
+    return this.request<Supply[]>('GET', '/supplies');
+  }
+
+  async createSupply(data: Partial<Supply>): Promise<Supply> {
+    return this.request<Supply>('POST', '/supplies', data);
+  }
+
+  async updateSupply(id: string, data: Partial<Supply>): Promise<Supply> {
+    return this.request<Supply>('PUT', `/supplies/${id}`, data);
+  }
+
+  async deleteSupply(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/supplies/${id}`);
+  }
+
+  // ─── Equipment ────────────────────────────────────────
+
+  async getEquipment(): Promise<Equipment[]> {
+    return this.request<Equipment[]>('GET', '/equipment');
+  }
+
+  async createEquipment(data: Partial<Equipment>): Promise<Equipment> {
+    return this.request<Equipment>('POST', '/equipment', data);
+  }
+
+  async updateEquipment(id: string, data: Partial<Equipment>): Promise<Equipment> {
+    return this.request<Equipment>('PUT', `/equipment/${id}`, data);
+  }
+
+  async deleteEquipment(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/equipment/${id}`);
+  }
+
+  async reassignEquipment(id: string, vehicleId: string | null): Promise<Equipment> {
+    return this.request<Equipment>('PATCH', `/equipment/${id}/reassign`, { vehicleId });
+  }
+
+  // ─── Inspections ──────────────────────────────────────
+
+  async getInspections(): Promise<Inspection[]> {
+    return this.request<Inspection[]>('GET', '/inspections');
+  }
+
+  async createInspection(data: Partial<Inspection>): Promise<Inspection> {
+    return this.request<Inspection>('POST', '/inspections', data);
+  }
+
+  async updateInspection(id: string, data: Partial<Inspection>): Promise<Inspection> {
+    return this.request<Inspection>('PUT', `/inspections/${id}`, data);
+  }
+
+  async deleteInspection(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/inspections/${id}`);
+  }
+
+  // ─── Vehicle Notes ────────────────────────────────────
+
+  async getVehicleNotes(): Promise<VehicleNote[]> {
+    return this.request<VehicleNote[]>('GET', '/vehicle-notes');
+  }
+
+  async createVehicleNote(data: Partial<VehicleNote>): Promise<VehicleNote> {
+    return this.request<VehicleNote>('POST', '/vehicle-notes', data);
+  }
+
+  async updateVehicleNote(id: string, data: Partial<VehicleNote>): Promise<VehicleNote> {
+    return this.request<VehicleNote>('PUT', `/vehicle-notes/${id}`, data);
+  }
+
+  async deleteVehicleNote(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/vehicle-notes/${id}`);
+  }
+
+  async toggleNotePin(id: string): Promise<VehicleNote> {
+    return this.request<VehicleNote>('PATCH', `/vehicle-notes/${id}/toggle-pin`);
+  }
+
+  // ─── Tax Records ──────────────────────────────────────
+
+  async getTaxRecords(): Promise<TaxRecord[]> {
+    return this.request<TaxRecord[]>('GET', '/tax-records');
+  }
+
+  async createTaxRecord(data: Partial<TaxRecord>): Promise<TaxRecord> {
+    return this.request<TaxRecord>('POST', '/tax-records', data);
+  }
+
+  async updateTaxRecord(id: string, data: Partial<TaxRecord>): Promise<TaxRecord> {
+    return this.request<TaxRecord>('PUT', `/tax-records/${id}`, data);
+  }
+
+  async deleteTaxRecord(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/tax-records/${id}`);
+  }
+
+  // ─── Planner Tasks ───────────────────────────────────
+
+  async getPlannerTasks(): Promise<PlannerTask[]> {
+    return this.request<PlannerTask[]>('GET', '/planner-tasks');
+  }
+
+  async createPlannerTask(data: Partial<PlannerTask>): Promise<PlannerTask> {
+    return this.request<PlannerTask>('POST', '/planner-tasks', data);
+  }
+
+  async updatePlannerTask(id: string, data: Partial<PlannerTask>): Promise<PlannerTask> {
+    return this.request<PlannerTask>('PUT', `/planner-tasks/${id}`, data);
+  }
+
+  async deletePlannerTask(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/planner-tasks/${id}`);
+  }
+
+  async updateTaskStage(id: string, stage: TaskStage): Promise<PlannerTask> {
+    return this.request<PlannerTask>('PATCH', `/planner-tasks/${id}/stage`, { stage });
+  }
+
+  // ─── Attachments ──────────────────────────────────────
+
+  async getAttachments(recordType: string, recordId: string): Promise<Attachment[]> {
+    return this.request<Attachment[]>('GET', `/attachments/${recordType}/${recordId}`);
+  }
+
+  async uploadAttachment(recordType: string, recordId: string, file: File): Promise<Attachment> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('recordType', recordType);
+    formData.append('recordId', recordId);
+    const headers: Record<string, string> = {};
+    if (this.accessToken) headers['Authorization'] = `Bearer ${this.accessToken}`;
+    const res = await fetch(`${API_BASE}/attachments`, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: formData,
+    });
+    if (!res.ok) throw new ApiError(res.status, await res.text());
+    return res.json();
+  }
+
+  async deleteAttachment(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/attachments/${id}`);
+  }
+
+  // ─── Search ───────────────────────────────────────────
+
+  async globalSearch(query: string): Promise<SearchResult[]> {
+    return this.request<SearchResult[]>('GET', `/search?q=${encodeURIComponent(query)}`);
+  }
+
+  // ─── Maintenance Report ───────────────────────────────
+
+  async getMaintenanceReport(vehicleId: string, year?: number): Promise<Record<string, unknown>> {
+    const params = year ? `?year=${year}` : '';
+    return this.request<Record<string, unknown>>('GET', `/reports/maintenance/${vehicleId}${params}`);
   }
 }
 

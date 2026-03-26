@@ -1,39 +1,48 @@
-import { useState } from 'react';
-import { Car, DollarSign, TrendingUp, Star, Fuel } from 'lucide-react';
-import type { PlannedPurchase, FuelType } from '../../types';
-import { formatCurrency, calculateFinancing } from '../../utils';
+import { Star } from 'lucide-react';
+import type { FuelType } from '../../types';
+
+const selectChevron = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`;
 
 const inputClass =
-  'w-full bg-dark-900 border border-dark-600 rounded-lg px-3 py-2 text-dark-100 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none transition-colors';
+  'w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50';
 
-const labelClass = 'block text-sm font-medium text-dark-300 mb-1';
+const selectClass =
+  'w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 outline-none focus:border-violet-500/50 appearance-none';
 
-export type PurchaseFormData = Omit<PlannedPurchase, 'id' | 'createdAt' | 'monthlyRate'>;
+const labelClass = 'block text-sm font-medium text-zinc-400 mb-2';
 
-function StarRating({ rating, onChange, size = 24 }: { rating: number; onChange: (r: number) => void; size?: number }) {
-  return (
-    <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <button
-          key={i}
-          type="button"
-          onClick={() => onChange(i)}
-          className="transition-colors cursor-pointer hover:scale-110"
-        >
-          <Star
-            size={size}
-            className={i <= rating ? 'text-amber-400 fill-amber-400' : 'text-dark-600'}
-          />
-        </button>
-      ))}
-    </div>
-  );
+export interface PurchaseFormData {
+  brand: string;
+  model: string;
+  variant: string;
+  price: number;
+  mobileDeLink: string;
+  imageUrl: string;
+  year: number;
+  mileage: number;
+  fuelType: FuelType;
+  horsePower: number;
+  downPayment: number;
+  financingMonths: number;
+  interestRate: number;
+  monthlyRate: number;
+  estimatedInsurance: number;
+  estimatedTax: number;
+  estimatedFuelMonthly: number;
+  estimatedMaintenance: number;
+  notes: string;
+  pros: string;
+  cons: string;
+  rating: number;
 }
 
-// Fuel calculator helper
-function calcMonthlyFuel(kmPerMonth: number, consumptionPer100: number, pricePerLiter: number): number {
-  return (kmPerMonth / 100) * consumptionPer100 * pricePerLiter;
-}
+const fuelTypeOptions: { value: FuelType; label: string }[] = [
+  { value: 'benzin', label: 'Gasoline' },
+  { value: 'diesel', label: 'Diesel' },
+  { value: 'elektro', label: 'Electric' },
+  { value: 'hybrid', label: 'Hybrid' },
+  { value: 'lpg', label: 'LPG' },
+];
 
 interface PurchaseFormProps {
   formData: PurchaseFormData;
@@ -43,241 +52,306 @@ interface PurchaseFormProps {
   isEdit: boolean;
 }
 
-export default function PurchaseForm({ formData: form, setFormData, onSubmit, onCancel, isEdit }: PurchaseFormProps) {
-  const [fuelCalcKm, setFuelCalcKm] = useState(1000);
-  const [fuelCalcConsumption, setFuelCalcConsumption] = useState(7);
-  const [fuelCalcPrice, setFuelCalcPrice] = useState(1.75);
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-zinc-300 mb-4">{title}</h3>
+      <div className="grid grid-cols-2 gap-4">{children}</div>
+    </div>
+  );
+}
 
-  const updateForm = (patch: Partial<PurchaseFormData>) => setFormData({ ...form, ...patch });
+export default function PurchaseForm({ formData, setFormData, onSubmit, onCancel, isEdit }: PurchaseFormProps) {
+  const update = (updates: Partial<PurchaseFormData>) => setFormData({ ...formData, ...updates });
 
   return (
-    <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
-      {/* Vehicle Info */}
-      <div>
-        <h4 className="text-sm font-semibold text-dark-200 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <Car size={16} className="text-primary-400" />
-          Vehicle Information
-        </h4>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <label className={labelClass}>Brand *</label>
-            <input className={inputClass} value={form.brand} onChange={(e) => updateForm({ brand: e.target.value })} placeholder="e.g. BMW" />
-          </div>
-          <div>
-            <label className={labelClass}>Model *</label>
-            <input className={inputClass} value={form.model} onChange={(e) => updateForm({ model: e.target.value })} placeholder="e.g. 320d" />
-          </div>
-          <div>
-            <label className={labelClass}>Variant</label>
-            <input className={inputClass} value={form.variant} onChange={(e) => updateForm({ variant: e.target.value })} placeholder="e.g. M Sport" />
-          </div>
+    <div className="space-y-8">
+      {/* Vehicle Details */}
+      <Section title="Vehicle Details">
+        <div>
+          <label className={labelClass}>Brand</label>
+          <input
+            type="text"
+            className={inputClass}
+            placeholder="e.g. BMW"
+            value={formData.brand}
+            onChange={(e) => update({ brand: e.target.value })}
+          />
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
-          <div>
-            <label className={labelClass}>Asking Price *</label>
-            <input type="number" className={inputClass} value={form.price || ''} onChange={(e) => updateForm({ price: Number(e.target.value) })} />
-          </div>
-          <div>
-            <label className={labelClass}>Year</label>
-            <input type="number" className={inputClass} value={form.year || ''} onChange={(e) => updateForm({ year: Number(e.target.value) })} />
-          </div>
-          <div>
-            <label className={labelClass}>Mileage (km)</label>
-            <input type="number" className={inputClass} value={form.mileage || ''} onChange={(e) => updateForm({ mileage: Number(e.target.value) })} />
-          </div>
-          <div>
-            <label className={labelClass}>Horse Power</label>
-            <input type="number" className={inputClass} value={form.horsePower || ''} onChange={(e) => updateForm({ horsePower: Number(e.target.value) })} />
-          </div>
+        <div>
+          <label className={labelClass}>Model</label>
+          <input
+            type="text"
+            className={inputClass}
+            placeholder="e.g. 3 Series"
+            value={formData.model}
+            onChange={(e) => update({ model: e.target.value })}
+          />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
-          <div>
-            <label className={labelClass}>Fuel Type</label>
-            <select className={inputClass} value={form.fuelType} onChange={(e) => updateForm({ fuelType: e.target.value as FuelType })}>
-              <option value="benzin">Gasoline</option>
-              <option value="diesel">Diesel</option>
-              <option value="elektro">Electric</option>
-              <option value="hybrid">Hybrid</option>
-              <option value="lpg">LPG</option>
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>mobile.de Link</label>
-            <input className={inputClass} value={form.mobileDeLink} onChange={(e) => updateForm({ mobileDeLink: e.target.value })} placeholder="https://..." />
-          </div>
-          <div>
-            <label className={labelClass}>Image URL</label>
-            <input className={inputClass} value={form.imageUrl} onChange={(e) => updateForm({ imageUrl: e.target.value })} placeholder="https://..." />
-          </div>
+        <div>
+          <label className={labelClass}>Variant</label>
+          <input
+            type="text"
+            className={inputClass}
+            placeholder="e.g. 320d M Sport"
+            value={formData.variant}
+            onChange={(e) => update({ variant: e.target.value })}
+          />
         </div>
-      </div>
+        <div>
+          <label className={labelClass}>Price (EUR)</label>
+          <input
+            type="number"
+            className={inputClass}
+            placeholder="0"
+            value={formData.price || ''}
+            onChange={(e) => update({ price: parseFloat(e.target.value) || 0 })}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Year</label>
+          <input
+            type="number"
+            className={inputClass}
+            placeholder="e.g. 2023"
+            value={formData.year || ''}
+            onChange={(e) => update({ year: parseInt(e.target.value) || 0 })}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Mileage (km)</label>
+          <input
+            type="number"
+            className={inputClass}
+            placeholder="0"
+            value={formData.mileage || ''}
+            onChange={(e) => update({ mileage: parseInt(e.target.value) || 0 })}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Fuel Type</label>
+          <select
+            className={selectClass}
+            style={{ backgroundImage: selectChevron, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center' }}
+            value={formData.fuelType}
+            onChange={(e) => update({ fuelType: e.target.value as FuelType })}
+          >
+            {fuelTypeOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={labelClass}>Horsepower (PS)</label>
+          <input
+            type="number"
+            className={inputClass}
+            placeholder="0"
+            value={formData.horsePower || ''}
+            onChange={(e) => update({ horsePower: parseInt(e.target.value) || 0 })}
+          />
+        </div>
+      </Section>
+
+      {/* Links */}
+      <Section title="Links & Media">
+        <div>
+          <label className={labelClass}>mobile.de Link</label>
+          <input
+            type="url"
+            className={inputClass}
+            placeholder="https://..."
+            value={formData.mobileDeLink}
+            onChange={(e) => update({ mobileDeLink: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Image URL</label>
+          <input
+            type="url"
+            className={inputClass}
+            placeholder="https://..."
+            value={formData.imageUrl}
+            onChange={(e) => update({ imageUrl: e.target.value })}
+          />
+        </div>
+      </Section>
 
       {/* Financing */}
-      <div>
-        <h4 className="text-sm font-semibold text-dark-200 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <DollarSign size={16} className="text-amber-400" />
-          Financing
-        </h4>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <label className={labelClass}>Down Payment</label>
-            <input type="number" className={inputClass} value={form.downPayment || ''} onChange={(e) => updateForm({ downPayment: Number(e.target.value) })} />
-          </div>
-          <div>
-            <label className={labelClass}>Duration (months)</label>
-            <input type="number" className={inputClass} value={form.financingMonths || ''} onChange={(e) => updateForm({ financingMonths: Number(e.target.value) })} />
-          </div>
-          <div>
-            <label className={labelClass}>Interest Rate (%)</label>
-            <input type="number" step="0.1" className={inputClass} value={form.interestRate || ''} onChange={(e) => updateForm({ interestRate: Number(e.target.value) })} />
-          </div>
+      <Section title="Financing">
+        <div>
+          <label className={labelClass}>Down Payment (EUR)</label>
+          <input
+            type="number"
+            className={inputClass}
+            placeholder="0"
+            value={formData.downPayment || ''}
+            onChange={(e) => update({ downPayment: parseFloat(e.target.value) || 0 })}
+          />
         </div>
-        {/* Preview */}
-        {form.price > 0 && form.financingMonths > 0 && (
-          <div className="mt-3 bg-dark-850 rounded-xl p-3 border border-dark-700/50 grid grid-cols-3 gap-3 text-center">
-            {(() => {
-              const preview = calculateFinancing(form.price, form.downPayment, form.financingMonths, form.interestRate);
-              return (
-                <>
-                  <div>
-                    <p className="text-xs text-dark-500">Monthly Rate</p>
-                    <p className="text-sm font-bold text-primary-400">{formatCurrency(preview.monthlyPayment)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-dark-500">Total Interest</p>
-                    <p className="text-sm font-bold text-amber-400">{formatCurrency(preview.totalInterest)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-dark-500">Total Cost</p>
-                    <p className="text-sm font-bold text-dark-200">{formatCurrency(preview.totalCost)}</p>
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-        )}
-      </div>
-
-      {/* Estimated Running Costs */}
-      <div>
-        <h4 className="text-sm font-semibold text-dark-200 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <TrendingUp size={16} className="text-emerald-400" />
-          Estimated Running Costs
-        </h4>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div>
-            <label className={labelClass}>Insurance / mo</label>
-            <input type="number" className={inputClass} value={form.estimatedInsurance || ''} onChange={(e) => updateForm({ estimatedInsurance: Number(e.target.value) })} />
-          </div>
-          <div>
-            <label className={labelClass}>Tax / year</label>
-            <input type="number" className={inputClass} value={form.estimatedTax || ''} onChange={(e) => updateForm({ estimatedTax: Number(e.target.value) })} />
-          </div>
-          <div>
-            <label className={labelClass}>Fuel / mo</label>
-            <input type="number" className={inputClass} value={form.estimatedFuelMonthly || ''} onChange={(e) => updateForm({ estimatedFuelMonthly: Number(e.target.value) })} />
-          </div>
-          <div>
-            <label className={labelClass}>Maintenance / mo</label>
-            <input type="number" className={inputClass} value={form.estimatedMaintenance || ''} onChange={(e) => updateForm({ estimatedMaintenance: Number(e.target.value) })} />
-          </div>
+        <div>
+          <label className={labelClass}>Duration (Months)</label>
+          <input
+            type="number"
+            className={inputClass}
+            placeholder="0"
+            value={formData.financingMonths || ''}
+            onChange={(e) => update({ financingMonths: parseInt(e.target.value) || 0 })}
+          />
         </div>
-
-        {/* Fuel Calculator */}
-        <div className="mt-3 bg-dark-850 rounded-xl p-4 border border-dark-700/50">
-          <div className="flex items-center gap-2 mb-3">
-            <Fuel size={14} className="text-dark-400" />
-            <p className="text-xs font-medium text-dark-400 uppercase tracking-wider">Fuel Cost Calculator</p>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs text-dark-500 mb-1">km / month</label>
-              <input type="number" className={inputClass} value={fuelCalcKm || ''} onChange={(e) => setFuelCalcKm(Number(e.target.value))} />
-            </div>
-            <div>
-              <label className="block text-xs text-dark-500 mb-1">L / 100km</label>
-              <input type="number" step="0.1" className={inputClass} value={fuelCalcConsumption || ''} onChange={(e) => setFuelCalcConsumption(Number(e.target.value))} />
-            </div>
-            <div>
-              <label className="block text-xs text-dark-500 mb-1">Price / L</label>
-              <input type="number" step="0.01" className={inputClass} value={fuelCalcPrice || ''} onChange={(e) => setFuelCalcPrice(Number(e.target.value))} />
-            </div>
-          </div>
-          <div className="flex items-center justify-between mt-3">
-            <p className="text-sm text-dark-300">
-              Estimated: <span className="font-bold text-primary-400">{formatCurrency(calcMonthlyFuel(fuelCalcKm, fuelCalcConsumption, fuelCalcPrice))}</span>/mo
-            </p>
-            <button
-              type="button"
-              onClick={() => updateForm({ estimatedFuelMonthly: Math.round(calcMonthlyFuel(fuelCalcKm, fuelCalcConsumption, fuelCalcPrice) * 100) / 100 })}
-              className="text-xs px-3 py-1.5 rounded-lg bg-primary-600/20 text-primary-400 hover:bg-primary-600/30 transition-colors font-medium"
-            >
-              Apply
-            </button>
-          </div>
+        <div>
+          <label className={labelClass}>Interest Rate (%)</label>
+          <input
+            type="number"
+            step="0.01"
+            className={inputClass}
+            placeholder="0.00"
+            value={formData.interestRate || ''}
+            onChange={(e) => update({ interestRate: parseFloat(e.target.value) || 0 })}
+          />
         </div>
-      </div>
+        <div>
+          <label className={labelClass}>Monthly Rate (EUR)</label>
+          <input
+            type="number"
+            step="0.01"
+            className={inputClass}
+            placeholder="0.00"
+            value={formData.monthlyRate || ''}
+            onChange={(e) => update({ monthlyRate: parseFloat(e.target.value) || 0 })}
+          />
+        </div>
+      </Section>
 
-      {/* Pros, Cons, Rating, Notes */}
+      {/* Estimated Costs */}
+      <Section title="Estimated Monthly Costs">
+        <div>
+          <label className={labelClass}>Insurance (EUR/mo)</label>
+          <input
+            type="number"
+            step="0.01"
+            className={inputClass}
+            placeholder="0.00"
+            value={formData.estimatedInsurance || ''}
+            onChange={(e) => update({ estimatedInsurance: parseFloat(e.target.value) || 0 })}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Tax (EUR/year)</label>
+          <input
+            type="number"
+            step="0.01"
+            className={inputClass}
+            placeholder="0.00"
+            value={formData.estimatedTax || ''}
+            onChange={(e) => update({ estimatedTax: parseFloat(e.target.value) || 0 })}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Fuel (EUR/mo)</label>
+          <input
+            type="number"
+            step="0.01"
+            className={inputClass}
+            placeholder="0.00"
+            value={formData.estimatedFuelMonthly || ''}
+            onChange={(e) => update({ estimatedFuelMonthly: parseFloat(e.target.value) || 0 })}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Maintenance (EUR/mo)</label>
+          <input
+            type="number"
+            step="0.01"
+            className={inputClass}
+            placeholder="0.00"
+            value={formData.estimatedMaintenance || ''}
+            onChange={(e) => update({ estimatedMaintenance: parseFloat(e.target.value) || 0 })}
+          />
+        </div>
+      </Section>
+
+      {/* Evaluation */}
       <div>
-        <h4 className="text-sm font-semibold text-dark-200 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <Star size={16} className="text-amber-400" />
-          Evaluation
-        </h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <h3 className="text-sm font-semibold text-zinc-300 mb-4">Evaluation</h3>
+        <div className="space-y-5">
+          {/* Rating */}
+          <div>
+            <label className={labelClass}>Rating</label>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => update({ rating: i + 1 === formData.rating ? 0 : i + 1 })}
+                  className="p-0.5 transition-colors"
+                >
+                  <Star
+                    size={20}
+                    className={
+                      i < formData.rating
+                        ? 'text-amber-400 fill-amber-400'
+                        : 'text-zinc-700 hover:text-zinc-500'
+                    }
+                  />
+                </button>
+              ))}
+              {formData.rating > 0 && (
+                <span className="text-xs text-zinc-500 ml-2">{formData.rating}/5</span>
+              )}
+            </div>
+          </div>
+
+          {/* Pros */}
           <div>
             <label className={labelClass}>Pros (one per line)</label>
             <textarea
-              rows={4}
-              className={inputClass + ' resize-none'}
-              value={form.pros}
-              onChange={(e) => updateForm({ pros: e.target.value })}
-              placeholder="Good fuel economy&#10;Low insurance&#10;Reliable engine"
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 min-h-[100px] resize-none"
+              placeholder="Good fuel economy&#10;Spacious interior&#10;Low maintenance"
+              value={formData.pros}
+              onChange={(e) => update({ pros: e.target.value })}
             />
           </div>
+
+          {/* Cons */}
           <div>
             <label className={labelClass}>Cons (one per line)</label>
             <textarea
-              rows={4}
-              className={inputClass + ' resize-none'}
-              value={form.cons}
-              onChange={(e) => updateForm({ cons: e.target.value })}
-              placeholder="High mileage&#10;Previous accident&#10;Expensive parts"
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 min-h-[100px] resize-none"
+              placeholder="High insurance&#10;Limited cargo space"
+              value={formData.cons}
+              onChange={(e) => update({ cons: e.target.value })}
+            />
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className={labelClass}>Notes</label>
+            <textarea
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 min-h-[100px] resize-none"
+              placeholder="Additional notes..."
+              value={formData.notes}
+              onChange={(e) => update({ notes: e.target.value })}
             />
           </div>
         </div>
-        <div className="mt-4 flex items-center gap-6">
-          <div>
-            <label className={labelClass}>Rating</label>
-            <StarRating rating={form.rating} onChange={(r) => updateForm({ rating: r })} size={24} />
-          </div>
-        </div>
-        <div className="mt-4">
-          <label className={labelClass}>Notes</label>
-          <textarea
-            rows={3}
-            className={inputClass + ' resize-none'}
-            value={form.notes}
-            onChange={(e) => updateForm({ notes: e.target.value })}
-            placeholder="Additional notes..."
-          />
-        </div>
       </div>
 
-      {/* Buttons */}
-      <div className="flex justify-end gap-3 pt-4 border-t border-dark-700">
+      {/* Footer buttons */}
+      <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
         <button
           onClick={onCancel}
-          className="px-5 py-2.5 rounded-xl bg-dark-700 text-dark-300 hover:bg-dark-600 hover:text-dark-100 transition-colors font-medium text-sm"
+          className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm transition-colors"
         >
           Cancel
         </button>
         <button
           onClick={onSubmit}
-          disabled={!form.brand || !form.model || !form.price}
-          className="px-5 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-500 disabled:bg-dark-700 disabled:text-dark-500 text-white transition-colors font-medium text-sm shadow-lg shadow-primary-600/25 disabled:shadow-none"
+          className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium transition-colors"
         >
-          {isEdit ? 'Save Changes' : 'Add Purchase'}
+          {isEdit ? 'Update' : 'Add Purchase'}
         </button>
       </div>
     </div>

@@ -18,7 +18,12 @@ router.get('/goals', async (req: Request, res: Response) => {
       'SELECT * FROM savings_goals WHERE user_id = ? ORDER BY created_at DESC',
       [userId]
     );
-    return res.status(200).json(rowsToCamelCase(rows as any[]));
+    const parsed = (rows as any[]).map((r: any) => {
+      const obj = toCamelCase(r);
+      if (typeof obj.tags === 'string') obj.tags = JSON.parse(obj.tags);
+      return obj;
+    });
+    return res.status(200).json(parsed);
   } catch (err: any) {
     console.error('[SAVINGS] List goals error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -40,7 +45,9 @@ router.get('/goals/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Savings goal not found' });
     }
 
-    return res.status(200).json(toCamelCase(row));
+    const obj = toCamelCase(row);
+    if (typeof obj.tags === 'string') obj.tags = JSON.parse(obj.tags);
+    return res.status(200).json(obj);
   } catch (err: any) {
     console.error('[SAVINGS] Get goal error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -67,10 +74,11 @@ router.post('/goals', async (req: Request, res: Response) => {
 
     const id = uuid();
     const data = toSnakeCase(req.body);
+    const tagsStr = data.tags ? JSON.stringify(data.tags) : null;
 
     await pool.execute(`
-      INSERT INTO savings_goals (id, user_id, vehicle_id, name, target_amount, monthly_contribution, start_date, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO savings_goals (id, user_id, vehicle_id, name, target_amount, monthly_contribution, start_date, notes, tags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id,
       userId,
@@ -79,12 +87,15 @@ router.post('/goals', async (req: Request, res: Response) => {
       data.target_amount || 0,
       data.monthly_contribution || 0,
       data.start_date || '',
-      data.notes || ''
+      data.notes || '',
+      tagsStr
     ]);
 
     const [createdRows] = await pool.execute('SELECT * FROM savings_goals WHERE id = ?', [id]);
     const created = (createdRows as any[])[0];
-    return res.status(201).json(toCamelCase(created));
+    const createdObj = toCamelCase(created);
+    if (typeof createdObj.tags === 'string') createdObj.tags = JSON.parse(createdObj.tags);
+    return res.status(201).json(createdObj);
   } catch (err: any) {
     console.error('[SAVINGS] Create goal error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -108,6 +119,7 @@ router.put('/goals/:id', async (req: Request, res: Response) => {
     }
 
     const data = toSnakeCase(req.body);
+    const tagsStr = data.tags !== undefined ? JSON.stringify(data.tags) : null;
 
     await pool.execute(`
       UPDATE savings_goals SET
@@ -115,7 +127,8 @@ router.put('/goals/:id', async (req: Request, res: Response) => {
         target_amount = COALESCE(?, target_amount),
         monthly_contribution = COALESCE(?, monthly_contribution),
         start_date = COALESCE(?, start_date),
-        notes = COALESCE(?, notes)
+        notes = COALESCE(?, notes),
+        tags = COALESCE(?, tags)
       WHERE id = ? AND user_id = ?
     `, [
       data.name ?? null,
@@ -123,13 +136,16 @@ router.put('/goals/:id', async (req: Request, res: Response) => {
       data.monthly_contribution ?? null,
       data.start_date ?? null,
       data.notes ?? null,
+      tagsStr,
       id,
       userId
     ]);
 
     const [updatedRows] = await pool.execute('SELECT * FROM savings_goals WHERE id = ?', [id]);
     const updated = (updatedRows as any[])[0];
-    return res.status(200).json(toCamelCase(updated));
+    const updatedObj = toCamelCase(updated);
+    if (typeof updatedObj.tags === 'string') updatedObj.tags = JSON.parse(updatedObj.tags);
+    return res.status(200).json(updatedObj);
   } catch (err: any) {
     console.error('[SAVINGS] Update goal error:', err);
     return res.status(500).json({ error: 'Internal server error' });

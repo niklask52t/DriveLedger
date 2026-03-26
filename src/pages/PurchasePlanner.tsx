@@ -1,22 +1,22 @@
 import { useState } from 'react';
-import { Car, Plus, Calculator } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
+import { Plus, Calculator, Trash2 } from 'lucide-react';
+import { api } from '../api';
+import { cn } from '../lib/utils';
+import { formatCurrency } from '../utils';
 import Modal from '../components/Modal';
 import PurchaseCard from '../components/purchase/PurchaseCard';
 import ComparisonTable from '../components/purchase/ComparisonTable';
 import FinancingCalculator from '../components/purchase/FinancingCalculator';
 import PurchaseForm from '../components/purchase/PurchaseForm';
-import type { PurchaseFormData } from '../components/purchase/PurchaseForm';
 import type { AppState, Page, PlannedPurchase } from '../types';
-import { calculateFinancing } from '../utils';
 
-interface PurchasePlannerProps {
+interface Props {
   state: AppState;
-  setState: (state: AppState) => void;
+  setState: (s: AppState) => void;
   onNavigate: (page: Page, vehicleId?: string) => void;
 }
 
-const emptyPurchase: PurchaseFormData = {
+const emptyPurchase: Partial<PlannedPurchase> = {
   brand: '',
   model: '',
   variant: '',
@@ -30,6 +30,7 @@ const emptyPurchase: PurchaseFormData = {
   downPayment: 0,
   financingMonths: 48,
   interestRate: 3.9,
+  monthlyRate: 0,
   estimatedInsurance: 0,
   estimatedTax: 0,
   estimatedFuelMonthly: 0,
@@ -40,178 +41,204 @@ const emptyPurchase: PurchaseFormData = {
   rating: 3,
 };
 
-export default function PurchasePlanner({ state, setState, onNavigate }: PurchasePlannerProps) {
-  const [showModal, setShowModal] = useState(false);
+export default function PurchasePlanner({ state, setState, onNavigate }: Props) {
+  const { plannedPurchases } = state;
+  const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [showCalc, setShowCalc] = useState(false);
-  const [form, setForm] = useState<PurchaseFormData>(emptyPurchase);
-
-  const purchases = state.plannedPurchases;
-
-  // ============= FORM HELPERS =============
+  const [form, setForm] = useState<Partial<PlannedPurchase>>(emptyPurchase);
+  const [showCalculator, setShowCalculator] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const openAdd = () => {
     setEditingId(null);
-    setForm({ ...emptyPurchase });
-    setShowModal(true);
+    setForm(emptyPurchase);
+    setModalOpen(true);
   };
 
   const openEdit = (p: PlannedPurchase) => {
     setEditingId(p.id);
-    const { id, createdAt, monthlyRate, ...rest } = p;
-    setForm(rest);
-    setShowModal(true);
+    setForm({ ...p });
+    setModalOpen(true);
   };
 
-  const handleSave = () => {
-    const fin = calculateFinancing(form.price, form.downPayment, form.financingMonths, form.interestRate);
-
-    if (editingId) {
-      setState({
-        ...state,
-        plannedPurchases: state.plannedPurchases.map((p) =>
-          p.id === editingId
-            ? { ...p, ...form, monthlyRate: fin.monthlyPayment }
-            : p
-        ),
-      });
-    } else {
-      const newPurchase: PlannedPurchase = {
-        ...form,
-        id: uuidv4(),
-        monthlyRate: fin.monthlyPayment,
-        createdAt: new Date().toISOString(),
-      };
-      setState({
-        ...state,
-        plannedPurchases: [...state.plannedPurchases, newPurchase],
-      });
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      if (editingId) {
+        const updated = await api.updatePlannedPurchase(editingId, form);
+        setState({
+          ...state,
+          plannedPurchases: plannedPurchases.map((p) => (p.id === editingId ? updated : p)),
+        });
+      } else {
+        const created = await api.createPlannedPurchase(form);
+        setState({
+          ...state,
+          plannedPurchases: [...plannedPurchases, created],
+        });
+      }
+      setModalOpen(false);
+    } catch {
+      // ignore
+    } finally {
+      setSaving(false);
     }
-    setShowModal(false);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    await api.deletePlannedPurchase(id);
     setState({
       ...state,
-      plannedPurchases: state.plannedPurchases.filter((p) => p.id !== id),
+      plannedPurchases: plannedPurchases.filter((p) => p.id !== id),
     });
   };
 
-  const handleConvertToVehicle = (p: PlannedPurchase) => {
-    const vehicleId = uuidv4();
-    setState({
-      ...state,
-      vehicles: [
-        ...state.vehicles,
-        {
-          id: vehicleId,
-          name: `${p.brand} ${p.model}`,
-          brand: p.brand,
-          model: p.model,
-          variant: p.variant,
-          licensePlate: '',
-          hsn: '',
-          tsn: '',
-          firstRegistration: `${p.year}-01-01`,
-          purchasePrice: p.price,
-          purchaseDate: new Date().toISOString().slice(0, 10),
-          currentMileage: p.mileage,
-          annualMileage: 15000,
-          fuelType: p.fuelType,
-          avgConsumption: 0,
-          fuelPrice: 0,
-          horsePower: p.horsePower,
-          imageUrl: p.imageUrl,
-          status: 'owned',
-          mobileDeLink: p.mobileDeLink,
-          notes: p.notes,
-          color: '#3b82f6',
-          createdAt: new Date().toISOString(),
-        },
-      ],
-      plannedPurchases: state.plannedPurchases.filter((x) => x.id !== p.id),
-    });
-    onNavigate('vehicle-detail', vehicleId);
+  const handleConvert = async (purchase: PlannedPurchase) => {
+    try {
+      const vehicle = await api.createVehicle({
+        name: `${purchase.brand} ${purchase.model}`,
+        brand: purchase.brand,
+        model: purchase.model,
+        variant: purchase.variant,
+        purchasePrice: purchase.price,
+        currentMileage: purchase.mileage,
+        fuelType: purchase.fuelType,
+        horsePower: purchase.horsePower,
+        imageUrl: purchase.imageUrl,
+        mobileDeLink: purchase.mobileDeLink,
+        status: 'owned',
+        notes: purchase.notes,
+        purchaseDate: new Date().toISOString().slice(0, 10),
+      });
+      await api.deletePlannedPurchase(purchase.id);
+      setState({
+        ...state,
+        vehicles: [...state.vehicles, vehicle],
+        plannedPurchases: plannedPurchases.filter((p) => p.id !== purchase.id),
+      });
+      onNavigate('vehicle-detail', vehicle.id);
+    } catch {
+      // ignore
+    }
   };
 
-  // ============= RENDER =============
+  const totalEstimated = plannedPurchases.reduce((sum, p) => sum + p.price, 0);
 
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
         <div>
-          <h2 className="text-2xl font-bold text-dark-50">Purchase Planner</h2>
-          <p className="text-dark-400 mt-1">Compare and plan your next car purchase</p>
+          <h1 className="text-2xl font-bold text-zinc-50">Purchase Planner</h1>
+          <p className="text-sm text-zinc-500 mt-1">
+            Compare vehicles and plan your next purchase
+            {plannedPurchases.length > 0 && (
+              <span className="ml-2 text-zinc-400">
+                &middot; {plannedPurchases.length} vehicle{plannedPurchases.length !== 1 ? 's' : ''} &middot; Total {formatCurrency(totalEstimated)}
+              </span>
+            )}
+          </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
           <button
-            onClick={() => setShowCalc(!showCalc)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-dark-200 hover:bg-dark-700 hover:text-dark-100 transition-colors font-medium text-sm"
+            onClick={() => setShowCalculator(!showCalculator)}
+            className={cn(
+              'rounded-lg h-10 px-4 text-sm flex items-center gap-2',
+              showCalculator
+                ? 'bg-violet-500/15 text-violet-400 border border-violet-500/30'
+                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+            )}
           >
-            <Calculator size={18} />
-            Financing Calculator
+            <Calculator size={16} />
+            Calculator
           </button>
           <button
             onClick={openAdd}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white transition-colors font-medium text-sm shadow-lg shadow-primary-600/25"
+            className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium flex items-center gap-2"
           >
-            <Plus size={18} />
-            Add Planned Purchase
+            <Plus size={16} />
+            Add Vehicle
           </button>
         </div>
       </div>
 
-      {/* Standalone Financing Calculator */}
-      {showCalc && <FinancingCalculator />}
+      {/* Financing Calculator */}
+      {showCalculator && (
+        <FinancingCalculator />
+      )}
 
-      {/* Purchase Cards Grid */}
-      {purchases.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-dark-800/50 border border-dark-700 rounded-2xl">
-          <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-dark-700/50 mb-4">
-            <Car size={32} className="text-dark-500" />
+      {/* Purchase Grid */}
+      {plannedPurchases.length === 0 ? (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <div className="text-center py-12">
+            <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center mx-auto mb-4">
+              <Plus size={24} className="text-zinc-500" />
+            </div>
+            <p className="text-zinc-400 text-sm">No planned purchases yet</p>
+            <p className="text-zinc-600 text-xs mt-1">Add a vehicle to start comparing options</p>
+            <button
+              onClick={openAdd}
+              className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium mt-5"
+            >
+              Add Your First Vehicle
+            </button>
           </div>
-          <h3 className="text-lg font-semibold text-dark-300 mb-1">No planned purchases yet</h3>
-          <p className="text-dark-500 text-sm mb-6">Start comparing cars by adding your first planned purchase</p>
-          <button
-            onClick={openAdd}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white transition-colors font-medium text-sm"
-          >
-            <Plus size={18} />
-            Add Planned Purchase
-          </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {purchases.map((p) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {plannedPurchases.map((purchase) => (
             <PurchaseCard
-              key={p.id}
-              purchase={p}
-              onEdit={openEdit}
-              onDelete={handleDelete}
-              onConvert={handleConvertToVehicle}
+              key={purchase.id}
+              purchase={purchase}
+              onEdit={() => openEdit(purchase)}
+              onDelete={() => handleDelete(purchase.id)}
+              onConvert={() => handleConvert(purchase)}
             />
           ))}
         </div>
       )}
 
       {/* Comparison Table */}
-      <ComparisonTable purchases={purchases} />
+      {plannedPurchases.length >= 2 && (
+        <ComparisonTable purchases={plannedPurchases} />
+      )}
 
-      {/* Add/Edit Modal */}
+      {/* Add / Edit Modal */}
       <Modal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        title={editingId ? 'Edit Planned Purchase' : 'Add Planned Purchase'}
-        size="xl"
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editingId ? 'Edit Vehicle' : 'Add Vehicle'}
+        size="3xl"
+        footer={
+          <>
+            {editingId && (
+              <button
+                onClick={() => {
+                  handleDelete(editingId);
+                  setModalOpen(false);
+                }}
+                className="mr-auto p-2 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition-colors"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+            <button
+              onClick={() => setModalOpen(false)}
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !form.brand || !form.model}
+              className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : editingId ? 'Update' : 'Create'}
+            </button>
+          </>
+        }
       >
-        <PurchaseForm
-          formData={form}
-          setFormData={setForm}
-          onSubmit={handleSave}
-          onCancel={() => setShowModal(false)}
-          isEdit={!!editingId}
-        />
+        <PurchaseForm form={form} onChange={setForm} />
       </Modal>
     </div>
   );

@@ -1,61 +1,81 @@
-import { useState, useEffect, type FormEvent } from 'react';
-import {
-  Key, Plus, Trash2, Copy, Check, AlertCircle, Loader2,
-  ToggleLeft, ToggleRight, AlertTriangle, X,
-} from 'lucide-react';
-import { api, ApiError } from '../../api';
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, Trash2, Copy, Check, Key, Loader2, ToggleLeft, ToggleRight } from 'lucide-react';
+import { api } from '../../api';
+import { formatDate } from '../../utils';
 import type { ApiToken } from '../../types';
-import { format } from 'date-fns';
 
-const inputClass = 'w-full bg-dark-800 border border-dark-700 rounded-lg px-4 py-2.5 text-dark-100 placeholder-dark-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none transition-colors';
+const inputClass =
+  'w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50';
+
+const labelClass = 'block text-sm font-medium text-zinc-400 mb-2';
+
+const PERMISSION_OPTIONS = [
+  { value: 'vehicles:read', label: 'Read Vehicles' },
+  { value: 'vehicles:write', label: 'Write Vehicles' },
+  { value: 'costs:read', label: 'Read Costs' },
+  { value: 'costs:write', label: 'Write Costs' },
+  { value: 'loans:read', label: 'Read Loans' },
+  { value: 'loans:write', label: 'Write Loans' },
+  { value: 'repairs:read', label: 'Read Repairs' },
+  { value: 'repairs:write', label: 'Write Repairs' },
+  { value: 'savings:read', label: 'Read Savings' },
+  { value: 'savings:write', label: 'Write Savings' },
+];
 
 export default function ApiTokensTab() {
   const [tokens, setTokens] = useState<ApiToken[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [newTokenName, setNewTokenName] = useState('');
   const [creating, setCreating] = useState(false);
-  const [createdToken, setCreatedToken] = useState<{ token: ApiToken; secret: string } | null>(null);
-  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [tokenName, setTokenName] = useState('');
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+  const [newSecret, setNewSecret] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchTokens = async () => {
+  const loadTokens = useCallback(async () => {
     try {
       const data = await api.getApiTokens();
       setTokens(data);
-    } catch {
-      setError('Failed to load API tokens.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load tokens.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { fetchTokens(); }, []);
+  useEffect(() => {
+    loadTokens();
+  }, [loadTokens]);
 
-  const handleCreate = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleCreate = async () => {
+    if (!tokenName.trim()) return;
     setCreating(true);
-    setError('');
+    setError(null);
     try {
-      const result = await api.createApiToken(newTokenName, ['read', 'write']);
-      setCreatedToken(result);
+      const result = await api.createApiToken(tokenName.trim(), selectedPermissions);
+      setNewSecret(result.secret);
+      setTokenName('');
+      setSelectedPermissions([]);
       setShowCreate(false);
-      setNewTokenName('');
-      await fetchTokens();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to create token.');
+      await loadTokens();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create token.';
+      setError(msg);
     } finally {
       setCreating(false);
     }
   };
 
-  const handleToggle = async (id: string, active: boolean) => {
+  const handleToggle = async (token: ApiToken) => {
     try {
-      await api.toggleApiToken(id, !active);
-      await fetchTokens();
-    } catch {
-      setError('Failed to toggle token.');
+      await api.toggleApiToken(token.id, !token.active);
+      await loadTokens();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to toggle token.';
+      setError(msg);
     }
   };
 
@@ -63,64 +83,61 @@ export default function ApiTokensTab() {
     try {
       await api.deleteApiToken(id);
       setDeleteConfirm(null);
-      await fetchTokens();
-    } catch {
-      setError('Failed to delete token.');
+      await loadTokens();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete token.';
+      setError(msg);
     }
   };
 
-  const copyToClipboard = (text: string, field: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedField(field);
-    setTimeout(() => setCopiedField(null), 2000);
+  const handleCopy = async (text: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  if (loading) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-dark-400" /></div>;
+  const togglePermission = (perm: string) => {
+    setSelectedPermissions((prev) =>
+      prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm]
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 size={24} className="animate-spin text-zinc-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       {error && (
-        <div className="flex items-center gap-2 bg-danger/10 border border-danger/20 rounded-lg px-4 py-3">
-          <AlertCircle size={18} className="text-danger shrink-0" />
-          <p className="text-sm text-danger">{error}</p>
-        </div>
+        <div className="bg-red-400/10 text-red-400 text-sm px-3 py-2 rounded-lg">{error}</div>
       )}
 
-      {/* Created token display */}
-      {createdToken && (
-        <div className="bg-warning/5 border border-warning/20 rounded-xl p-6">
-          <div className="flex items-start gap-3 mb-4">
-            <AlertTriangle size={20} className="text-warning shrink-0 mt-0.5" />
-            <div>
-              <h4 className="font-semibold text-warning">Save your API token now</h4>
-              <p className="text-sm text-dark-400 mt-1">
-                This is the only time you will see the full token. Store it somewhere safe.
-              </p>
-            </div>
-          </div>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-dark-400 mb-1 block">Token ID</label>
-              <div className="flex items-center gap-2 bg-dark-800 rounded-lg px-3 py-2">
-                <code className="text-sm text-dark-200 flex-1 font-mono break-all">{createdToken.token.id}</code>
-                <button onClick={() => copyToClipboard(createdToken.token.id, 'id')} className="shrink-0 text-dark-400 hover:text-dark-200">
-                  {copiedField === 'id' ? <Check size={16} className="text-success" /> : <Copy size={16} />}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-dark-400 mb-1 block">Secret</label>
-              <div className="flex items-center gap-2 bg-dark-800 rounded-lg px-3 py-2">
-                <code className="text-sm text-dark-200 flex-1 font-mono break-all">{createdToken.secret}</code>
-                <button onClick={() => copyToClipboard(createdToken.secret, 'secret')} className="shrink-0 text-dark-400 hover:text-dark-200">
-                  {copiedField === 'secret' ? <Check size={16} className="text-success" /> : <Copy size={16} />}
-                </button>
-              </div>
-            </div>
+      {/* New secret display */}
+      {newSecret && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <h3 className="text-sm font-semibold text-emerald-400 mb-2">Token Created</h3>
+          <p className="text-xs text-zinc-400 mb-3">
+            Copy this token now. You will not be able to see it again.
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-50 font-mono break-all">
+              {newSecret}
+            </code>
+            <button
+              onClick={() => handleCopy(newSecret)}
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-2 transition-colors shrink-0"
+            >
+              {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+              {copied ? 'Copied' : 'Copy'}
+            </button>
           </div>
           <button
-            onClick={() => setCreatedToken(null)}
-            className="mt-4 text-sm text-dark-400 hover:text-dark-200 transition-colors"
+            onClick={() => setNewSecret(null)}
+            className="mt-3 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm transition-colors"
           >
             Dismiss
           </button>
@@ -129,101 +146,152 @@ export default function ApiTokensTab() {
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-dark-50">API Tokens</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-300">API Tokens</h3>
+          <p className="text-xs text-zinc-500 mt-1">Manage tokens for API access.</p>
+        </div>
         <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors cursor-pointer"
+          onClick={() => setShowCreate(!showCreate)}
+          className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2 transition-colors"
         >
-          <Plus size={16} /> New Token
+          <Plus size={16} />
+          Create Token
         </button>
       </div>
 
-      {/* Create form */}
+      {/* Create Form */}
       {showCreate && (
-        <div className="bg-dark-900 border border-dark-800 rounded-xl p-6">
-          <form onSubmit={handleCreate} className="flex items-end gap-3">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-dark-300 mb-1.5">Token Name</label>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <div className="space-y-5">
+            <div>
+              <label className={labelClass}>Token Name</label>
               <input
                 type="text"
-                value={newTokenName}
-                onChange={(e) => setNewTokenName(e.target.value)}
-                required
-                placeholder="e.g. Mobile App"
                 className={inputClass}
+                placeholder="e.g. Mobile App"
+                value={tokenName}
+                onChange={(e) => setTokenName(e.target.value)}
               />
             </div>
-            <button
-              type="submit"
-              disabled={creating}
-              className="flex items-center gap-2 bg-primary-600 hover:bg-primary-500 text-white font-medium rounded-lg px-5 py-2.5 transition-colors disabled:opacity-50 cursor-pointer whitespace-nowrap"
-            >
-              {creating ? <Loader2 size={18} className="animate-spin" /> : 'Create'}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setShowCreate(false); setNewTokenName(''); }}
-              className="text-dark-400 hover:text-dark-200 p-2.5 rounded-lg hover:bg-dark-800 transition-colors cursor-pointer"
-            >
-              <X size={18} />
-            </button>
-          </form>
+            <div>
+              <label className={labelClass}>Permissions</label>
+              <div className="grid grid-cols-2 gap-2">
+                {PERMISSION_OPTIONS.map((perm) => (
+                  <label
+                    key={perm.value}
+                    className="flex items-center gap-2 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg cursor-pointer hover:border-zinc-700 transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedPermissions.includes(perm.value)}
+                      onChange={() => togglePermission(perm.value)}
+                      className="rounded border-zinc-700 bg-zinc-900 text-violet-500 focus:ring-violet-500/50"
+                    />
+                    <span className="text-sm text-zinc-300">{perm.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleCreate}
+                disabled={creating || !tokenName.trim()}
+                className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2 transition-colors disabled:opacity-50"
+              >
+                {creating && <Loader2 size={16} className="animate-spin" />}
+                Create
+              </button>
+              <button
+                onClick={() => {
+                  setShowCreate(false);
+                  setTokenName('');
+                  setSelectedPermissions([]);
+                }}
+                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Token list */}
-      <div className="space-y-3">
-        {tokens.length === 0 ? (
-          <div className="bg-dark-900 border border-dark-800 rounded-xl p-8 text-center">
-            <Key size={32} className="text-dark-600 mx-auto mb-3" />
-            <p className="text-dark-400">No API tokens yet. Create one to get started.</p>
-          </div>
-        ) : (
-          tokens.map((token) => (
-            <div key={token.id} className="bg-dark-900 border border-dark-800 rounded-xl p-4 flex items-center gap-4">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-dark-100">{token.name}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${token.active ? 'bg-success/10 text-success' : 'bg-dark-700 text-dark-400'}`}>
-                    {token.active ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-4 mt-1 text-xs text-dark-500">
-                  <span>Prefix: <code className="text-dark-400">{token.tokenPrefix}...</code></span>
-                  <span>Permissions: {token.permissions.join(', ')}</span>
-                  {token.lastUsed && <span>Last used: {format(new Date(token.lastUsed), 'MMM d, yyyy')}</span>}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => handleToggle(token.id, token.active)}
-                  className="text-dark-400 hover:text-dark-200 p-1.5 rounded-lg hover:bg-dark-800 transition-colors cursor-pointer"
-                  title={token.active ? 'Deactivate' : 'Activate'}
-                >
-                  {token.active ? <ToggleRight size={20} className="text-success" /> : <ToggleLeft size={20} />}
-                </button>
-                {deleteConfirm === token.id ? (
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => handleDelete(token.id)} className="text-danger hover:text-red-400 p-1.5 rounded-lg hover:bg-dark-800 cursor-pointer">
-                      <Check size={18} />
-                    </button>
-                    <button onClick={() => setDeleteConfirm(null)} className="text-dark-400 hover:text-dark-200 p-1.5 rounded-lg hover:bg-dark-800 cursor-pointer">
-                      <X size={18} />
-                    </button>
+      {/* Token List */}
+      {tokens.length === 0 ? (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
+          <Key size={32} className="mx-auto text-zinc-600 mb-3" />
+          <p className="text-zinc-500 text-sm">No API tokens yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {tokens.map((token) => (
+            <div key={token.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-medium text-zinc-50">{token.name}</h4>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full ${
+                        token.active
+                          ? 'bg-emerald-400/10 text-emerald-400'
+                          : 'bg-zinc-800 text-zinc-500'
+                      }`}
+                    >
+                      {token.active ? 'Active' : 'Inactive'}
+                    </span>
                   </div>
-                ) : (
+                  <p className="text-xs text-zinc-500 mt-1 font-mono">{token.tokenPrefix}...</p>
+                  {token.permissions.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {token.permissions.map((p) => (
+                        <span key={p} className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded">
+                          {p}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 mt-2 text-xs text-zinc-600">
+                    <span>Created {formatDate(token.createdAt)}</span>
+                    {token.lastUsed && <span>Last used {formatDate(token.lastUsed)}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
                   <button
-                    onClick={() => setDeleteConfirm(token.id)}
-                    className="text-dark-400 hover:text-danger p-1.5 rounded-lg hover:bg-dark-800 transition-colors cursor-pointer"
+                    onClick={() => handleToggle(token)}
+                    className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center transition-colors"
+                    title={token.active ? 'Deactivate' : 'Activate'}
                   >
-                    <Trash2 size={18} />
+                    {token.active ? <ToggleRight size={18} className="text-emerald-400" /> : <ToggleLeft size={18} />}
                   </button>
-                )}
+                  {deleteConfirm === token.id ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleDelete(token.id)}
+                        className="bg-red-400/10 text-red-400 hover:bg-red-400/20 rounded-lg h-9 px-3 text-xs transition-colors"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm(null)}
+                        className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-xs transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setDeleteConfirm(token.id)}
+                      className="text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

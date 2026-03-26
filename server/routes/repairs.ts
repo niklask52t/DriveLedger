@@ -29,7 +29,13 @@ router.get('/', async (req: Request, res: Response) => {
       rows = result as any[];
     }
 
-    return res.status(200).json(rowsToCamelCase(rows));
+    const parsed = rows.map((r: any) => {
+      const obj = toCamelCase(r);
+      if (typeof obj.tags === 'string') obj.tags = JSON.parse(obj.tags);
+      return obj;
+    });
+
+    return res.status(200).json(parsed);
   } catch (err: any) {
     console.error('[REPAIRS] List error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -48,7 +54,9 @@ router.get('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Repair not found' });
     }
 
-    return res.status(200).json(toCamelCase(row));
+    const obj = toCamelCase(row);
+    if (typeof obj.tags === 'string') obj.tags = JSON.parse(obj.tags);
+    return res.status(200).json(obj);
   } catch (err: any) {
     console.error('[REPAIRS] Get error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -75,10 +83,11 @@ router.post('/', async (req: Request, res: Response) => {
 
     const id = uuid();
     const data = toSnakeCase(req.body);
+    const tagsStr = data.tags ? JSON.stringify(data.tags) : null;
 
     await pool.execute(`
-      INSERT INTO repairs (id, user_id, vehicle_id, date, description, category, notes, cost, mileage, workshop)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO repairs (id, user_id, vehicle_id, date, description, category, notes, cost, mileage, workshop, tags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id,
       userId,
@@ -89,12 +98,15 @@ router.post('/', async (req: Request, res: Response) => {
       data.notes || '',
       data.cost || 0,
       data.mileage || 0,
-      data.workshop || ''
+      data.workshop || '',
+      tagsStr
     ]);
 
     const [createdRows] = await pool.execute('SELECT * FROM repairs WHERE id = ?', [id]);
     const created = (createdRows as any[])[0];
-    return res.status(201).json(toCamelCase(created));
+    const createdObj = toCamelCase(created);
+    if (typeof createdObj.tags === 'string') createdObj.tags = JSON.parse(createdObj.tags);
+    return res.status(201).json(createdObj);
   } catch (err: any) {
     console.error('[REPAIRS] Create error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -115,6 +127,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     }
 
     const data = toSnakeCase(req.body);
+    const tagsStr = data.tags !== undefined ? JSON.stringify(data.tags) : null;
 
     await pool.execute(`
       UPDATE repairs SET
@@ -124,7 +137,8 @@ router.put('/:id', async (req: Request, res: Response) => {
         notes = COALESCE(?, notes),
         cost = COALESCE(?, cost),
         mileage = COALESCE(?, mileage),
-        workshop = COALESCE(?, workshop)
+        workshop = COALESCE(?, workshop),
+        tags = COALESCE(?, tags)
       WHERE id = ? AND user_id = ?
     `, [
       data.date ?? null,
@@ -134,13 +148,16 @@ router.put('/:id', async (req: Request, res: Response) => {
       data.cost ?? null,
       data.mileage ?? null,
       data.workshop ?? null,
+      tagsStr,
       id,
       userId
     ]);
 
     const [updatedRows] = await pool.execute('SELECT * FROM repairs WHERE id = ?', [id]);
     const updated = (updatedRows as any[])[0];
-    return res.status(200).json(toCamelCase(updated));
+    const updatedObj = toCamelCase(updated);
+    if (typeof updatedObj.tags === 'string') updatedObj.tags = JSON.parse(updatedObj.tags);
+    return res.status(200).json(updatedObj);
   } catch (err: any) {
     console.error('[REPAIRS] Update error:', err);
     return res.status(500).json({ error: 'Internal server error' });

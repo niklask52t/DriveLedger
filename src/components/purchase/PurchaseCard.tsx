@@ -1,142 +1,177 @@
-import { Car, ExternalLink, Star, Trash2, Edit, ArrowRight } from 'lucide-react';
+import { Pencil, Trash2, ArrowRightLeft, Star, ExternalLink, Fuel, Gauge, Calendar } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { formatCurrency, formatNumber, getFuelTypeLabel } from '../../utils';
 import type { PlannedPurchase } from '../../types';
-import { formatCurrency, formatNumber, calculateFinancing, getFuelTypeLabel } from '../../utils';
-
-function StarRating({ rating, size = 16 }: { rating: number; size?: number }) {
-  return (
-    <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <span key={i} className="cursor-default">
-          <Star
-            size={size}
-            className={i <= rating ? 'text-amber-400 fill-amber-400' : 'text-dark-600'}
-          />
-        </span>
-      ))}
-    </div>
-  );
-}
+import { useState } from 'react';
 
 interface PurchaseCardProps {
   purchase: PlannedPurchase;
-  onEdit: (p: PlannedPurchase) => void;
+  onEdit: (purchase: PlannedPurchase) => void;
   onDelete: (id: string) => void;
-  onConvert: (p: PlannedPurchase) => void;
+  onConvert: (purchase: PlannedPurchase) => void;
 }
 
-export default function PurchaseCard({ purchase: p, onEdit, onDelete, onConvert }: PurchaseCardProps) {
-  const fin = calculateFinancing(p.price, p.downPayment, p.financingMonths, p.interestRate);
-  const totalMonthly = fin.monthlyPayment + p.estimatedInsurance + p.estimatedFuelMonthly + p.estimatedMaintenance;
+export default function PurchaseCard({ purchase, onEdit, onDelete, onConvert }: PurchaseCardProps) {
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+
+  const totalMonthlyCost =
+    purchase.monthlyRate +
+    purchase.estimatedInsurance +
+    purchase.estimatedTax / 12 +
+    purchase.estimatedFuelMonthly +
+    purchase.estimatedMaintenance;
+
+  const pros = purchase.pros
+    ? purchase.pros.split('\n').filter((l) => l.trim())
+    : [];
+  const cons = purchase.cons
+    ? purchase.cons.split('\n').filter((l) => l.trim())
+    : [];
 
   return (
-    <div className="bg-dark-800 border border-dark-700 rounded-2xl overflow-hidden hover:border-dark-600 transition-colors group">
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden"
+    >
       {/* Image */}
-      <div className="relative h-48 bg-dark-850 overflow-hidden">
-        {p.imageUrl ? (
+      {purchase.imageUrl && (
+        <div className="h-40 overflow-hidden">
           <img
-            src={p.imageUrl}
-            alt={`${p.brand} ${p.model}`}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            src={purchase.imageUrl}
+            alt={`${purchase.brand} ${purchase.model}`}
+            className="w-full h-full object-cover"
           />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Car size={64} className="text-dark-700" />
+        </div>
+      )}
+
+      <div className="p-6">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-base font-semibold text-zinc-50">
+              {purchase.brand} {purchase.model}
+            </h3>
+            {purchase.variant && (
+              <p className="text-sm text-zinc-400 mt-0.5">{purchase.variant}</p>
+            )}
+          </div>
+          <span className="text-lg font-semibold text-zinc-50">{formatCurrency(purchase.price)}</span>
+        </div>
+
+        {/* Key specs */}
+        <div className="flex flex-wrap gap-3 mb-4">
+          {purchase.year > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+              <Calendar size={12} />
+              <span>{purchase.year}</span>
+            </div>
+          )}
+          {purchase.mileage > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+              <Gauge size={12} />
+              <span>{formatNumber(purchase.mileage)} km</span>
+            </div>
+          )}
+          {purchase.fuelType && (
+            <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+              <Fuel size={12} />
+              <span>{getFuelTypeLabel(purchase.fuelType)}</span>
+            </div>
+          )}
+          {purchase.horsePower > 0 && (
+            <span className="text-xs text-zinc-400">{purchase.horsePower} PS</span>
+          )}
+        </div>
+
+        {/* Rating */}
+        {purchase.rating > 0 && (
+          <div className="flex items-center gap-1 mb-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Star
+                key={i}
+                size={14}
+                className={i < purchase.rating ? 'text-amber-400 fill-amber-400' : 'text-zinc-700'}
+              />
+            ))}
           </div>
         )}
-        {/* Rating overlay */}
-        <div className="absolute top-3 right-3 bg-dark-900/80 backdrop-blur-sm rounded-lg px-2.5 py-1.5">
-          <StarRating rating={p.rating} size={16} />
-        </div>
-        {/* Price overlay */}
-        <div className="absolute bottom-3 left-3 bg-dark-900/80 backdrop-blur-sm rounded-lg px-3 py-1.5">
-          <span className="text-lg font-bold text-primary-400">{formatCurrency(p.price)}</span>
-        </div>
-      </div>
 
-      {/* Content */}
-      <div className="p-5 space-y-4">
-        {/* Title */}
-        <div>
-          <h3 className="text-lg font-bold text-dark-50">
-            {p.brand} {p.model}
-          </h3>
-          <div className="flex items-center gap-3 text-sm text-dark-400 mt-1">
-            {p.variant && <span>{p.variant}</span>}
-            <span>{p.year}</span>
-            <span>{formatNumber(p.mileage)} km</span>
-            <span>{p.horsePower} HP</span>
+        {/* Cost breakdown */}
+        <div className="bg-zinc-950 rounded-lg p-4 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs text-zinc-500 uppercase tracking-wider">Est. Monthly Total</span>
+            <span className="text-sm font-semibold text-zinc-50">{formatCurrency(totalMonthlyCost)}</span>
           </div>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-xs px-2 py-0.5 rounded-full bg-dark-700 text-dark-300">
-              {getFuelTypeLabel(p.fuelType)}
-            </span>
-          </div>
-        </div>
-
-        {/* Financing Summary */}
-        <div className="bg-dark-850 rounded-xl p-3 space-y-2 border border-dark-700/50">
-          <div className="flex justify-between text-sm">
-            <span className="text-dark-400">Monthly Rate</span>
-            <span className="text-dark-100 font-medium">{formatCurrency(fin.monthlyPayment)}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-dark-400">Total Interest</span>
-            <span className="text-amber-400 font-medium">{formatCurrency(fin.totalInterest)}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-dark-400">Total Finance Cost</span>
-            <span className="text-dark-100 font-medium">{formatCurrency(fin.totalCost)}</span>
-          </div>
-          <div className="border-t border-dark-700 pt-2 flex justify-between text-sm">
-            <span className="text-dark-300 font-medium">Total Monthly Cost</span>
-            <span className="text-primary-400 font-bold text-base">{formatCurrency(totalMonthly)}</span>
+          <div className="space-y-2">
+            {purchase.monthlyRate > 0 && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-zinc-500">Financing</span>
+                <span className="text-zinc-300">{formatCurrency(purchase.monthlyRate)}</span>
+              </div>
+            )}
+            {purchase.estimatedInsurance > 0 && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-zinc-500">Insurance</span>
+                <span className="text-zinc-300">{formatCurrency(purchase.estimatedInsurance)}</span>
+              </div>
+            )}
+            {purchase.estimatedTax > 0 && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-zinc-500">Tax</span>
+                <span className="text-zinc-300">{formatCurrency(purchase.estimatedTax / 12)}/mo</span>
+              </div>
+            )}
+            {purchase.estimatedFuelMonthly > 0 && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-zinc-500">Fuel</span>
+                <span className="text-zinc-300">{formatCurrency(purchase.estimatedFuelMonthly)}</span>
+              </div>
+            )}
+            {purchase.estimatedMaintenance > 0 && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-zinc-500">Maintenance</span>
+                <span className="text-zinc-300">{formatCurrency(purchase.estimatedMaintenance)}</span>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Running costs breakdown */}
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="bg-dark-850 rounded-lg px-2.5 py-2 border border-dark-700/50">
-            <span className="text-dark-500">Insurance</span>
-            <p className="text-dark-200 font-medium">{formatCurrency(p.estimatedInsurance)}/mo</p>
+        {/* Financing details */}
+        {purchase.downPayment > 0 && (
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 mb-4">
+            <span>Down: {formatCurrency(purchase.downPayment)}</span>
+            <span>{purchase.financingMonths} months</span>
+            <span>{purchase.interestRate}% interest</span>
           </div>
-          <div className="bg-dark-850 rounded-lg px-2.5 py-2 border border-dark-700/50">
-            <span className="text-dark-500">Tax</span>
-            <p className="text-dark-200 font-medium">{formatCurrency(p.estimatedTax)}/yr</p>
-          </div>
-          <div className="bg-dark-850 rounded-lg px-2.5 py-2 border border-dark-700/50">
-            <span className="text-dark-500">Fuel</span>
-            <p className="text-dark-200 font-medium">{formatCurrency(p.estimatedFuelMonthly)}/mo</p>
-          </div>
-          <div className="bg-dark-850 rounded-lg px-2.5 py-2 border border-dark-700/50">
-            <span className="text-dark-500">Maintenance</span>
-            <p className="text-dark-200 font-medium">{formatCurrency(p.estimatedMaintenance)}/mo</p>
-          </div>
-        </div>
+        )}
 
         {/* Pros & Cons */}
-        {(p.pros || p.cons) && (
-          <div className="space-y-2">
-            {p.pros && (
+        {(pros.length > 0 || cons.length > 0) && (
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            {pros.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-emerald-400 mb-1">Pros</p>
-                <ul className="text-xs text-dark-300 space-y-0.5">
-                  {p.pros.split('\n').filter(Boolean).map((line, i) => (
-                    <li key={i} className="flex items-start gap-1.5">
-                      <span className="text-emerald-500 mt-0.5 shrink-0">+</span>
-                      {line}
+                <h4 className="text-xs font-medium text-emerald-400 mb-2">Pros</h4>
+                <ul className="space-y-1">
+                  {pros.map((p, i) => (
+                    <li key={i} className="text-xs text-zinc-400 flex items-start gap-1.5">
+                      <span className="text-emerald-400 mt-0.5 shrink-0">+</span>
+                      {p}
                     </li>
                   ))}
                 </ul>
               </div>
             )}
-            {p.cons && (
+            {cons.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-red-400 mb-1">Cons</p>
-                <ul className="text-xs text-dark-300 space-y-0.5">
-                  {p.cons.split('\n').filter(Boolean).map((line, i) => (
-                    <li key={i} className="flex items-start gap-1.5">
-                      <span className="text-red-500 mt-0.5 shrink-0">-</span>
-                      {line}
+                <h4 className="text-xs font-medium text-red-400 mb-2">Cons</h4>
+                <ul className="space-y-1">
+                  {cons.map((c, i) => (
+                    <li key={i} className="text-xs text-zinc-400 flex items-start gap-1.5">
+                      <span className="text-red-400 mt-0.5 shrink-0">-</span>
+                      {c}
                     </li>
                   ))}
                 </ul>
@@ -145,41 +180,69 @@ export default function PurchaseCard({ purchase: p, onEdit, onDelete, onConvert 
           </div>
         )}
 
-        {/* Action buttons */}
-        <div className="flex gap-2 pt-2 border-t border-dark-700">
-          {p.mobileDeLink && (
-            <a
-              href={p.mobileDeLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-dark-700 text-dark-300 hover:text-dark-100 hover:bg-dark-600 transition-colors text-xs font-medium"
-            >
-              <ExternalLink size={14} />
-              mobile.de
-            </a>
-          )}
-          <button
-            onClick={() => onEdit(p)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-dark-700 text-dark-300 hover:text-dark-100 hover:bg-dark-600 transition-colors text-xs font-medium"
+        {/* Notes */}
+        {purchase.notes && (
+          <p className="text-xs text-zinc-500 mb-4 line-clamp-2">{purchase.notes}</p>
+        )}
+
+        {/* mobile.de link */}
+        {purchase.mobileDeLink && (
+          <a
+            href={purchase.mobileDeLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-violet-400 hover:text-violet-300 inline-flex items-center gap-1 mb-4 transition-colors"
           >
-            <Edit size={14} />
+            View on mobile.de
+            <ExternalLink size={10} />
+          </a>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 pt-4 border-t border-zinc-800">
+          <button
+            onClick={() => onEdit(purchase)}
+            className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center gap-1.5 transition-colors"
+          >
+            <Pencil size={14} />
             Edit
           </button>
           <button
-            onClick={() => onConvert(p)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary-600/20 text-primary-400 hover:bg-primary-600/30 transition-colors text-xs font-medium"
+            onClick={() => onConvert(purchase)}
+            className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center gap-1.5 transition-colors"
           >
-            <ArrowRight size={14} />
+            <ArrowRightLeft size={14} />
             Convert to Vehicle
           </button>
-          <button
-            onClick={() => onDelete(p.id)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-red-400 hover:bg-red-500/15 transition-colors text-xs font-medium ml-auto"
-          >
-            <Trash2 size={14} />
-          </button>
+          <div className="flex-1" />
+          {deleteConfirm ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  onDelete(purchase.id);
+                  setDeleteConfirm(false);
+                }}
+                className="bg-red-400/10 text-red-400 hover:bg-red-400/20 rounded-lg h-9 px-3 text-xs transition-colors"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => setDeleteConfirm(false)}
+                className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-xs transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              className="text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center transition-colors"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

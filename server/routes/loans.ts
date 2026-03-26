@@ -29,7 +29,13 @@ router.get('/', async (req: Request, res: Response) => {
       rows = result as any[];
     }
 
-    return res.status(200).json(rowsToCamelCase(rows));
+    const parsed = rows.map((r: any) => {
+      const obj = toCamelCase(r);
+      if (typeof obj.tags === 'string') obj.tags = JSON.parse(obj.tags);
+      return obj;
+    });
+
+    return res.status(200).json(parsed);
   } catch (err: any) {
     console.error('[LOANS] List error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -48,7 +54,9 @@ router.get('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Loan not found' });
     }
 
-    return res.status(200).json(toCamelCase(row));
+    const obj = toCamelCase(row);
+    if (typeof obj.tags === 'string') obj.tags = JSON.parse(obj.tags);
+    return res.status(200).json(obj);
   } catch (err: any) {
     console.error('[LOANS] Get error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -75,10 +83,11 @@ router.post('/', async (req: Request, res: Response) => {
 
     const id = uuid();
     const data = toSnakeCase(req.body);
+    const tagsStr = data.tags ? JSON.stringify(data.tags) : null;
 
     await pool.execute(`
-      INSERT INTO loans (id, user_id, vehicle_id, name, total_amount, monthly_payment, interest_rate, start_date, duration_months, additional_savings_per_month, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO loans (id, user_id, vehicle_id, name, total_amount, monthly_payment, interest_rate, start_date, duration_months, additional_savings_per_month, notes, tags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id,
       userId,
@@ -90,12 +99,15 @@ router.post('/', async (req: Request, res: Response) => {
       data.start_date || '',
       data.duration_months || 0,
       data.additional_savings_per_month || 0,
-      data.notes || ''
+      data.notes || '',
+      tagsStr
     ]);
 
     const [createdRows] = await pool.execute('SELECT * FROM loans WHERE id = ?', [id]);
     const created = (createdRows as any[])[0];
-    return res.status(201).json(toCamelCase(created));
+    const createdObj = toCamelCase(created);
+    if (typeof createdObj.tags === 'string') createdObj.tags = JSON.parse(createdObj.tags);
+    return res.status(201).json(createdObj);
   } catch (err: any) {
     console.error('[LOANS] Create error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -116,6 +128,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     }
 
     const data = toSnakeCase(req.body);
+    const tagsStr = data.tags !== undefined ? JSON.stringify(data.tags) : null;
 
     await pool.execute(`
       UPDATE loans SET
@@ -126,7 +139,8 @@ router.put('/:id', async (req: Request, res: Response) => {
         start_date = COALESCE(?, start_date),
         duration_months = COALESCE(?, duration_months),
         additional_savings_per_month = COALESCE(?, additional_savings_per_month),
-        notes = COALESCE(?, notes)
+        notes = COALESCE(?, notes),
+        tags = COALESCE(?, tags)
       WHERE id = ? AND user_id = ?
     `, [
       data.name ?? null,
@@ -137,13 +151,16 @@ router.put('/:id', async (req: Request, res: Response) => {
       data.duration_months ?? null,
       data.additional_savings_per_month ?? null,
       data.notes ?? null,
+      tagsStr,
       id,
       userId
     ]);
 
     const [updatedRows] = await pool.execute('SELECT * FROM loans WHERE id = ?', [id]);
     const updated = (updatedRows as any[])[0];
-    return res.status(200).json(toCamelCase(updated));
+    const updatedObj = toCamelCase(updated);
+    if (typeof updatedObj.tags === 'string') updatedObj.tags = JSON.parse(updatedObj.tags);
+    return res.status(200).json(updatedObj);
   } catch (err: any) {
     console.error('[LOANS] Update error:', err);
     return res.status(500).json({ error: 'Internal server error' });

@@ -1,21 +1,35 @@
-import { Pencil, Trash2, Plus, CreditCard } from 'lucide-react';
-import Modal from '../Modal';
-import type { Cost, CostCategory, CostFrequency } from '../../types';
-import { formatCurrency, getCategoryLabel, getCategoryColor, getFrequencyLabel, toMonthly } from '../../utils';
-import { inputClass, labelClass, categoryOptions, frequencyOptions } from './constants';
+import { useState } from 'react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
+import Modal from '../../components/Modal';
+import { cn } from '../../lib/utils';
+import { formatCurrency, getFrequencyLabel, getCategoryLabel, toMonthly, formatDate } from '../../utils';
+import { costCategoryOptions, costFrequencyOptions, emptyCost } from './constants';
+import type { Cost, Vehicle, Person } from '../../types';
+
+const selectChevron = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`;
+
+const inputClass =
+  'w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50';
+
+const selectClass =
+  'w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 outline-none focus:border-violet-500/50 appearance-none';
+
+const labelClass = 'block text-sm font-medium text-zinc-400 mb-2';
 
 interface VehicleCostsTabProps {
   vehicleCosts: Cost[];
   showCostModal: boolean;
-  setShowCostModal: (show: boolean) => void;
+  setShowCostModal: (v: boolean) => void;
   costForm: Omit<Cost, 'id' | 'createdAt'>;
-  setCostForm: React.Dispatch<React.SetStateAction<Omit<Cost, 'id' | 'createdAt'>>>;
+  setCostForm: (v: Omit<Cost, 'id' | 'createdAt'>) => void;
   editingCostId: string | null;
-  setEditingCostId: (id: string | null) => void;
+  setEditingCostId: (v: string | null) => void;
   onAddCost: () => void;
   onEditCost: (cost: Cost) => void;
   onSaveCost: () => void;
-  onDeleteCost: (costId: string) => void;
+  onDeleteCost: (id: string) => void;
+  vehicles: Vehicle[];
+  persons: Person[];
 }
 
 export default function VehicleCostsTab({
@@ -30,82 +44,106 @@ export default function VehicleCostsTab({
   onEditCost,
   onSaveCost,
   onDeleteCost,
+  vehicles,
+  persons,
 }: VehicleCostsTabProps) {
-  return (
-    <>
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-dark-100">Recurring Costs</h2>
-          <button
-            onClick={onAddCost}
-            className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 hover:bg-primary-700 rounded-lg text-sm text-white transition-colors cursor-pointer"
-          >
-            <Plus size={14} />
-            Add Cost
-          </button>
-        </div>
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-        {vehicleCosts.length === 0 ? (
-          <div className="text-center py-12 text-dark-400">
-            <CreditCard size={40} className="mx-auto mb-3 opacity-40" />
-            <p>No costs tracked yet</p>
-          </div>
-        ) : (
-          <div className="bg-dark-800 border border-dark-700 rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-dark-700">
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-dark-400 uppercase tracking-wider">Category</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-dark-400 uppercase tracking-wider">Name</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-dark-400 uppercase tracking-wider">Amount</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-dark-400 uppercase tracking-wider">Frequency</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-dark-400 uppercase tracking-wider">Monthly</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-dark-400 uppercase tracking-wider">Paid by</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-dark-400 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {vehicleCosts.map((cost) => (
-                    <tr key={cost.id} className="border-b border-dark-700/50 hover:bg-dark-750/50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-3 h-3 rounded-full shrink-0"
-                            style={{ backgroundColor: getCategoryColor(cost.category) }}
-                          />
-                          <span className="text-sm text-dark-200">{getCategoryLabel(cost.category)}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-dark-100 font-medium">{cost.name}</td>
-                      <td className="px-4 py-3 text-sm text-dark-100 text-right font-medium">{formatCurrency(cost.amount)}</td>
-                      <td className="px-4 py-3 text-sm text-dark-300">{getFrequencyLabel(cost.frequency)}</td>
-                      <td className="px-4 py-3 text-sm text-dark-100 text-right">{formatCurrency(toMonthly(cost.amount, cost.frequency))}</td>
-                      <td className="px-4 py-3 text-sm text-dark-300">{cost.paidBy || '-'}</td>
-                      <td className="px-4 py-3 text-right">
+  const totalMonthly = vehicleCosts.reduce((sum, c) => sum + toMonthly(c.amount, c.frequency), 0);
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <p className="text-sm text-zinc-400">
+            {vehicleCosts.length} cost{vehicleCosts.length !== 1 ? 's' : ''} &middot; {formatCurrency(totalMonthly)}/mo
+          </p>
+        </div>
+        <button
+          onClick={onAddCost}
+          className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2 transition-colors"
+        >
+          <Plus size={16} />
+          Add Cost
+        </button>
+      </div>
+
+      {/* Table */}
+      {vehicleCosts.length === 0 ? (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
+          <p className="text-zinc-500 text-sm">No costs recorded yet.</p>
+        </div>
+      ) : (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-zinc-800">
+                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">Name</th>
+                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">Category</th>
+                  <th className="px-4 py-3.5 text-right text-xs text-zinc-500 uppercase tracking-wider font-medium">Amount</th>
+                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">Frequency</th>
+                  <th className="px-4 py-3.5 text-right text-xs text-zinc-500 uppercase tracking-wider font-medium">Monthly</th>
+                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">Paid By</th>
+                  <th className="px-4 py-3.5 text-right text-xs text-zinc-500 uppercase tracking-wider font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vehicleCosts.map((cost) => {
+                  const person = persons.find((p) => p.id === cost.paidBy);
+                  return (
+                    <tr key={cost.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
+                      <td className="px-4 py-3.5 text-sm text-zinc-50">{cost.name}</td>
+                      <td className="px-4 py-3.5 text-sm text-zinc-400">{getCategoryLabel(cost.category)}</td>
+                      <td className="px-4 py-3.5 text-sm text-zinc-50 text-right">{formatCurrency(cost.amount)}</td>
+                      <td className="px-4 py-3.5 text-sm text-zinc-400">{getFrequencyLabel(cost.frequency)}</td>
+                      <td className="px-4 py-3.5 text-sm text-zinc-50 text-right">{formatCurrency(toMonthly(cost.amount, cost.frequency))}</td>
+                      <td className="px-4 py-3.5 text-sm text-zinc-400">{person?.name || '-'}</td>
+                      <td className="px-4 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => onEditCost(cost)}
-                            className="p-1.5 rounded-lg text-dark-400 hover:text-primary-400 hover:bg-dark-700 transition-colors cursor-pointer"
+                            className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center transition-colors"
                           >
                             <Pencil size={14} />
                           </button>
-                          <button
-                            onClick={() => onDeleteCost(cost.id)}
-                            className="p-1.5 rounded-lg text-dark-400 hover:text-danger hover:bg-dark-700 transition-colors cursor-pointer"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          {deleteConfirm === cost.id ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  onDeleteCost(cost.id);
+                                  setDeleteConfirm(null);
+                                }}
+                                className="bg-red-400/10 text-red-400 hover:bg-red-400/20 rounded-lg h-9 px-3 text-xs transition-colors"
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                onClick={() => setDeleteConfirm(null)}
+                                className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-xs transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setDeleteConfirm(cost.id)}
+                              className="text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center transition-colors"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Cost Modal */}
       <Modal
@@ -115,7 +153,6 @@ export default function VehicleCostsTab({
           setEditingCostId(null);
         }}
         title={editingCostId ? 'Edit Cost' : 'Add Cost'}
-        size="xl"
         footer={
           <>
             <button
@@ -123,106 +160,138 @@ export default function VehicleCostsTab({
                 setShowCostModal(false);
                 setEditingCostId(null);
               }}
-              className="px-4 py-2 rounded-lg text-dark-300 hover:text-dark-100 hover:bg-dark-700 transition-colors cursor-pointer"
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={onSaveCost}
-              disabled={!costForm.name.trim()}
-              className="px-6 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors cursor-pointer"
+              className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium transition-colors"
             >
-              {editingCostId ? 'Save Changes' : 'Add Cost'}
+              {editingCostId ? 'Update' : 'Add'}
             </button>
           </>
         }
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-5">
           <div>
-            <label className={labelClass}>Name *</label>
+            <label className={labelClass}>Name</label>
             <input
               type="text"
               className={inputClass}
-              placeholder="e.g. Car Insurance"
+              placeholder="e.g. Insurance"
               value={costForm.name}
-              onChange={(e) => setCostForm((f) => ({ ...f, name: e.target.value }))}
+              onChange={(e) => setCostForm({ ...costForm, name: e.target.value })}
             />
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Category</label>
+              <select
+                className={selectClass}
+                style={{ backgroundImage: selectChevron, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center' }}
+                value={costForm.category}
+                onChange={(e) => setCostForm({ ...costForm, category: e.target.value as Cost['category'] })}
+              >
+                {costCategoryOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Frequency</label>
+              <select
+                className={selectClass}
+                style={{ backgroundImage: selectChevron, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center' }}
+                value={costForm.frequency}
+                onChange={(e) => setCostForm({ ...costForm, frequency: e.target.value as Cost['frequency'] })}
+              >
+                {costFrequencyOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Amount (EUR)</label>
+              <input
+                type="number"
+                step="0.01"
+                className={inputClass}
+                placeholder="0.00"
+                value={costForm.amount || ''}
+                onChange={(e) => setCostForm({ ...costForm, amount: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Paid By</label>
+              <select
+                className={selectClass}
+                style={{ backgroundImage: selectChevron, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center' }}
+                value={costForm.paidBy}
+                onChange={(e) => setCostForm({ ...costForm, paidBy: e.target.value })}
+              >
+                <option value="">Select person...</option>
+                {persons.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Start Date</label>
+              <input
+                type="date"
+                className={inputClass}
+                value={costForm.startDate}
+                onChange={(e) => setCostForm({ ...costForm, startDate: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>End Date</label>
+              <input
+                type="date"
+                className={inputClass}
+                value={costForm.endDate}
+                onChange={(e) => setCostForm({ ...costForm, endDate: e.target.value })}
+              />
+            </div>
+          </div>
           <div>
-            <label className={labelClass}>Category</label>
+            <label className={labelClass}>Vehicle</label>
             <select
-              className={inputClass}
-              value={costForm.category}
-              onChange={(e) => setCostForm((f) => ({ ...f, category: e.target.value as CostCategory }))}
+              className={selectClass}
+              style={{ backgroundImage: selectChevron, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center' }}
+              value={costForm.vehicleId}
+              onChange={(e) => setCostForm({ ...costForm, vehicleId: e.target.value })}
             >
-              {categoryOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              <option value="">Select vehicle...</option>
+              {vehicles.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name || `${v.brand} ${v.model}`}
+                </option>
               ))}
             </select>
           </div>
           <div>
-            <label className={labelClass}>Amount (EUR)</label>
-            <input
-              type="number"
-              step="0.01"
-              className={inputClass}
-              placeholder="0"
-              value={costForm.amount || ''}
-              onChange={(e) => setCostForm((f) => ({ ...f, amount: parseFloat(e.target.value) || 0 }))}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Frequency</label>
-            <select
-              className={inputClass}
-              value={costForm.frequency}
-              onChange={(e) => setCostForm((f) => ({ ...f, frequency: e.target.value as CostFrequency }))}
-            >
-              {frequencyOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>Paid By</label>
-            <input
-              type="text"
-              className={inputClass}
-              placeholder="Person name"
-              value={costForm.paidBy}
-              onChange={(e) => setCostForm((f) => ({ ...f, paidBy: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Start Date</label>
-            <input
-              type="date"
-              className={inputClass}
-              value={costForm.startDate}
-              onChange={(e) => setCostForm((f) => ({ ...f, startDate: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>End Date</label>
-            <input
-              type="date"
-              className={inputClass}
-              value={costForm.endDate}
-              onChange={(e) => setCostForm((f) => ({ ...f, endDate: e.target.value }))}
-            />
-          </div>
-          <div className="sm:col-span-2">
             <label className={labelClass}>Notes</label>
             <textarea
-              className={`${inputClass} resize-none`}
-              rows={2}
-              placeholder="Any notes..."
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 min-h-[100px] resize-none"
+              placeholder="Optional notes..."
               value={costForm.notes}
-              onChange={(e) => setCostForm((f) => ({ ...f, notes: e.target.value }))}
+              onChange={(e) => setCostForm({ ...costForm, notes: e.target.value })}
             />
           </div>
         </div>
       </Modal>
-    </>
+    </div>
   );
 }

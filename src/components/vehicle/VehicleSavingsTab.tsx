@@ -1,6 +1,6 @@
-import { PiggyBank } from 'lucide-react';
-import type { SavingsGoal, SavingsTransaction, Page } from '../../types';
+import { ArrowRight, PiggyBank } from 'lucide-react';
 import { formatCurrency, getSavingsBalance, getSavingsProgress } from '../../utils';
+import type { SavingsGoal, SavingsTransaction, Page } from '../../types';
 
 interface VehicleSavingsTabProps {
   vehicleSavings: SavingsGoal[];
@@ -9,65 +9,88 @@ interface VehicleSavingsTabProps {
 }
 
 export default function VehicleSavingsTab({ vehicleSavings, savingsTransactions, onNavigate }: VehicleSavingsTabProps) {
+  if (vehicleSavings.length === 0) {
+    return (
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
+        <PiggyBank size={32} className="mx-auto text-zinc-600 mb-3" />
+        <p className="text-zinc-500 text-sm mb-4">No savings goals linked to this vehicle.</p>
+        <button
+          onClick={() => onNavigate('savings')}
+          className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-2 transition-colors"
+        >
+          Go to Savings
+          <ArrowRight size={14} />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-dark-100">Savings Goals</h2>
-      </div>
+      {vehicleSavings.map((goal) => {
+        const balance = getSavingsBalance(goal, savingsTransactions);
+        const progress = getSavingsProgress(goal, savingsTransactions);
+        const isComplete = progress >= 100;
 
-      {vehicleSavings.length === 0 ? (
-        <div className="text-center py-12 text-dark-400">
-          <PiggyBank size={40} className="mx-auto mb-3 opacity-40" />
-          <p>No savings goals for this vehicle</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {vehicleSavings.map((goal) => {
-            const txns = savingsTransactions.filter((t) => t.savingsGoalId === goal.id);
-            const balance = getSavingsBalance(goal, txns);
-            const progress = getSavingsProgress(goal, txns);
-            return (
-              <div
-                key={goal.id}
-                className="bg-dark-800 border border-dark-700 rounded-xl p-5 hover:border-dark-500 transition-colors cursor-pointer"
-                onClick={() => onNavigate('savings')}
-              >
-                <h3 className="font-semibold text-dark-100 mb-3">{goal.name}</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-dark-400">Target</span>
-                    <span className="text-dark-100 font-medium">{formatCurrency(goal.targetAmount)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-dark-400">Monthly Contribution</span>
-                    <span className="text-dark-100 font-medium">{formatCurrency(goal.monthlyContribution)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-dark-400">Current Balance</span>
-                    <span className="text-success font-medium">{formatCurrency(balance)}</span>
-                  </div>
-                  {/* Progress bar */}
-                  <div>
-                    <div className="flex justify-between text-xs text-dark-400 mb-1">
-                      <span>{formatCurrency(balance)}</span>
-                      <span>{Math.round(progress)}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-dark-700 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-success rounded-full transition-all"
-                        style={{ width: `${Math.min(100, progress)}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-dark-500 mt-1">
-                      {formatCurrency(Math.max(0, goal.targetAmount - balance))} remaining
-                    </p>
-                  </div>
-                </div>
+        return (
+          <div key={goal.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-50">{goal.name}</h3>
+                <p className="text-xs text-zinc-500 mt-1">
+                  {formatCurrency(goal.monthlyContribution)}/mo contribution
+                </p>
               </div>
-            );
-          })}
-        </div>
-      )}
+              <span
+                className={`text-xs font-medium ${isComplete ? 'text-emerald-400' : 'text-violet-400'}`}
+              >
+                {progress.toFixed(1)}%
+              </span>
+            </div>
+
+            {/* Progress bar */}
+            <div className="h-2 bg-zinc-800 rounded-full mb-3">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${isComplete ? 'bg-emerald-400' : 'bg-violet-500'}`}
+                style={{ width: `${Math.min(100, progress)}%` }}
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4 mt-4">
+              <div>
+                <p className="text-xs text-zinc-500 mb-1">Target</p>
+                <p className="text-sm font-medium text-zinc-50">{formatCurrency(goal.targetAmount)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500 mb-1">Saved</p>
+                <p className="text-sm font-medium text-emerald-400">{formatCurrency(balance)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500 mb-1">Remaining</p>
+                <p className="text-sm font-medium text-zinc-50">
+                  {formatCurrency(Math.max(0, goal.targetAmount - balance))}
+                </p>
+              </div>
+            </div>
+
+            {goal.notes && (
+              <div className="mt-3 pt-3 border-t border-zinc-800">
+                <p className="text-xs text-zinc-500">{goal.notes}</p>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      <div className="flex justify-end">
+        <button
+          onClick={() => onNavigate('savings')}
+          className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center gap-2 transition-colors"
+        >
+          View All Savings
+          <ArrowRight size={14} />
+        </button>
+      </div>
     </div>
   );
 }

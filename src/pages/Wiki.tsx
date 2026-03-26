@@ -1,438 +1,977 @@
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ChevronDown, ChevronRight, BookOpen, Car, DollarSign,
-  CreditCard, PiggyBank, Wrench, ShoppingCart, Code, Shield,
-  HelpCircle, Gauge, Server
+  ChevronDown, BookOpen, Car, CreditCard, Wrench, PiggyBank,
+  Bell, ShoppingCart, Users, Settings, Shield, Code, History,
+  Fuel, Gauge, ClipboardCheck, Receipt, Package, Boxes,
+  KanbanSquare, Share2, Search, FileText, Tag, Webhook,
 } from 'lucide-react';
+import { cn } from '../lib/utils';
 
 interface Section {
   id: string;
+  icon: typeof BookOpen;
   title: string;
-  icon: React.ReactNode;
   content: React.ReactNode;
-}
-
-function WikiSection({ section }: { section: Section }) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="bg-dark-900 border border-dark-800 rounded-xl overflow-hidden">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-3 px-6 py-4 text-left hover:bg-dark-800/50 transition-colors cursor-pointer"
-      >
-        <span className="text-primary-400">{section.icon}</span>
-        <span className="flex-1 font-semibold text-dark-50">{section.title}</span>
-        {open ? <ChevronDown size={20} className="text-dark-400" /> : <ChevronRight size={20} className="text-dark-400" />}
-      </button>
-      {open && (
-        <div className="px-6 pb-6 border-t border-dark-800 pt-4">
-          <div className="prose-dark space-y-4 text-dark-300 text-sm leading-relaxed">
-            {section.content}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function H3({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-base font-semibold text-dark-100 mt-4 mb-2">{children}</h3>;
-}
-
-function P({ children }: { children: React.ReactNode }) {
-  return <p className="text-dark-300 leading-relaxed">{children}</p>;
-}
-
-function UL({ children }: { children: React.ReactNode }) {
-  return <ul className="list-disc list-inside space-y-1 text-dark-300 ml-2">{children}</ul>;
 }
 
 function CodeBlock({ children }: { children: string }) {
   return (
-    <pre className="bg-dark-800 border border-dark-700 rounded-lg p-4 overflow-x-auto text-xs">
-      <code className="text-dark-200 font-mono">{children}</code>
+    <pre className="bg-zinc-950 border border-zinc-800 rounded-lg p-4 font-mono text-xs text-zinc-300 overflow-x-auto">
+      {children}
     </pre>
   );
 }
 
+const SECTIONS: Section[] = [
+  {
+    id: 'getting-started',
+    icon: BookOpen,
+    title: 'Getting Started',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Welcome to DriveLedger. This application helps you track every financial and maintenance
+          aspect of vehicle ownership -- costs, loans, repairs, services, fuel economy, inspections,
+          taxes, supplies, equipment, and more.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Quick Start</h4>
+        <ol className="list-decimal list-inside space-y-2">
+          <li>Add your vehicle in the Vehicles section with basic details.</li>
+          <li>Set up recurring costs like insurance, tax, and fuel estimates.</li>
+          <li>Track any loans or financing tied to your vehicle.</li>
+          <li>Log repairs, services, and upgrades as they happen.</li>
+          <li>Record fuel fill-ups to track consumption and L/100km.</li>
+          <li>Create savings goals for future purchases or maintenance funds.</li>
+          <li>Set up reminders for inspections, tax due dates, and maintenance intervals.</li>
+          <li>Use the Task Planner to organize upcoming work on a Kanban board.</li>
+        </ol>
+        <h4 className="text-zinc-50 font-medium">Navigation</h4>
+        <p>
+          Use the sidebar to navigate between sections. Items are grouped into categories: Overview,
+          Vehicle Data, Financial, Maintenance, Planning, and System. The dashboard gives you a quick
+          overview of all your vehicles with charts, analytics, and a year filter.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Global Search</h4>
+        <p>
+          Use the global search to find any record across all sections -- vehicles, costs, repairs,
+          services, fuel logs, and more. Results link directly to the relevant item.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'vehicles',
+    icon: Car,
+    title: 'Vehicles',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Vehicles are the core entity in the app. Each vehicle stores essential information and
+          serves as the anchor for all records: costs, loans, repairs, services, upgrades, fuel logs,
+          odometer readings, inspections, taxes, supplies, equipment, and notes.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Vehicle Fields</h4>
+        <ul className="list-disc list-inside space-y-1">
+          <li><span className="text-zinc-300">Brand / Model / Variant</span> - Vehicle identification</li>
+          <li><span className="text-zinc-300">License Plate</span> - Registration number</li>
+          <li><span className="text-zinc-300">HSN / TSN</span> - German type approval numbers for insurance lookup</li>
+          <li><span className="text-zinc-300">Fuel Type</span> - Diesel, Gasoline, Electric, Hybrid, or LPG</li>
+          <li><span className="text-zinc-300">Mileage</span> - Current and estimated annual mileage</li>
+          <li><span className="text-zinc-300">Consumption</span> - Average fuel consumption for cost estimates</li>
+          <li><span className="text-zinc-300">Status</span> - Owned or Planned</li>
+        </ul>
+        <h4 className="text-zinc-50 font-medium">Vehicle Detail View (12 Tabs)</h4>
+        <p>
+          Click on a vehicle card to open the detail view with 12 tabs:
+        </p>
+        <ul className="list-disc list-inside space-y-1">
+          <li><span className="text-zinc-300">Stats</span> - Financial breakdown, cost distribution charts</li>
+          <li><span className="text-zinc-300">Costs</span> - All costs associated with the vehicle</li>
+          <li><span className="text-zinc-300">Repairs</span> - Unplanned fix history</li>
+          <li><span className="text-zinc-300">Services</span> - Planned maintenance records</li>
+          <li><span className="text-zinc-300">Upgrades</span> - Modifications and tuning</li>
+          <li><span className="text-zinc-300">Fuel</span> - Fill-up log with L/100km calculation</li>
+          <li><span className="text-zinc-300">Odometer</span> - Mileage readings over time</li>
+          <li><span className="text-zinc-300">Loans</span> - Active loans and amortization</li>
+          <li><span className="text-zinc-300">Savings</span> - Savings goals and transactions</li>
+          <li><span className="text-zinc-300">Inspections</span> - Pass/fail forms and findings</li>
+          <li><span className="text-zinc-300">Taxes</span> - Tax and registration tracking</li>
+          <li><span className="text-zinc-300">Notes</span> - Free-form notes</li>
+        </ul>
+        <h4 className="text-zinc-50 font-medium">Vehicle Sharing</h4>
+        <p>
+          Share vehicles with other users to allow collaborative tracking. Shared users can view and
+          add records to the shared vehicle.
+        </p>
+        <h4 className="text-zinc-50 font-medium">QR Codes</h4>
+        <p>
+          Generate QR codes for vehicles for quick access or physical labeling.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'costs',
+    icon: CreditCard,
+    title: 'Costs & Expenses',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Track all recurring and one-time costs associated with your vehicles. Costs are
+          automatically converted to monthly and yearly totals for easy comparison.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Cost Categories</h4>
+        <ul className="list-disc list-inside space-y-1">
+          <li><span className="text-zinc-300">Tax</span> - Annual vehicle tax</li>
+          <li><span className="text-zinc-300">Insurance</span> - Liability, comprehensive, or partial coverage</li>
+          <li><span className="text-zinc-300">Fuel</span> - Estimated monthly fuel costs</li>
+          <li><span className="text-zinc-300">Care & Cleaning</span> - Wash, detailing, products</li>
+          <li><span className="text-zinc-300">Repair</span> - Unexpected repair costs</li>
+          <li><span className="text-zinc-300">Inspection (TUV)</span> - Periodic technical inspection</li>
+          <li><span className="text-zinc-300">Financing</span> - Loan-related costs</li>
+          <li><span className="text-zinc-300">Savings</span> - Set-aside amounts</li>
+          <li><span className="text-zinc-300">Other</span> - Anything else</li>
+        </ul>
+        <h4 className="text-zinc-50 font-medium">Frequency</h4>
+        <p>
+          Costs can be set as one-time, monthly, quarterly, semi-annual, or yearly. The system
+          normalizes all frequencies to a monthly rate for comparison.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Paid By</h4>
+        <p>
+          Assign costs to different people to track who pays what. Add people in the Persons section
+          first, then select them when adding costs.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Tags</h4>
+        <p>
+          Add tags to cost entries for custom categorization and filtering.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Bulk Operations</h4>
+        <p>
+          Select multiple cost entries to edit or delete them in bulk.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'services',
+    icon: Wrench,
+    title: 'Service Records',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Track planned maintenance events such as oil changes, brake pad replacements, filter swaps,
+          and scheduled inspections. Services differ from repairs in that they are planned and
+          preventive rather than reactive.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Service Fields</h4>
+        <ul className="list-disc list-inside space-y-1">
+          <li><span className="text-zinc-300">Date</span> - When the service was performed</li>
+          <li><span className="text-zinc-300">Description</span> - What was done</li>
+          <li><span className="text-zinc-300">Category</span> - Type of service (oil change, brakes, filters, etc.)</li>
+          <li><span className="text-zinc-300">Cost</span> - Total cost</li>
+          <li><span className="text-zinc-300">Mileage</span> - Odometer reading at time of service</li>
+          <li><span className="text-zinc-300">Workshop</span> - Where the work was performed</li>
+        </ul>
+        <p>
+          Services are shown in the vehicle detail view under the Services tab and are included
+          in maintenance reports.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'repairs',
+    icon: Wrench,
+    title: 'Repairs',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Log every unplanned repair to build a comprehensive fix history. This helps track total
+          repair costs and identify recurring issues.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Repair Fields</h4>
+        <ul className="list-disc list-inside space-y-1">
+          <li><span className="text-zinc-300">Date</span> - When the repair was done</li>
+          <li><span className="text-zinc-300">Description</span> - What was repaired</li>
+          <li><span className="text-zinc-300">Category</span> - Type of work (engine, brakes, tires, etc.)</li>
+          <li><span className="text-zinc-300">Cost</span> - Total cost of the repair</li>
+          <li><span className="text-zinc-300">Mileage</span> - Odometer reading at time of repair</li>
+          <li><span className="text-zinc-300">Workshop</span> - Where the work was done</li>
+        </ul>
+        <p>
+          The repairs page shows a timeline view and cost summary. You can filter by vehicle and
+          category to find specific entries.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'upgrades',
+    icon: Wrench,
+    title: 'Upgrades & Modifications',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Track vehicle modifications, tuning, and aftermarket parts. Upgrades capture the cost and
+          details of enhancements you have made to your vehicle.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Examples</h4>
+        <ul className="list-disc list-inside space-y-1">
+          <li>Performance tuning and ECU remaps</li>
+          <li>Suspension upgrades (coilovers, springs, sway bars)</li>
+          <li>Exhaust system modifications</li>
+          <li>Wheels and tire upgrades</li>
+          <li>Interior modifications (seats, steering wheel, trim)</li>
+          <li>Audio and infotainment upgrades</li>
+          <li>Exterior modifications (body kits, wraps, lighting)</li>
+        </ul>
+      </div>
+    ),
+  },
+  {
+    id: 'fuel',
+    icon: Fuel,
+    title: 'Fuel Tracking',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Log every fuel fill-up to track consumption, costs, and fuel economy over time.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Fill-up Fields</h4>
+        <ul className="list-disc list-inside space-y-1">
+          <li><span className="text-zinc-300">Date</span> - When you refueled</li>
+          <li><span className="text-zinc-300">Liters</span> - Amount of fuel added</li>
+          <li><span className="text-zinc-300">Cost</span> - Total cost of the fill-up</li>
+          <li><span className="text-zinc-300">Odometer</span> - Current mileage reading</li>
+          <li><span className="text-zinc-300">Full Tank</span> - Whether it was a full fill-up</li>
+        </ul>
+        <h4 className="text-zinc-50 font-medium">L/100km Calculation</h4>
+        <p>
+          When you log consecutive full tank fill-ups, the system calculates your actual fuel
+          consumption in liters per 100 kilometers. Charts show consumption trends over time so you
+          can spot changes in efficiency.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'odometer',
+    icon: Gauge,
+    title: 'Odometer Logging',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Record odometer readings independently of fuel fill-ups. This provides a complete mileage
+          history for your vehicle and helps calculate usage patterns, cost-per-km, and service
+          intervals.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Usage</h4>
+        <p>
+          Log readings periodically or at specific events (start of month, before/after trips, etc.).
+          The vehicle detail view shows a timeline of readings with distance calculations between
+          entries.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'loans',
+    icon: CreditCard,
+    title: 'Loans & Financing',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Track vehicle financing including loan amount, monthly payments, interest rates, and
+          optional additional savings alongside your loan payments.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Loan Schedule</h4>
+        <p>
+          Each loan generates a repayment schedule showing month-by-month breakdowns of payments,
+          remaining debt, and accumulated savings. The progress bar shows how far along you are.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Additional Savings</h4>
+        <p>
+          You can set an additional savings amount per month alongside your loan payment. This helps
+          you build up funds for the balloon payment or to save for your next vehicle while paying
+          off the current one.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Calculation Formula</h4>
+        <CodeBlock>{`Monthly Payment = P * [r(1+r)^n] / [(1+r)^n - 1]
+
+Where:
+  P = Loan principal (price - down payment)
+  r = Monthly interest rate (annual rate / 12)
+  n = Number of monthly payments`}</CodeBlock>
+      </div>
+    ),
+  },
+  {
+    id: 'savings',
+    icon: PiggyBank,
+    title: 'Savings Goals',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Create savings goals tied to vehicles. The system tracks monthly contributions and
+          manual transactions to show progress toward your target.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Automatic Contributions</h4>
+        <p>
+          When you set a monthly contribution, the system calculates accumulated savings based on
+          months elapsed since the start date. This gives you a projected balance without needing
+          to log every monthly deposit.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Manual Transactions</h4>
+        <p>
+          You can also add manual deposits or withdrawals for lump-sum contributions or unexpected
+          expenses. These are added to (or subtracted from) the automatic contribution total.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Progress Tracking</h4>
+        <p>
+          Each goal shows a progress bar with current balance vs. target amount. Projection charts
+          show when you are expected to reach your goal.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'inspections',
+    icon: ClipboardCheck,
+    title: 'Inspections',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Record vehicle inspections (TUV, MOT, safety checks) with structured pass/fail forms.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Inspection Fields</h4>
+        <ul className="list-disc list-inside space-y-1">
+          <li><span className="text-zinc-300">Date</span> - When the inspection was performed</li>
+          <li><span className="text-zinc-300">Type</span> - Type of inspection</li>
+          <li><span className="text-zinc-300">Result</span> - Pass or fail</li>
+          <li><span className="text-zinc-300">Findings</span> - Issues found during inspection</li>
+          <li><span className="text-zinc-300">Cost</span> - Inspection fee</li>
+          <li><span className="text-zinc-300">Next Due</span> - When the next inspection is due</li>
+        </ul>
+        <p>
+          Track inspection history per vehicle and set reminders for upcoming inspections.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'taxes',
+    icon: Receipt,
+    title: 'Taxes & Registration',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Track recurring vehicle taxes and registration fees. The system alerts you when payments
+          are coming due.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Tax Fields</h4>
+        <ul className="list-disc list-inside space-y-1">
+          <li><span className="text-zinc-300">Type</span> - Vehicle tax, registration fee, emissions charge, etc.</li>
+          <li><span className="text-zinc-300">Amount</span> - Payment amount</li>
+          <li><span className="text-zinc-300">Due Date</span> - When the payment is due</li>
+          <li><span className="text-zinc-300">Frequency</span> - How often it recurs</li>
+          <li><span className="text-zinc-300">Status</span> - Paid or pending</li>
+        </ul>
+      </div>
+    ),
+  },
+  {
+    id: 'supplies',
+    icon: Package,
+    title: 'Supplies Inventory',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Track supplies and consumables -- both per-vehicle items and shop-wide inventory.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Per-Vehicle Supplies</h4>
+        <p>
+          Items tied to a specific vehicle: spare bulbs, touch-up paint, specific oil filters, etc.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Shop-Wide Supplies</h4>
+        <p>
+          General supplies not tied to a specific vehicle: tools, cleaning products, general fluids, etc.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Tracking</h4>
+        <p>
+          Track quantity on hand, cost, and notes for each supply item.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'equipment',
+    icon: Boxes,
+    title: 'Equipment Tracking',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Track larger equipment items associated with your vehicles.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Examples</h4>
+        <ul className="list-disc list-inside space-y-1">
+          <li>Seasonal tires (summer/winter sets)</li>
+          <li>Trailers</li>
+          <li>Roof boxes and cargo carriers</li>
+          <li>Bike racks</li>
+          <li>Snow chains</li>
+          <li>Car covers</li>
+        </ul>
+        <p>
+          Equipment can be assigned to specific vehicles and tracked with purchase date, cost, and
+          condition notes.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'planner',
+    icon: KanbanSquare,
+    title: 'Task Planner',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          A Kanban-style board for planning and tracking vehicle-related tasks.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Task Management</h4>
+        <p>
+          Create tasks, assign them to columns (e.g. To Do, In Progress, Done), and drag them
+          between columns as work progresses. Tasks can be linked to specific vehicles and given
+          due dates.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Use Cases</h4>
+        <ul className="list-disc list-inside space-y-1">
+          <li>Plan upcoming maintenance work</li>
+          <li>Track modification projects</li>
+          <li>Organize seasonal tasks (tire swap, winterization)</li>
+          <li>Keep a to-do list of parts to order</li>
+        </ul>
+      </div>
+    ),
+  },
+  {
+    id: 'reminders',
+    icon: Bell,
+    title: 'Reminders',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Set up reminders for important dates and recurring tasks related to your vehicles.
+          Reminders can be based on calendar dates or mileage thresholds.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Reminder Types</h4>
+        <ul className="list-disc list-inside space-y-1">
+          <li><span className="text-zinc-300">Cost Due</span> - Upcoming cost payments</li>
+          <li><span className="text-zinc-300">Loan Payment</span> - Monthly loan due dates</li>
+          <li><span className="text-zinc-300">Inspection</span> - TUV and other inspections</li>
+          <li><span className="text-zinc-300">Insurance</span> - Policy renewals</li>
+          <li><span className="text-zinc-300">Savings Goal</span> - Milestone reminders</li>
+          <li><span className="text-zinc-300">Mileage-Based</span> - Triggered at specific odometer readings</li>
+          <li><span className="text-zinc-300">Custom</span> - Any other reminder</li>
+        </ul>
+        <h4 className="text-zinc-50 font-medium">Recurring Reminders</h4>
+        <p>
+          Reminders can be set to repeat daily, weekly, monthly, or yearly. When snoozed, the
+          reminder is pushed to the next day at 9:00 AM.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Email Notifications</h4>
+        <p>
+          If email is enabled on the server, reminders can optionally send email notifications
+          when they become due.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'purchase-planner',
+    icon: ShoppingCart,
+    title: 'Purchase Planner',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Compare potential vehicle purchases side by side. Evaluate financing options, estimated
+          running costs, and rate each option to find the best fit.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Vehicle Comparison</h4>
+        <p>
+          When you have two or more planned purchases, a comparison table automatically appears
+          showing key metrics side by side: price, financing costs, estimated monthly expenses,
+          and your personal rating.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Financing Calculator</h4>
+        <p>
+          Use the built-in calculator to experiment with different down payments, interest rates,
+          and loan durations. Results update in real-time.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Convert to Vehicle</h4>
+        <p>
+          Once you decide on a purchase, use the "Convert to Vehicle" action to create a real
+          vehicle entry from the planned purchase. This transfers all the basic information and
+          removes it from the planner.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'attachments-tags',
+    icon: Tag,
+    title: 'Attachments, Tags & Bulk Operations',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <h4 className="text-zinc-50 font-medium">File Attachments</h4>
+        <p>
+          Attach files (photos, PDFs, invoices, documents) to records across the application.
+          Attachments are stored on the server and linked to the relevant record.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Tags</h4>
+        <p>
+          Add custom tags to any record type for flexible categorization. Tags make it easy to
+          filter and group records across different sections.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Bulk Operations</h4>
+        <p>
+          Select multiple records and perform batch operations (edit, delete) to save time when
+          managing large amounts of data.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'search-reports',
+    icon: Search,
+    title: 'Search & Reports',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <h4 className="text-zinc-50 font-medium">Global Search</h4>
+        <p>
+          Search across all record types from a single search bar. Results are grouped by type
+          and link directly to the matching record.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Maintenance Reports</h4>
+        <p>
+          Generate maintenance reports that combine service records, repairs, inspections, and
+          costs into a comprehensive overview. Useful for resale documentation or insurance claims.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'sharing-webhooks',
+    icon: Share2,
+    title: 'Sharing & Webhooks',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <h4 className="text-zinc-50 font-medium">Vehicle Sharing</h4>
+        <p>
+          Share vehicles with other DriveLedger users for collaborative tracking. Useful for
+          families or businesses managing a shared fleet.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Webhooks</h4>
+        <p>
+          Configure webhooks to send notifications to external services when events occur in
+          DriveLedger. Integrate with messaging platforms, automation tools, or custom applications.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'import-export',
+    icon: FileText,
+    title: 'Import & Export',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <h4 className="text-zinc-50 font-medium">Data Export</h4>
+        <p>
+          Export all your data as JSON for backup or migration. Available in Settings &gt; Data.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Data Import</h4>
+        <p>
+          Import data from a previous DriveLedger export to restore or transfer your information.
+        </p>
+        <h4 className="text-zinc-50 font-medium">LubeLogger Import</h4>
+        <p>
+          Import data from LubeLogger to migrate your vehicle records into DriveLedger.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'persons',
+    icon: Users,
+    title: 'Persons & Cost Sharing',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Manage people involved in vehicle expenses. Each person has a name and a color for
+          visual identification in charts and cost breakdowns.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Cost Assignment</h4>
+        <p>
+          When adding costs, select the person responsible for that payment. The dashboard and
+          vehicle detail views show cost distribution per person, making it easy to split or
+          track shared vehicle expenses.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Adding Persons</h4>
+        <p>
+          Add persons before assigning costs. Navigate to the costs page and use the person
+          management section to create entries. Each person needs a unique name.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'settings',
+    icon: Settings,
+    title: 'Settings & Account',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Manage your account settings, API tokens, and data.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Profile</h4>
+        <p>
+          Change your password and view account details. Email verification status is shown here
+          if email is enabled on the server.
+        </p>
+        <h4 className="text-zinc-50 font-medium">API Tokens</h4>
+        <p>
+          Generate API tokens for external integrations. Each token can have specific permissions
+          and can be toggled active/inactive. The token secret is only shown once upon creation.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Data Management</h4>
+        <p>
+          Export all your data as JSON for backup or migration. Import data from a previous export
+          to restore or transfer your information.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Admin Panel</h4>
+        <p>
+          Admin users can manage all users, generate registration invite tokens, and perform
+          system-level operations.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'api',
+    icon: Code,
+    title: 'API Reference',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          The application provides a REST API for all resources. Authenticate via JWT Bearer token
+          or API key.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Authentication</h4>
+        <CodeBlock>{`# JWT Bearer
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \\
+  https://your-domain/api/vehicles
+
+# API Key
+curl -H "Authorization: ApiKey dl_token:your-secret" \\
+  https://your-domain/api/vehicles`}</CodeBlock>
+        <h4 className="text-zinc-50 font-medium">Resource Endpoints</h4>
+        <CodeBlock>{`GET/POST           /api/vehicles
+GET/PUT/DELETE     /api/vehicles/:id
+GET/POST           /api/costs
+GET/POST           /api/loans
+GET/POST           /api/repairs
+GET/POST           /api/services
+GET/POST           /api/upgrades
+GET/POST           /api/fuel
+GET/POST           /api/odometer
+GET/POST           /api/inspections
+GET/POST           /api/taxes
+GET/POST           /api/supplies
+GET/POST           /api/equipment
+GET/POST           /api/reminders
+GET/POST           /api/purchases
+GET/POST           /api/persons
+GET/POST           /api/planner-tasks
+GET/POST           /api/vehicle-notes
+GET/POST           /api/attachments
+GET                /api/search?q=...
+GET                /api/reports/...
+GET                /api/savings/goals
+POST               /api/savings/goals/:id/transactions`}</CodeBlock>
+        <h4 className="text-zinc-50 font-medium">Data Endpoints</h4>
+        <CodeBlock>{`GET    /api/data/export       - Export all data (JSON)
+POST   /api/data/import       - Import data (JSON)
+GET    /api/health            - Health check (no auth)
+GET    /api/config            - Server config (no auth)`}</CodeBlock>
+        <h4 className="text-zinc-50 font-medium">Admin Endpoints</h4>
+        <CodeBlock>{`GET    /api/admin/users                    - List users
+DELETE /api/admin/users/:id                - Delete user
+POST   /api/admin/registration-tokens      - Generate token
+GET    /api/admin/registration-tokens      - List tokens
+POST   /api/admin/users/:id/reset-password - Reset password`}</CodeBlock>
+      </div>
+    ),
+  },
+  {
+    id: 'security',
+    icon: Shield,
+    title: 'Security & Privacy',
+    content: (
+      <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
+        <p>
+          Your data is stored securely in a MariaDB database. The application uses JWT-based
+          authentication with refresh tokens stored in HTTP-only cookies.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Authentication</h4>
+        <ul className="list-disc list-inside space-y-1">
+          <li>Access tokens expire after 15 minutes</li>
+          <li>Refresh tokens are stored in HTTP-only secure cookies</li>
+          <li>Passwords are hashed using bcrypt (12 salt rounds)</li>
+          <li>Registration requires an invite token from an admin</li>
+          <li>API tokens hashed with SHA-256, secrets hashed with bcrypt</li>
+        </ul>
+        <h4 className="text-zinc-50 font-medium">Server Hardening</h4>
+        <ul className="list-disc list-inside space-y-1">
+          <li>Rate limiting: 100 req/min general, 5 req/min on auth endpoints</li>
+          <li>Helmet.js security headers (CSP, HSTS, X-Frame-Options)</li>
+          <li>CORS whitelist restricted to configured frontend origin</li>
+          <li>Parameterized SQL queries via mysql2 (no SQL injection)</li>
+          <li>Non-root Docker container execution</li>
+        </ul>
+        <h4 className="text-zinc-50 font-medium">Data Isolation</h4>
+        <p>
+          Each user can only access their own data. All database queries are scoped to the
+          authenticated user's ID. API tokens inherit the permissions of the user who created them.
+          Admin endpoints are restricted to admin users only.
+        </p>
+        <h4 className="text-zinc-50 font-medium">Account Deletion</h4>
+        <p>
+          You can delete your account and all associated data from the Settings page. This action
+          is irreversible and removes all vehicles, costs, loans, repairs, services, upgrades,
+          fuel logs, inspections, taxes, supplies, equipment, savings, reminders, and API tokens.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'changelog',
+    icon: History,
+    title: 'Changelog',
+    content: (() => {
+      const T = ({ type }: { type: 'new' | 'fix' | 'change' | 'remove' }) => {
+        const styles = {
+          new: 'bg-emerald-400/15 text-emerald-400',
+          fix: 'bg-sky-400/15 text-sky-400',
+          change: 'bg-amber-400/15 text-amber-400',
+          remove: 'bg-red-400/15 text-red-400',
+        };
+        return <span className={`inline-block text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${styles[type]} mr-2`}>{type}</span>;
+      };
+      return (
+        <div className="space-y-6 text-sm text-zinc-400 leading-relaxed">
+          <div>
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-mono bg-violet-500/15 text-violet-400 px-2 py-0.5 rounded-md">v2.0.0</span>
+              <span className="text-xs text-zinc-600">2026-03-27</span>
+            </div>
+            <h4 className="text-zinc-50 font-medium mb-3">Major Feature Release</h4>
+            <ul className="space-y-2">
+              <li><T type="new" />Service Records for planned maintenance with categories and intervals</li>
+              <li><T type="new" />Upgrade Records for vehicle modifications and tuning</li>
+              <li><T type="new" />Fuel Tracking with automatic L/100km consumption calculation</li>
+              <li><T type="new" />Odometer Logging for independent mileage history</li>
+              <li><T type="new" />Inspections with structured pass/fail forms and findings</li>
+              <li><T type="new" />Taxes & Registration tracking with due date alerts</li>
+              <li><T type="new" />Supplies Inventory for per-vehicle and shop-wide items</li>
+              <li><T type="new" />Equipment Tracking for seasonal tires, trailers, and accessories</li>
+              <li><T type="new" />Task Planner with Kanban-style board</li>
+              <li><T type="new" />Vehicle Sharing between users</li>
+              <li><T type="new" />Webhooks for external integrations</li>
+              <li><T type="new" />Bulk Operations for batch editing and deleting</li>
+              <li><T type="new" />QR Code Generation for vehicles</li>
+              <li><T type="new" />LubeLogger data import</li>
+              <li><T type="new" />Global Search across all record types</li>
+              <li><T type="new" />Maintenance Reports generation</li>
+              <li><T type="new" />File Attachments on records</li>
+              <li><T type="new" />Tags on all record types for custom categorization</li>
+              <li><T type="new" />Year filter on Dashboard analytics</li>
+              <li><T type="change" />Sidebar reorganized with grouped sections (Overview, Vehicle Data, Financial, Maintenance, Planning, System)</li>
+              <li><T type="change" />VehicleDetail expanded to 12 tabs (Stats, Costs, Repairs, Services, Upgrades, Fuel, Odometer, Loans, Savings, Inspections, Taxes, Notes)</li>
+              <li><T type="change" />Dashboard enhanced with fuel economy charts and upcoming reminders section</li>
+            </ul>
+          </div>
+
+          <div className="border-t border-zinc-800 pt-5">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-mono bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">v1.5.0</span>
+              <span className="text-xs text-zinc-600">2026-03-26</span>
+            </div>
+            <h4 className="text-zinc-50 font-medium mb-3">Complete UI Redesign</h4>
+            <ul className="space-y-2">
+              <li><T type="new" />Completely rebuilt frontend with minimal dark design</li>
+              <li><T type="new" />Framer-motion page transitions and animations</li>
+              <li><T type="new" />Split-screen login and registration pages</li>
+              <li><T type="new" />New app logo</li>
+              <li><T type="new" />Changelog section in documentation</li>
+              <li><T type="new" />Version number in settings</li>
+              <li><T type="change" />Redesigned sidebar navigation layout</li>
+              <li><T type="change" />Improved spacing and typography throughout</li>
+              <li><T type="remove" />Removed old shadcn/ui component library</li>
+              <li><T type="remove" />Removed unnecessary CSS bloat</li>
+            </ul>
+          </div>
+
+          <div className="border-t border-zinc-800 pt-5">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-mono bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">v1.4.0</span>
+              <span className="text-xs text-zinc-600">2025-12-15</span>
+            </div>
+            <h4 className="text-zinc-50 font-medium mb-3">MariaDB Migration</h4>
+            <ul className="space-y-2">
+              <li><T type="change" />Migrated database from SQLite to MariaDB</li>
+              <li><T type="new" />Docker Compose setup with persistent MariaDB container</li>
+              <li><T type="fix" />Improved query performance and concurrent access</li>
+              <li><T type="remove" />Removed SQLite dependency</li>
+            </ul>
+          </div>
+
+          <div className="border-t border-zinc-800 pt-5">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-mono bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">v1.3.0</span>
+              <span className="text-xs text-zinc-600">2025-11-20</span>
+            </div>
+            <h4 className="text-zinc-50 font-medium mb-3">Email & Reminders</h4>
+            <ul className="space-y-2">
+              <li><T type="new" />EMAIL_ENABLED toggle for optional email features</li>
+              <li><T type="new" />Email verification system for new accounts</li>
+              <li><T type="new" />Reminder system with email notifications</li>
+              <li><T type="new" />Recurring reminders (daily, weekly, monthly, yearly)</li>
+              <li><T type="new" />Snooze and dismiss functionality</li>
+              <li><T type="fix" />Clean login page design</li>
+              <li><T type="fix" />Support username or email login</li>
+            </ul>
+          </div>
+
+          <div className="border-t border-zinc-800 pt-5">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-mono bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">v1.2.0</span>
+              <span className="text-xs text-zinc-600">2025-10-05</span>
+            </div>
+            <h4 className="text-zinc-50 font-medium mb-3">Purchase Planner & Savings</h4>
+            <ul className="space-y-2">
+              <li><T type="new" />Purchase planner with side-by-side vehicle comparison</li>
+              <li><T type="new" />Built-in financing calculator</li>
+              <li><T type="new" />Savings goals with transaction tracking</li>
+              <li><T type="new" />Savings growth projection charts</li>
+              <li><T type="new" />Convert planned purchases to owned vehicles</li>
+            </ul>
+          </div>
+
+          <div className="border-t border-zinc-800 pt-5">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-mono bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">v1.1.0</span>
+              <span className="text-xs text-zinc-600">2025-08-15</span>
+            </div>
+            <h4 className="text-zinc-50 font-medium mb-3">Loans & API Tokens</h4>
+            <ul className="space-y-2">
+              <li><T type="new" />Loan tracking with amortization schedules</li>
+              <li><T type="new" />Loan progress visualization with charts</li>
+              <li><T type="new" />API token system for programmatic access</li>
+              <li><T type="new" />Data export and import functionality</li>
+            </ul>
+          </div>
+
+          <div className="border-t border-zinc-800 pt-5">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-mono bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">v1.0.0</span>
+              <span className="text-xs text-zinc-600">2025-06-01</span>
+            </div>
+            <h4 className="text-zinc-50 font-medium mb-3">Initial Release</h4>
+            <ul className="space-y-2">
+              <li><T type="new" />Vehicle management with detailed profiles</li>
+              <li><T type="new" />Cost tracking with categories and frequencies</li>
+              <li><T type="new" />Repair history logging</li>
+              <li><T type="new" />Dashboard with charts and overview</li>
+              <li><T type="new" />User authentication with JWT and bcrypt</li>
+              <li><T type="new" />Admin panel with registration tokens</li>
+              <li><T type="new" />Rate limiting and security headers</li>
+            </ul>
+          </div>
+        </div>
+      );
+    })(),
+  },
+];
+
 export default function Wiki() {
-  const sections: Section[] = [
-    {
-      id: 'getting-started',
-      title: 'Getting Started',
-      icon: <BookOpen size={20} />,
-      content: (
-        <>
-          <P>DriveLedger is your personal vehicle finance management tool. It helps you track all expenses, loans, savings, and repairs for your vehicles in one place.</P>
-          <H3>First Steps</H3>
-          <UL>
-            <li>Start by adding your first vehicle on the <strong className="text-dark-100">Vehicles</strong> page</li>
-            <li>Fill in vehicle details like brand, model, fuel type, and purchase price</li>
-            <li>Add recurring costs (insurance, tax, fuel) on the <strong className="text-dark-100">Costs</strong> page</li>
-            <li>Set up any loans or financing on the <strong className="text-dark-100">Loans</strong> page</li>
-            <li>Create savings goals to plan for future repairs or your next car</li>
-            <li>Track all repairs and maintenance work on the <strong className="text-dark-100">Repairs</strong> page</li>
-          </UL>
-          <H3>Dashboard</H3>
-          <P>The Dashboard gives you an overview of all your vehicles, total monthly and yearly costs broken down by category and person, loan progress, and savings status. It is your central hub for understanding your vehicle finances at a glance.</P>
-          <H3>Quick Setup Options</H3>
-          <UL>
-            <li><strong className="text-dark-100">Windows (dev.bat)</strong> - Double-click <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">dev.bat</code> to auto-install dependencies, create the .env file, and launch both backend and frontend in one step.</li>
-            <li><strong className="text-dark-100">Docker (Production)</strong> - Use <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">docker compose up -d</code> for a single-command production deployment with persistent data and health checks.</li>
-            <li><strong className="text-dark-100">update.sh (Maintenance)</strong> - On Linux servers, use <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">./update.sh update</code> to pull the latest code and rebuild, or <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">./update.sh reset</code> for a full wipe.</li>
-          </UL>
-          <P>See the <strong className="text-dark-100">Deployment</strong> section below for detailed instructions on each method.</P>
-        </>
-      ),
-    },
-    {
-      id: 'vehicles',
-      title: 'Vehicles',
-      icon: <Car size={20} />,
-      content: (
-        <>
-          <P>The Vehicles page lets you manage all your owned and planned vehicles.</P>
-          <H3>Vehicle Fields</H3>
-          <UL>
-            <li><strong className="text-dark-100">Name</strong> - A friendly name for your vehicle (e.g., "Family SUV")</li>
-            <li><strong className="text-dark-100">Brand &amp; Model</strong> - Manufacturer and model designation</li>
-            <li><strong className="text-dark-100">Variant</strong> - Specific variant (e.g., "AMG-Line, 194 PS")</li>
-            <li><strong className="text-dark-100">License Plate</strong> - Your vehicle's registration plate</li>
-            <li><strong className="text-dark-100">HSN/TSN</strong> - German manufacturer/type codes for insurance</li>
-            <li><strong className="text-dark-100">First Registration</strong> - Date of first registration</li>
-            <li><strong className="text-dark-100">Purchase Price</strong> - What you paid for the vehicle</li>
-            <li><strong className="text-dark-100">Mileage</strong> - Current and estimated annual mileage</li>
-            <li><strong className="text-dark-100">Fuel Type</strong> - Diesel, Benzin, Elektro, Hybrid, or LPG</li>
-            <li><strong className="text-dark-100">Consumption &amp; Fuel Price</strong> - Average l/100km and price per liter</li>
-            <li><strong className="text-dark-100">Status</strong> - "Owned" for your current cars, "Planned" for future purchases</li>
-            <li><strong className="text-dark-100">mobile.de Link</strong> - Link to the listing if applicable</li>
-          </UL>
-          <H3>Vehicle Detail View</H3>
-          <P>Click on any vehicle to see a comprehensive detail view including all associated costs, loans, repairs, and savings goals. You can also view calculated monthly fuel costs and total cost of ownership.</P>
-        </>
-      ),
-    },
-    {
-      id: 'costs',
-      title: 'Costs',
-      icon: <DollarSign size={20} />,
-      content: (
-        <>
-          <P>Track all recurring and one-time costs associated with your vehicles.</P>
-          <H3>Cost Categories</H3>
-          <UL>
-            <li><strong className="text-dark-100">Steuer</strong> - Vehicle tax (Kfz-Steuer)</li>
-            <li><strong className="text-dark-100">Versicherung</strong> - Insurance (Haftpflicht, Teilkasko, Vollkasko)</li>
-            <li><strong className="text-dark-100">Sprit</strong> - Fuel costs</li>
-            <li><strong className="text-dark-100">Pflege</strong> - Car care and washing</li>
-            <li><strong className="text-dark-100">Reparatur</strong> - Repairs</li>
-            <li><strong className="text-dark-100">TUeV</strong> - Vehicle inspection</li>
-            <li><strong className="text-dark-100">Finanzierung</strong> - Financing related costs</li>
-            <li><strong className="text-dark-100">Sparen</strong> - Savings contributions</li>
-            <li><strong className="text-dark-100">Sonstiges</strong> - Other costs</li>
-          </UL>
-          <H3>Frequencies</H3>
-          <P>Costs can be set as: monthly (monatlich), quarterly (quartal), semi-annual (halbjaehrlich), annual (jaehrlich), or one-time (einmalig). All costs are automatically converted to monthly and yearly totals for the dashboard.</P>
-          <H3>Paid By</H3>
-          <P>Assign each cost to a person to see the breakdown of who pays what. Manage persons on the Vehicles page or they are created automatically when you add costs.</P>
-        </>
-      ),
-    },
-    {
-      id: 'loans',
-      title: 'Loans & Financing',
-      icon: <CreditCard size={20} />,
-      content: (
-        <>
-          <P>Track loans, financing agreements, and payment schedules for your vehicles.</P>
-          <H3>Loan Fields</H3>
-          <UL>
-            <li><strong className="text-dark-100">Total Amount</strong> - The original loan amount</li>
-            <li><strong className="text-dark-100">Monthly Payment</strong> - Regular monthly payment</li>
-            <li><strong className="text-dark-100">Interest Rate</strong> - Annual interest rate (0 for interest-free loans)</li>
-            <li><strong className="text-dark-100">Start Date</strong> - When payments began</li>
-            <li><strong className="text-dark-100">Duration</strong> - Number of months for the loan</li>
-            <li><strong className="text-dark-100">Additional Savings</strong> - Extra monthly amount saved alongside loan payments</li>
-          </UL>
-          <H3>Progress Tracking</H3>
-          <P>The dashboard and loan page show how much of the loan has been paid off, remaining balance, estimated payoff date, and amortization progress.</P>
-        </>
-      ),
-    },
-    {
-      id: 'savings',
-      title: 'Savings',
-      icon: <PiggyBank size={20} />,
-      content: (
-        <>
-          <P>Set savings goals and track transactions toward those goals.</P>
-          <H3>Savings Goals</H3>
-          <P>Create goals like "Repair Reserve" or "Next Car Fund" with a target amount and monthly contribution. The system tracks your progress and projects when you will reach your goal.</P>
-          <H3>Transactions</H3>
-          <P>Record deposits and withdrawals against your savings goals. Each transaction has a date, amount, type (deposit/withdrawal), and description.</P>
-          <H3>Projections</H3>
-          <P>Based on your monthly contribution and current balance, DriveLedger calculates the estimated date when you will reach your savings goal.</P>
-        </>
-      ),
-    },
-    {
-      id: 'repairs',
-      title: 'Repairs',
-      icon: <Wrench size={20} />,
-      content: (
-        <>
-          <P>Keep a complete history of all repairs and maintenance work on your vehicles.</P>
-          <H3>Repair Fields</H3>
-          <UL>
-            <li><strong className="text-dark-100">Date</strong> - When the repair was performed</li>
-            <li><strong className="text-dark-100">Description</strong> - What was done</li>
-            <li><strong className="text-dark-100">Category</strong> - Type of repair (Service, Brakes, Engine, etc.)</li>
-            <li><strong className="text-dark-100">Cost</strong> - Total cost of the repair</li>
-            <li><strong className="text-dark-100">Mileage</strong> - Odometer reading at time of repair</li>
-            <li><strong className="text-dark-100">Workshop</strong> - Where the work was done</li>
-          </UL>
-          <P>Having a detailed repair history helps you plan future maintenance, estimate ongoing costs, and increases the resale value of your vehicle.</P>
-        </>
-      ),
-    },
-    {
-      id: 'purchase-planner',
-      title: 'Purchase Planner',
-      icon: <ShoppingCart size={20} />,
-      content: (
-        <>
-          <P>Compare potential vehicle purchases side by side to make informed buying decisions.</P>
-          <H3>Features</H3>
-          <UL>
-            <li>Add multiple vehicles you are considering</li>
-            <li>Enter estimated costs (insurance, tax, fuel, maintenance)</li>
-            <li>Configure financing options (down payment, term, interest rate)</li>
-            <li>Calculate total monthly cost of ownership for each option</li>
-            <li>Add pros/cons and a rating for each vehicle</li>
-            <li>Link to mobile.de listings for reference</li>
-          </UL>
-          <H3>Financing Calculator</H3>
-          <P>Enter the vehicle price, your down payment, financing term in months, and interest rate. The calculator shows you the monthly payment and total cost of financing.</P>
-        </>
-      ),
-    },
-    {
-      id: 'deployment',
-      title: 'Deployment',
-      icon: <Server size={20} />,
-      content: (
-        <>
-          <P>DriveLedger can be run in development mode on Windows or deployed to production with Docker.</P>
+  const [expanded, setExpanded] = useState<string | null>('getting-started');
 
-          <H3>Windows Development (dev.bat)</H3>
-          <P>The included <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">dev.bat</code> script is the easiest way to get started on Windows:</P>
-          <UL>
-            <li>Double-click <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">dev.bat</code> or run it from a terminal</li>
-            <li>It checks that Node.js is installed</li>
-            <li>Automatically runs <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">npm install</code> if <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">node_modules</code> is missing</li>
-            <li>Creates <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">.env</code> from <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">.env.example</code> if it does not exist</li>
-            <li>Starts both the backend (Express) and frontend (Vite) concurrently</li>
-          </UL>
-          <CodeBlock>{`# Just double-click dev.bat, or from a terminal:
-dev.bat`}</CodeBlock>
-
-          <H3>Docker Production Setup</H3>
-          <P>For production, DriveLedger ships with a multi-stage Dockerfile and Docker Compose configuration:</P>
-          <UL>
-            <li>Multi-stage build keeps the final image small (only runtime dependencies)</li>
-            <li>Runs as a non-root user for security</li>
-            <li>Persistent volume for the SQLite database</li>
-            <li>Built-in health checks</li>
-            <li>Single-port deployment: Express serves both the frontend and API</li>
-          </UL>
-          <CodeBlock>{`# Start in production mode:
-docker compose up -d
-
-# View logs:
-docker compose logs -f
-
-# Stop:
-docker compose down`}</CodeBlock>
-
-          <H3>Nginx Reverse Proxy</H3>
-          <P>For HTTPS and domain-based access, place Nginx in front of the Docker container:</P>
-          <CodeBlock>{`server {
-    listen 443 ssl;
-    server_name drive.example.com;
-
-    ssl_certificate     /etc/letsencrypt/live/drive.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/drive.example.com/privkey.pem;
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}`}</CodeBlock>
-
-          <H3>update.sh (Linux Maintenance)</H3>
-          <P>The <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">update.sh</code> script manages your Docker deployment on Linux servers:</P>
-          <UL>
-            <li><strong className="text-dark-100">update</strong> - Pulls latest code, rebuilds the Docker image, and restarts. Your database and data are preserved.</li>
-            <li><strong className="text-dark-100">reset</strong> - Full factory reset: stops containers, removes volumes and images, and redeploys from scratch. Requires triple confirmation for safety.</li>
-          </UL>
-          <CodeBlock>{`# Update to latest version (preserves data):
-./update.sh update
-
-# Full reset (destroys all data!):
-./update.sh reset`}</CodeBlock>
-
-          <H3>Environment Variables</H3>
-          <P>Configure DriveLedger via the <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">.env</code> file. Key variables:</P>
-          <UL>
-            <li><strong className="text-dark-100">PORT</strong> - Server port (default: 3000)</li>
-            <li><strong className="text-dark-100">JWT_SECRET</strong> - Secret key for signing JWT tokens (required, use a long random string)</li>
-            <li><strong className="text-dark-100">ADMIN_EMAIL / ADMIN_PASSWORD</strong> - Auto-created admin account on first startup</li>
-            <li><strong className="text-dark-100">FRONTEND_URL</strong> - The URL where the frontend is accessible (used for CORS)</li>
-            <li><strong className="text-dark-100">SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS</strong> - Email server for password resets and notifications</li>
-            <li><strong className="text-dark-100">SMTP_FROM</strong> - Sender address for outgoing emails</li>
-          </UL>
-          <P>Copy <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">.env.example</code> to <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">.env</code> and fill in your values. The dev.bat script does this automatically.</P>
-        </>
-      ),
-    },
-    {
-      id: 'api',
-      title: 'API',
-      icon: <Code size={20} />,
-      content: (
-        <>
-          <P>DriveLedger provides a RESTful API for programmatic access to your data. Two authentication methods are supported.</P>
-          <H3>Authentication Methods</H3>
-          <P><strong className="text-dark-100">1. JWT (Browser Sessions)</strong> - Used automatically by the web UI. Access tokens expire after 15 minutes; refresh tokens (httpOnly cookies) last 7 days.</P>
-          <P><strong className="text-dark-100">2. API Key (Programmatic Access)</strong> - For scripts, automations, and third-party integrations. Create a token in Settings &gt; API Tokens. Each token has a visible prefix and a secret. Use the secret in the Authorization header:</P>
-          <CodeBlock>{`curl -H "Authorization: Bearer YOUR_TOKEN_SECRET" \\
-  https://your-domain.com/api/vehicles`}</CodeBlock>
-          <H3>Creating API Tokens</H3>
-          <UL>
-            <li>Go to <strong className="text-dark-100">Settings &gt; API Tokens</strong> and click "Create Token"</li>
-            <li>Give the token a descriptive name (e.g., "Backup Script")</li>
-            <li>Copy the secret immediately - it is only shown once</li>
-            <li>Tokens can be activated/deactivated or revoked at any time</li>
-            <li>Last usage time is tracked for auditing</li>
-          </UL>
-          <H3>Endpoint Groups</H3>
-          <UL>
-            <li><strong className="text-dark-100">Auth</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/auth/*</code> - Login, register, refresh, change password, delete account</li>
-            <li><strong className="text-dark-100">Vehicles</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/vehicles</code> - Full CRUD for owned and planned vehicles</li>
-            <li><strong className="text-dark-100">Costs</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/costs</code> - Recurring and one-time cost tracking</li>
-            <li><strong className="text-dark-100">Loans</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/loans</code> - Loan and financing management</li>
-            <li><strong className="text-dark-100">Repairs</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/repairs</code> - Repair history records</li>
-            <li><strong className="text-dark-100">Savings Goals</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/savings-goals</code> - Goals with target amounts</li>
-            <li><strong className="text-dark-100">Savings Transactions</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/savings-transactions</code> - Deposits and withdrawals</li>
-            <li><strong className="text-dark-100">Planned Purchases</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/planned-purchases</code> - Vehicle purchase planning</li>
-            <li><strong className="text-dark-100">Persons</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/persons</code> - Cost-split person management</li>
-            <li><strong className="text-dark-100">Data</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/data/export</code>, <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/data/import</code> - Full data export/import</li>
-            <li><strong className="text-dark-100">API Tokens</strong> - <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">/api/api-tokens</code> - Token management (create, list, toggle, revoke)</li>
-          </UL>
-          <P>Each resource group supports the standard CRUD operations: GET (list/detail), POST (create), PUT (update), DELETE (remove).</P>
-          <H3>Example: Create a Vehicle</H3>
-          <CodeBlock>{`curl -X POST https://your-domain.com/api/vehicles \\
-  -H "Authorization: Bearer YOUR_TOKEN_SECRET" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "name": "My Car",
-    "brand": "BMW",
-    "model": "320d",
-    "fuelType": "diesel",
-    "purchasePrice": 25000
-  }'`}</CodeBlock>
-          <H3>Example: Export All Data</H3>
-          <CodeBlock>{`curl -H "Authorization: Bearer YOUR_TOKEN_SECRET" \\
-  https://your-domain.com/api/data/export -o backup.json`}</CodeBlock>
-          <H3>Example: Change Password</H3>
-          <CodeBlock>{`curl -X POST https://your-domain.com/api/auth/change-password \\
-  -H "Authorization: Bearer YOUR_TOKEN_SECRET" \\
-  -H "Content-Type: application/json" \\
-  -d '{ "currentPassword": "old", "newPassword": "new" }'`}</CodeBlock>
-          <H3>Error Handling</H3>
-          <P>Errors return JSON with an <code className="bg-dark-800 px-1.5 py-0.5 rounded text-dark-200">error</code> field. Common status codes: 400 (bad request), 401 (unauthorized), 404 (not found), 429 (rate limited), 500 (server error). Auth endpoints are rate-limited to 5 requests/minute; all other endpoints allow 100 requests/minute.</P>
-        </>
-      ),
-    },
-    {
-      id: 'security',
-      title: 'Security',
-      icon: <Shield size={20} />,
-      content: (
-        <>
-          <P>DriveLedger takes security seriously. Here is how your data is protected:</P>
-          <H3>Authentication</H3>
-          <UL>
-            <li>Passwords are hashed with bcrypt (never stored in plain text)</li>
-            <li>JWT access tokens expire after 15 minutes</li>
-            <li>Refresh tokens are stored as HTTP-only secure cookies</li>
-            <li>All API requests require authentication</li>
-          </UL>
-          <H3>Invite-Only Registration</H3>
-          <P>New accounts require a registration token generated by an admin. This prevents unauthorized sign-ups and keeps your instance private.</P>
-          <H3>API Tokens</H3>
-          <UL>
-            <li>API tokens have a visible prefix and a hashed secret</li>
-            <li>Tokens can be activated/deactivated without deletion</li>
-            <li>Last usage timestamp is tracked for auditing</li>
-            <li>Tokens can be scoped with permissions (read, write)</li>
-          </UL>
-          <H3>Best Practices</H3>
-          <UL>
-            <li>Use a strong, unique password (min. 8 chars with uppercase, lowercase, and numbers)</li>
-            <li>Rotate API tokens periodically</li>
-            <li>Deactivate tokens you are not actively using</li>
-            <li>Export your data regularly as a backup</li>
-          </UL>
-        </>
-      ),
-    },
-    {
-      id: 'faq',
-      title: 'FAQ',
-      icon: <HelpCircle size={20} />,
-      content: (
-        <>
-          <H3>How do I get a registration token?</H3>
-          <P>Registration tokens are generated by administrators. If you need an account, ask the person who manages the DriveLedger instance for an invite token.</P>
-          <H3>Can I share data between users?</H3>
-          <P>Currently, each user has their own separate data. Sharing features may be added in a future version.</P>
-          <H3>What happens if I forget my password?</H3>
-          <P>Use the "Forgot password?" link on the login page. A reset link will be sent to your email (if email is configured on the server).</P>
-          <H3>How do I change my password?</H3>
-          <P>Go to Settings &gt; Profile &gt; Change Password. You need to enter your current password for verification.</P>
-          <H3>Can I export my data?</H3>
-          <P>Yes. Go to Settings &gt; Data &gt; Export JSON. This downloads all your vehicles, costs, loans, repairs, savings, and other data as a JSON file.</P>
-          <H3>How do I delete my account?</H3>
-          <P>Go to Settings &gt; Data &gt; Delete Account. You will need to confirm three times to prevent accidental deletion. This action is irreversible.</P>
-          <H3>What currency does DriveLedger use?</H3>
-          <P>All monetary values are in Euros. Currency customization may be added in a future version.</P>
-          <H3>Can I track multiple vehicles?</H3>
-          <P>Yes. You can add as many vehicles as you want and track costs, loans, repairs, and savings separately for each one.</P>
-        </>
-      ),
-    },
-  ];
+  const toggle = (id: string) => {
+    setExpanded((prev) => (prev === id ? null : id));
+  };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="space-y-8">
       {/* Header */}
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary-600/20 mb-4">
-          <Gauge size={28} className="text-primary-400" />
-        </div>
-        <h1 className="text-2xl font-bold text-dark-50">DriveLedger Documentation</h1>
-        <p className="text-dark-400 mt-1">Everything you need to know about using DriveLedger</p>
+      <div>
+        <h1 className="text-2xl font-bold text-zinc-50">Wiki</h1>
+        <p className="text-sm text-zinc-500 mt-1">
+          Documentation and guides for using DriveLedger
+        </p>
       </div>
 
-      {/* Sections */}
+      {/* Accordion Sections */}
       <div className="space-y-3">
-        {sections.map((section) => (
-          <WikiSection key={section.id} section={section} />
+        {SECTIONS.map((section) => (
+          <div
+            key={section.id}
+            className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden"
+          >
+            <button
+              onClick={() => toggle(section.id)}
+              className="w-full flex items-center gap-3 px-6 py-4 text-left hover:bg-zinc-800/30 transition-colors"
+            >
+              <div
+                className={cn(
+                  'p-2 rounded-lg',
+                  expanded === section.id ? 'bg-violet-500/15 text-violet-400' : 'bg-zinc-800 text-zinc-500'
+                )}
+              >
+                <section.icon size={18} />
+              </div>
+              <span
+                className={cn(
+                  'flex-1 text-sm font-medium',
+                  expanded === section.id ? 'text-zinc-50' : 'text-zinc-400'
+                )}
+              >
+                {section.title}
+              </span>
+              <motion.div
+                animate={{ rotate: expanded === section.id ? 180 : 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <ChevronDown size={16} className="text-zinc-600" />
+              </motion.div>
+            </button>
+
+            <AnimatePresence initial={false}>
+              {expanded === section.id && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeInOut' }}
+                  className="overflow-hidden"
+                >
+                  <div className="px-6 pb-5 pt-1 border-t border-zinc-800">
+                    {section.content}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         ))}
       </div>
     </div>

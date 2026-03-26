@@ -1,156 +1,184 @@
 import { useState, useMemo } from 'react';
 import { Calculator } from 'lucide-react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts';
-import { formatCurrency, calculateFinancing } from '../../utils';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { calculateFinancing, formatCurrency } from '../../utils';
 
 const inputClass =
-  'w-full bg-dark-900 border border-dark-600 rounded-lg px-3 py-2 text-dark-100 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none transition-colors';
+  'w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50';
 
-const labelClass = 'block text-sm font-medium text-dark-300 mb-1';
+const labelClass = 'block text-sm font-medium text-zinc-400 mb-2';
+
+function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs shadow-lg">
+      {label && <p className="text-zinc-300 mb-1">{label}</p>}
+      {payload.map((entry, i) => (
+        <p key={i} style={{ color: entry.color }} className="font-medium">
+          {entry.name}: {formatCurrency(entry.value)}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 export default function FinancingCalculator() {
-  const [calcPrice, setCalcPrice] = useState(25000);
-  const [calcDown, setCalcDown] = useState(5000);
-  const [calcMonths, setCalcMonths] = useState(48);
-  const [calcRate, setCalcRate] = useState(3.9);
+  const [price, setPrice] = useState(25000);
+  const [downPayment, setDownPayment] = useState(5000);
+  const [months, setMonths] = useState(48);
+  const [rate, setRate] = useState(4.9);
 
-  const calcResult = useMemo(
-    () => calculateFinancing(calcPrice, calcDown, calcMonths, calcRate),
-    [calcPrice, calcDown, calcMonths, calcRate]
+  const result = useMemo(
+    () => calculateFinancing(price, downPayment, months, rate),
+    [price, downPayment, months, rate]
   );
 
-  const amortizationData = useMemo(() => {
-    const loanAmount = calcPrice - calcDown;
-    if (loanAmount <= 0 || calcMonths <= 0) return [];
-    const r = calcRate / 100 / 12;
-    let remaining = loanAmount;
-    const data = [];
-    for (let m = 1; m <= calcMonths; m++) {
-      const interest = remaining * r;
-      const principal = calcResult.monthlyPayment - interest;
-      remaining = Math.max(0, remaining - principal);
-      if (m % Math.max(1, Math.floor(calcMonths / 24)) === 0 || m === 1 || m === calcMonths) {
-        data.push({
-          month: m,
-          remaining: Math.round(remaining),
-          paid: Math.round(loanAmount - remaining),
-          interest: Math.round(interest),
-        });
-      }
-    }
-    return data;
-  }, [calcPrice, calcDown, calcMonths, calcRate, calcResult.monthlyPayment]);
+  const chartData = useMemo(() => {
+    const scenarios = [
+      { name: '24 mo', ...calculateFinancing(price, downPayment, 24, rate) },
+      { name: '36 mo', ...calculateFinancing(price, downPayment, 36, rate) },
+      { name: '48 mo', ...calculateFinancing(price, downPayment, 48, rate) },
+      { name: '60 mo', ...calculateFinancing(price, downPayment, 60, rate) },
+      { name: '72 mo', ...calculateFinancing(price, downPayment, 72, rate) },
+    ];
+    return scenarios.map((s) => ({
+      name: s.name,
+      monthly: Math.round(s.monthlyPayment * 100) / 100,
+      interest: Math.round(s.totalInterest * 100) / 100,
+    }));
+  }, [price, downPayment, rate]);
 
   return (
-    <div className="bg-dark-800 border border-dark-700 rounded-2xl p-6 space-y-6">
-      <div className="flex items-center gap-3 mb-2">
-        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-500/15">
-          <Calculator size={22} className="text-amber-400" />
+    <div className="space-y-6">
+      {/* Inputs */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Calculator size={16} className="text-violet-400" />
+          <h3 className="text-sm font-semibold text-zinc-300">Financing Calculator</h3>
         </div>
-        <div>
-          <h3 className="text-lg font-semibold text-dark-50">Financing Calculator</h3>
-          <p className="text-sm text-dark-400">Explore different financing scenarios</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Price */}
-        <div>
-          <label className={labelClass}>Vehicle Price</label>
-          <input
-            type="number"
-            className={inputClass}
-            value={calcPrice || ''}
-            onChange={(e) => setCalcPrice(Number(e.target.value))}
-          />
-        </div>
-        {/* Down Payment */}
-        <div>
-          <label className={labelClass}>Down Payment</label>
-          <input
-            type="number"
-            className={inputClass}
-            value={calcDown || ''}
-            onChange={(e) => setCalcDown(Number(e.target.value))}
-          />
-        </div>
-        {/* Duration slider */}
-        <div>
-          <label className={labelClass}>Duration: {calcMonths} months</label>
-          <input
-            type="range"
-            min={6}
-            max={120}
-            step={6}
-            value={calcMonths}
-            onChange={(e) => setCalcMonths(Number(e.target.value))}
-            className="w-full accent-primary-500 mt-2"
-          />
-          <div className="flex justify-between text-xs text-dark-500 mt-1">
-            <span>6 mo</span>
-            <span>120 mo</span>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div>
+            <label className={labelClass}>Vehicle Price (EUR)</label>
+            <input
+              type="number"
+              className={inputClass}
+              value={price || ''}
+              onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+            />
           </div>
-        </div>
-        {/* Interest slider */}
-        <div>
-          <label className={labelClass}>Interest Rate: {calcRate.toFixed(1)}%</label>
-          <input
-            type="range"
-            min={0}
-            max={15}
-            step={0.1}
-            value={calcRate}
-            onChange={(e) => setCalcRate(Number(e.target.value))}
-            className="w-full accent-primary-500 mt-2"
-          />
-          <div className="flex justify-between text-xs text-dark-500 mt-1">
-            <span>0%</span>
-            <span>15%</span>
+          <div>
+            <label className={labelClass}>Down Payment (EUR)</label>
+            <input
+              type="number"
+              className={inputClass}
+              value={downPayment || ''}
+              onChange={(e) => setDownPayment(parseFloat(e.target.value) || 0)}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Duration (Months)</label>
+            <input
+              type="number"
+              className={inputClass}
+              value={months || ''}
+              onChange={(e) => setMonths(parseInt(e.target.value) || 0)}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Interest Rate (%)</label>
+            <input
+              type="number"
+              step="0.01"
+              className={inputClass}
+              value={rate || ''}
+              onChange={(e) => setRate(parseFloat(e.target.value) || 0)}
+            />
           </div>
         </div>
       </div>
 
       {/* Results */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-dark-850 rounded-xl p-4 border border-dark-700">
-          <p className="text-sm text-dark-400">Monthly Payment</p>
-          <p className="text-2xl font-bold text-primary-400 mt-1">{formatCurrency(calcResult.monthlyPayment)}</p>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Loan Amount</p>
+          <p className="text-lg font-semibold text-zinc-50">{formatCurrency(result.loanAmount)}</p>
         </div>
-        <div className="bg-dark-850 rounded-xl p-4 border border-dark-700">
-          <p className="text-sm text-dark-400">Total Interest</p>
-          <p className="text-2xl font-bold text-amber-400 mt-1">{formatCurrency(calcResult.totalInterest)}</p>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Monthly Payment</p>
+          <p className="text-lg font-semibold text-violet-400">{formatCurrency(result.monthlyPayment)}</p>
         </div>
-        <div className="bg-dark-850 rounded-xl p-4 border border-dark-700">
-          <p className="text-sm text-dark-400">Total Cost</p>
-          <p className="text-2xl font-bold text-dark-100 mt-1">{formatCurrency(calcResult.totalCost)}</p>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Total Interest</p>
+          <p className="text-lg font-semibold text-red-400">{formatCurrency(result.totalInterest)}</p>
+        </div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Total Cost</p>
+          <p className="text-lg font-semibold text-zinc-50">{formatCurrency(result.totalCost)}</p>
         </div>
       </div>
 
-      {/* Amortization Chart */}
-      {amortizationData.length > 0 && (
-        <div>
-          <h4 className="text-sm font-medium text-dark-300 mb-3">Amortization Schedule</h4>
-          <div className="h-64 bg-dark-850 rounded-xl p-4 border border-dark-700">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={amortizationData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="month" stroke="#64748b" fontSize={12} label={{ value: 'Month', position: 'insideBottom', offset: -5, fill: '#64748b' }} />
-                <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-                  labelStyle={{ color: '#94a3b8' }}
-                  formatter={(value, name) => [formatCurrency(Number(value)), String(name) === 'remaining' ? 'Remaining' : 'Paid Off']}
-                  labelFormatter={(label) => `Month ${String(label)}`}
-                />
-                <Bar dataKey="paid" stackId="a" fill="#22c55e" radius={[0, 0, 0, 0]} name="Paid Off" />
-                <Bar dataKey="remaining" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Remaining" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+      {/* Duration comparison chart */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+        <h3 className="text-sm font-semibold text-zinc-300 mb-4">Duration Comparison</h3>
+        <p className="text-xs text-zinc-500 mb-4">
+          Compare monthly payments and total interest across different loan durations.
+        </p>
+        <div className="h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+              <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#a1a1aa' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#71717a' }} tickFormatter={(v: number) => `${Math.round(v)}`} />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend
+                formatter={(value: string) => <span className="text-xs text-zinc-400">{value}</span>}
+                iconSize={8}
+              />
+              <Bar dataKey="monthly" name="Monthly Payment" fill="#8b5cf6" radius={[4, 4, 0, 0]} barSize={32} />
+              <Bar dataKey="interest" name="Total Interest" fill="#f87171" radius={[4, 4, 0, 0]} barSize={32} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
-      )}
+      </div>
+
+      {/* Summary table */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-zinc-800">
+          <h3 className="text-sm font-semibold text-zinc-300">Detailed Comparison</h3>
+        </div>
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-zinc-800">
+              <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">Duration</th>
+              <th className="px-4 py-3.5 text-right text-xs text-zinc-500 uppercase tracking-wider font-medium">Monthly</th>
+              <th className="px-4 py-3.5 text-right text-xs text-zinc-500 uppercase tracking-wider font-medium">Interest</th>
+              <th className="px-4 py-3.5 text-right text-xs text-zinc-500 uppercase tracking-wider font-medium">Total Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[24, 36, 48, 60, 72].map((m) => {
+              const r = calculateFinancing(price, downPayment, m, rate);
+              const isSelected = m === months;
+              return (
+                <tr
+                  key={m}
+                  className={`border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors ${isSelected ? 'bg-violet-500/5' : ''}`}
+                >
+                  <td className="px-4 py-3.5 text-sm text-zinc-50">
+                    {m} months
+                    {isSelected && (
+                      <span className="ml-2 text-xs text-violet-400">Selected</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3.5 text-sm text-zinc-50 text-right">{formatCurrency(r.monthlyPayment)}</td>
+                  <td className="px-4 py-3.5 text-sm text-red-400 text-right">{formatCurrency(r.totalInterest)}</td>
+                  <td className="px-4 py-3.5 text-sm text-zinc-50 text-right">{formatCurrency(r.totalCost)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
