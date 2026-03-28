@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 title DriveLedger - Development Server
 color 0A
 
@@ -26,12 +27,44 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+:: Ask user what to do
+echo   What would you like to do?
+echo.
+echo   [1] Start normally
+echo   [2] Reset ALL data (delete database + start fresh)
+echo.
+set /p "choice=  Enter choice (1 or 2): "
+
+if "!choice!"=="2" (
+    echo.
+    echo   ========================================
+    echo   WARNING: This will DELETE ALL DATA!
+    echo   - All vehicles, costs, repairs, etc.
+    echo   - All user accounts
+    echo   - All settings and preferences
+    echo   ========================================
+    echo.
+    set /p "confirm=  Type RESET to confirm: "
+    if /i "!confirm!"=="RESET" (
+        echo.
+        echo [RESET] Stopping database container...
+        docker stop driveledger-dev-db >nul 2>nul
+        echo [RESET] Removing database container and data...
+        docker rm driveledger-dev-db >nul 2>nul
+        echo [RESET] Database deleted. A fresh database will be created.
+        echo.
+    ) else (
+        echo [INFO] Reset cancelled. Starting normally...
+        echo.
+    )
+)
+
 :: Start MariaDB container if not running
 docker ps --filter "name=driveledger-dev-db" --format "{{.Names}}" | findstr /i "driveledger-dev-db" >nul 2>nul
 if %errorlevel% neq 0 (
     echo [INFO] Starting MariaDB database container...
     docker run -d --name driveledger-dev-db -p 3306:3306 -e MYSQL_ROOT_PASSWORD=rootpassword -e MYSQL_DATABASE=driveledger -e MYSQL_USER=driveledger -e MYSQL_PASSWORD=driveledger mariadb:11 >nul 2>nul
-    if %errorlevel% neq 0 (
+    if !errorlevel! neq 0 (
         :: Container might exist but be stopped
         docker start driveledger-dev-db >nul 2>nul
     )
@@ -44,7 +77,7 @@ if %errorlevel% neq 0 (
 :: Always install/update dependencies
 echo [INFO] Installing dependencies...
 call npm install
-if %errorlevel% neq 0 (
+if !errorlevel! neq 0 (
     echo [ERROR] Failed to install dependencies.
     pause
     exit /b 1

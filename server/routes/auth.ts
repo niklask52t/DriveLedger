@@ -111,8 +111,9 @@ router.post('/register', async (req: Request, res: Response) => {
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: COOKIE_MAX_AGE,
+      path: '/',
     });
 
     return res.status(201).json({
@@ -168,8 +169,9 @@ router.post('/login', async (req: Request, res: Response) => {
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: COOKIE_MAX_AGE,
+      path: '/',
     });
 
     return res.status(200).json({
@@ -230,7 +232,8 @@ router.post('/logout', (_req: Request, res: Response) => {
     res.clearCookie('refreshToken', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
+      path: '/',
     });
 
     return res.status(200).json({ message: 'Logged out successfully' });
@@ -533,7 +536,7 @@ router.delete('/account', combinedAuthMiddleware, async (req: Request, res: Resp
       conn.release();
     }
 
-    res.clearCookie('refreshToken');
+    res.clearCookie('refreshToken', { path: '/' });
     return res.status(200).json({ message: 'Account deleted' });
   } catch (err: any) {
     console.error('[AUTH] Delete account error:', err);

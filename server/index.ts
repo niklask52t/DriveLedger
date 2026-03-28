@@ -69,7 +69,10 @@ app.use(express.text({ limit: '10mb', type: 'text/csv' }));
 
 // Rate limiting
 app.use('/api/', generalRateLimiter);
-app.use('/api/auth/', authRateLimiter);
+// Only rate-limit login/register/forgot-password, NOT refresh/me/logout
+app.use('/api/auth/login', authRateLimiter);
+app.use('/api/auth/register', authRateLimiter);
+app.use('/api/auth/forgot-password', authRateLimiter);
 
 // Mount routes
 app.use('/api/auth', authRoutes);

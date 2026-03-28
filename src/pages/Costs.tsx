@@ -37,6 +37,8 @@ const categories: CostCategory[] = [
 
 const frequencyKeys: CostFrequency[] = ['monatlich', 'quartal', 'halbjaehrlich', 'jaehrlich', 'einmalig'];
 
+const frequencies = frequencyKeys.map(f => ({ value: f, label: getFrequencyLabel(f) }));
+
 const emptyCost: Omit<Cost, 'id' | 'createdAt'> = {
   vehicleId: '',
   name: '',
