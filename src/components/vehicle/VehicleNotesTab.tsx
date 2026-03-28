@@ -1,9 +1,14 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, Pin, PinOff, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Pencil, Trash2, Pin, PinOff, ChevronDown, ChevronUp, Eye, PenLine } from 'lucide-react';
 import Modal from '../Modal';
 import TagInput from '../TagInput';
+import MarkdownRenderer from '../MarkdownRenderer';
+import ExtraFields from '../ExtraFields';
+import AttachmentManager from '../AttachmentManager';
+import { useExtraFields } from '../../hooks/useExtraFields';
 import { api } from '../../api';
 import { formatDate } from '../../utils';
+import { useI18n } from '../../contexts/I18nContext';
 import type { AppState, VehicleNote } from '../../types';
 
 const inputClass =
@@ -22,6 +27,7 @@ const emptyForm = {
   content: '',
   isPinned: false,
   tags: [] as string[],
+  extraFields: {} as Record<string, string>,
 };
 
 export default function VehicleNotesTab({ vehicleId, state, setState }: Props) {
@@ -30,6 +36,11 @@ export default function VehicleNotesTab({ vehicleId, state, setState }: Props) {
   const [form, setForm] = useState(emptyForm);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const extraFieldDefs = useExtraFields();
+
+  const { t } = useI18n();
 
   const notes = state.vehicleNotes
     .filter((n) => n.vehicleId === vehicleId)
@@ -42,6 +53,7 @@ export default function VehicleNotesTab({ vehicleId, state, setState }: Props) {
   const openAdd = () => {
     setForm({ ...emptyForm });
     setEditingId(null);
+    setPreviewMode(false);
     setShowModal(true);
   };
 
@@ -51,8 +63,10 @@ export default function VehicleNotesTab({ vehicleId, state, setState }: Props) {
       content: n.content,
       isPinned: n.isPinned,
       tags: n.tags || [],
+      extraFields: (n as any).extraFields || {},
     });
     setEditingId(n.id);
+    setPreviewMode(false);
     setShowModal(true);
   };
 
@@ -90,56 +104,115 @@ export default function VehicleNotesTab({ vehicleId, state, setState }: Props) {
     }
   };
 
+  const handleBulkPin = async (pinned: boolean) => {
+    if (selectedIds.size === 0) return;
+    try {
+      const updatedNotes = await api.bulkPinNotes(Array.from(selectedIds), pinned);
+      const updatedMap = new Map(updatedNotes.map((n) => [n.id, n]));
+      setState({
+        ...state,
+        vehicleNotes: state.vehicleNotes.map((n) => updatedMap.get(n.id) || n),
+      });
+      setSelectedIds(new Set());
+    } catch (e) {
+      console.error('Failed to bulk pin/unpin', e);
+    }
+  };
+
+  const toggleSelectNote = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <p className="text-sm text-zinc-400">
-          {notes.length} note{notes.length !== 1 ? 's' : ''}
-          {notes.filter((n) => n.isPinned).length > 0 && ` (${notes.filter((n) => n.isPinned).length} pinned)`}
+          {t("vehicle_tab.notes.count", { count: notes.length })}
+          {notes.filter((n) => n.isPinned).length > 0 && ` (${t("vehicle_tab.notes.pinned", { count: notes.filter((n) => n.isPinned).length })})`}
         </p>
-        <button
-          onClick={openAdd}
-          className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2 transition-colors"
-        >
-          <Plus size={16} />
-          Add Note
-        </button>
+        <div className="flex items-center gap-2">
+          {selectedIds.size > 0 && (
+            <>
+              <span className="text-xs text-zinc-500">{selectedIds.size} selected</span>
+              <button
+                onClick={() => handleBulkPin(true)}
+                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-1.5 transition-colors"
+              >
+                <Pin size={14} />
+                Pin
+              </button>
+              <button
+                onClick={() => handleBulkPin(false)}
+                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-1.5 transition-colors"
+              >
+                <PinOff size={14} />
+                Unpin
+              </button>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="text-zinc-500 hover:text-zinc-300 text-xs transition-colors"
+              >
+                Clear
+              </button>
+            </>
+          )}
+          <button
+            onClick={openAdd}
+            className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2 transition-colors"
+          >
+            <Plus size={16} />
+            {t("vehicle_tab.notes.add")}
+          </button>
+        </div>
       </div>
 
       {notes.length === 0 ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
-          <p className="text-zinc-500 text-sm">No notes yet.</p>
+          <p className="text-zinc-500 text-sm">{t("vehicle_tab.notes.no_notes")}</p>
         </div>
       ) : (
         <div className="space-y-3">
           {notes.map((n) => {
             const isExpanded = expandedId === n.id;
-            const preview = n.content.length > 120 ? n.content.slice(0, 120) + '...' : n.content;
+            const hasLongContent = n.content.length > 120;
 
             return (
               <div
                 key={n.id}
-                className={`bg-zinc-900 border rounded-xl overflow-hidden transition-colors ${n.isPinned ? 'border-violet-500/30' : 'border-zinc-800'}`}
+                className={`bg-zinc-900 border rounded-xl overflow-hidden transition-colors ${n.isPinned ? 'border-l-2 border-l-violet-500 border-violet-500/30' : 'border-zinc-800'}`}
               >
                 <div className="px-5 py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-1">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(n.id)}
+                          onChange={() => toggleSelectNote(n.id)}
+                          className="w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-violet-500 focus:ring-violet-500/30 shrink-0"
+                        />
                         {n.isPinned && <Pin size={12} className="text-violet-400 shrink-0" />}
                         <h3 className="text-sm font-medium text-zinc-50 truncate">{n.title}</h3>
                       </div>
-                      <p className="text-sm text-zinc-400 whitespace-pre-wrap">
-                        {isExpanded ? n.content : preview}
-                      </p>
-                      {n.content.length > 120 && (
+                      {isExpanded ? (
+                        <MarkdownRenderer content={n.content} className="text-sm text-zinc-300" />
+                      ) : (
+                        <p className="text-sm text-zinc-400 whitespace-pre-wrap">
+                          {hasLongContent ? n.content.slice(0, 120) + '...' : n.content}
+                        </p>
+                      )}
+                      {hasLongContent && (
                         <button
                           onClick={() => setExpandedId(isExpanded ? null : n.id)}
                           className="text-xs text-violet-400 hover:text-violet-300 mt-1 inline-flex items-center gap-1 transition-colors"
                         >
                           {isExpanded ? (
-                            <>Show less <ChevronUp size={12} /></>
+                            <>{t("vehicle_tab.notes.show_less")} <ChevronUp size={12} /></>
                           ) : (
-                            <>Show more <ChevronDown size={12} /></>
+                            <>{t("vehicle_tab.notes.show_more")} <ChevronDown size={12} /></>
                           )}
                         </button>
                       )}
@@ -154,7 +227,7 @@ export default function VehicleNotesTab({ vehicleId, state, setState }: Props) {
                       <button
                         onClick={() => handleTogglePin(n.id)}
                         className="text-zinc-400 hover:text-violet-400 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center transition-colors"
-                        title={n.isPinned ? 'Unpin' : 'Pin'}
+                        title={n.isPinned ? t('notes.unpin') : t('notes.pin')}
                       >
                         {n.isPinned ? <PinOff size={14} /> : <Pin size={14} />}
                       </button>
@@ -170,13 +243,13 @@ export default function VehicleNotesTab({ vehicleId, state, setState }: Props) {
                             onClick={() => { handleDelete(n.id); setDeleteConfirm(null); }}
                             className="bg-red-400/10 text-red-400 hover:bg-red-400/20 rounded-lg h-9 px-3 text-xs transition-colors"
                           >
-                            Confirm
+                            {t("common.confirm")}
                           </button>
                           <button
                             onClick={() => setDeleteConfirm(null)}
                             className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-xs transition-colors"
                           >
-                            Cancel
+                            {t("common.cancel")}
                           </button>
                         </div>
                       ) : (
@@ -199,43 +272,80 @@ export default function VehicleNotesTab({ vehicleId, state, setState }: Props) {
       <Modal
         isOpen={showModal}
         onClose={() => { setShowModal(false); setEditingId(null); }}
-        title={editingId ? 'Edit Note' : 'Add Note'}
+        title={editingId ? t('vehicle_tab.notes.edit') : t('vehicle_tab.notes.add')}
         footer={
           <>
             <button
               onClick={() => { setShowModal(false); setEditingId(null); }}
               className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm transition-colors"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               onClick={handleSave}
               className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium transition-colors"
             >
-              {editingId ? 'Update' : 'Add'}
+              {editingId ? t("common.update") : t("common.add")}
             </button>
           </>
         }
       >
         <div className="space-y-5">
           <div>
-            <label className={labelClass}>Title</label>
+            <label className={labelClass}>{t("common.title")}</label>
             <input
               type="text"
               className={inputClass}
-              placeholder="Note title"
+              placeholder={t("vehicle_tab.notes.note_title")}
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
             />
           </div>
           <div>
-            <label className={labelClass}>Content</label>
-            <textarea
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 min-h-[200px] resize-none"
-              placeholder="Write your note..."
-              value={form.content}
-              onChange={(e) => setForm({ ...form, content: e.target.value })}
-            />
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-zinc-400">{t("vehicle_tab.notes.content")}</label>
+              <div className="flex items-center bg-zinc-800 rounded-lg p-0.5">
+                <button
+                  onClick={() => setPreviewMode(false)}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    !previewMode ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <PenLine size={12} />
+                  {t("common.edit")}
+                </button>
+                <button
+                  onClick={() => setPreviewMode(true)}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    previewMode ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <Eye size={12} />
+                  {t("vehicle_tab.notes.preview")}
+                </button>
+              </div>
+            </div>
+            {previewMode ? (
+              <div className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 min-h-[200px]">
+                {form.content ? (
+                  <MarkdownRenderer content={form.content} className="text-sm text-zinc-300" />
+                ) : (
+                  <p className="text-sm text-zinc-600">{t("vehicle_tab.notes.nothing_to_preview")}</p>
+                )}
+              </div>
+            ) : (
+              <>
+                <textarea
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 min-h-[200px] resize-none"
+                  placeholder={t("vehicle_tab.notes.write_note")}
+                  value={form.content}
+                  onChange={(e) => setForm({ ...form, content: e.target.value })}
+                />
+                <p className="text-xs text-zinc-600 mt-1">
+                  Supports <strong className="text-zinc-500">**bold**</strong>, <em className="text-zinc-500">*italic*</em>, <code className="text-zinc-500 bg-zinc-800 px-1 rounded">`code`</code>, <span className="text-zinc-500">[links](url)</span>, <span className="text-zinc-500"># headers</span>
+                </p>
+              </>
+            )}
           </div>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -244,12 +354,22 @@ export default function VehicleNotesTab({ vehicleId, state, setState }: Props) {
               checked={form.isPinned}
               onChange={(e) => setForm({ ...form, isPinned: e.target.checked })}
             />
-            <span className="text-sm text-zinc-300">Pin this note</span>
+            <span className="text-sm text-zinc-300">{t("vehicle_tab.notes.pin_note")}</span>
           </label>
           <div>
-            <label className={labelClass}>Tags</label>
+            <label className={labelClass}>{t("common.tags")}</label>
             <TagInput tags={form.tags} onChange={(tags) => setForm({ ...form, tags })} />
           </div>
+          <ExtraFields
+            recordType="notes"
+            values={form.extraFields}
+            onChange={(extraFields) => setForm({ ...form, extraFields })}
+            definitions={extraFieldDefs}
+          />
+
+          {editingId && (
+            <AttachmentManager recordType="notes" recordId={editingId} />
+          )}
         </div>
       </Modal>
     </div>

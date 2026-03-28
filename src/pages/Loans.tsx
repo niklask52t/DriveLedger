@@ -2,8 +2,15 @@ import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Pencil, Trash2, ChevronDown } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { api } from '../api';
 import Modal from '../components/Modal';
+import TagInput from '../components/TagInput';
+import BulkActions from '../components/BulkActions';
+import ExtraFields from '../components/ExtraFields';
+import { useExtraFields } from '../hooks/useExtraFields';
+import { useUnits } from '../hooks/useUnits';
 import { cn } from '../lib/utils';
+import { useI18n } from '../contexts/I18nContext';
 import { formatCurrency, formatDate, formatMonthYear, getLoanProgress, generateLoanSchedule } from '../utils';
 import type { AppState, Loan } from '../types';
 
@@ -22,13 +29,21 @@ const emptyLoan: Omit<Loan, 'id' | 'createdAt'> = {
   durationMonths: 12,
   additionalSavingsPerMonth: 0,
   notes: '',
+  tags: [],
 };
 
 export default function Loans({ state, setState }: Props) {
+  const { t } = useI18n();
+  const extraFieldDefs = useExtraFields();
+  const { fmtDistance } = useUnits();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Loan | null>(null);
   const [form, setForm] = useState(emptyLoan);
+  const [extraFieldValues, setExtraFieldValues] = useState<Record<string, string>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const allTags = useMemo(() => [...new Set(state.loans.flatMap(l => l.tags || []))], [state.loans]);
 
   const totalDebt = useMemo(
     () => state.loans.reduce((sum, l) => sum + getLoanProgress(l).remaining, 0),
@@ -48,6 +63,7 @@ export default function Loans({ state, setState }: Props) {
   const openAdd = () => {
     setEditing(null);
     setForm({ ...emptyLoan, vehicleId: state.vehicles[0]?.id || '' });
+    setExtraFieldValues({});
     setModalOpen(true);
   };
 
@@ -63,32 +79,62 @@ export default function Loans({ state, setState }: Props) {
       durationMonths: loan.durationMonths,
       additionalSavingsPerMonth: loan.additionalSavingsPerMonth,
       notes: loan.notes,
+      tags: loan.tags || [],
     });
+    setExtraFieldValues((loan as any).extraFields || {});
     setModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim() || !form.vehicleId) return;
-    if (editing) {
-      setState({
-        ...state,
-        loans: state.loans.map(l =>
-          l.id === editing.id ? { ...l, ...form } : l
-        ),
-      });
-    } else {
-      const newLoan: Loan = {
-        ...form,
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString(),
-      };
-      setState({ ...state, loans: [...state.loans, newLoan] });
+    const payload = { ...form, extraFields: extraFieldValues };
+    try {
+      if (editing) {
+        const updated = await api.updateLoan(editing.id, payload);
+        setState({
+          ...state,
+          loans: state.loans.map(l =>
+            l.id === editing.id ? updated : l
+          ),
+        });
+      } else {
+        const newLoan = await api.createLoan(payload);
+        setState({ ...state, loans: [...state.loans, newLoan] });
+      }
+      setModalOpen(false);
+    } catch {
+      // ignore
     }
-    setModalOpen(false);
   };
 
-  const handleDelete = (id: string) => {
-    setState({ ...state, loans: state.loans.filter(l => l.id !== id) });
+  const handleBulkDelete = async () => {
+    try {
+      for (const id of selectedIds) {
+        await api.deleteLoan(id);
+      }
+      setState({ ...state, loans: state.loans.filter(l => !selectedIds.has(l.id)) });
+      setSelectedIds(new Set());
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await api.deleteLoan(id);
+      setState({ ...state, loans: state.loans.filter(l => l.id !== id) });
+    } catch {
+      // ignore
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const selectClasses = "w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 outline-none focus:border-violet-500/50 appearance-none";
@@ -125,9 +171,9 @@ export default function Loans({ state, setState }: Props) {
       <div className="flex items-start justify-between">
         <div className="grid grid-cols-3 gap-6">
           {[
-            { label: 'Total Debt', value: formatCurrency(totalDebt), color: 'text-red-400' },
-            { label: 'Monthly Payments', value: formatCurrency(totalMonthly), color: 'text-violet-400' },
-            { label: 'Active Loans', value: String(activeCount), color: 'text-emerald-400' },
+            { label: t('loans.total_debt'), value: formatCurrency(totalDebt), color: 'text-red-400' },
+            { label: t('loans.monthly_payments'), value: formatCurrency(totalMonthly), color: 'text-violet-400' },
+            { label: t('loans.active_loans'), value: String(activeCount), color: 'text-emerald-400' },
           ].map(s => (
             <div key={s.label}>
               <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{s.label}</p>
@@ -137,15 +183,30 @@ export default function Loans({ state, setState }: Props) {
         </div>
         <button onClick={openAdd} className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2">
           <Plus size={16} />
-          Add Loan
+          {t('loans.add')}
         </button>
       </div>
+
+      {/* Bulk Actions */}
+      <BulkActions
+        selectedCount={selectedIds.size}
+        selectedIds={Array.from(selectedIds)}
+        onDelete={handleBulkDelete}
+        onDeselect={() => setSelectedIds(new Set())}
+        recordType="loans"
+        vehicles={state.vehicles}
+        onComplete={async () => {
+          const loans = await api.getLoans();
+          setState({ ...state, loans });
+          setSelectedIds(new Set());
+        }}
+      />
 
       {/* Loan cards */}
       <div className="space-y-5">
         {state.loans.length === 0 && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
-            <p className="text-sm text-zinc-500">No loans yet. Add your first loan to track your financing.</p>
+            <p className="text-sm text-zinc-500">{t('loans.no_loans')}</p>
           </div>
         )}
         {state.loans.map(loan => {
@@ -158,21 +219,41 @@ export default function Loans({ state, setState }: Props) {
             <motion.div
               key={loan.id}
               layout
-              className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden"
+              className={cn(
+                "bg-zinc-900 border rounded-xl overflow-hidden",
+                selectedIds.has(loan.id) ? 'border-violet-500' : 'border-zinc-800'
+              )}
             >
               <div className="p-6">
                 {/* Header */}
                 <div className="flex items-start justify-between mb-5">
-                  <div>
-                    <div className="flex items-center gap-3 mb-1">
-                      <h3 className="text-base font-semibold text-zinc-50">{loan.name}</h3>
-                      <span className="px-2.5 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-400 border border-zinc-700">
-                        {vehicleName}
-                      </span>
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(loan.id)}
+                      onChange={() => toggleSelect(loan.id)}
+                      className="mt-1.5 h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-violet-500 focus:ring-violet-500/50 cursor-pointer"
+                    />
+                    <div>
+                      <div className="flex items-center gap-3 mb-1">
+                        <h3 className="text-base font-semibold text-zinc-50">{loan.name}</h3>
+                        <span className="px-2.5 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-400 border border-zinc-700">
+                          {vehicleName}
+                        </span>
+                      </div>
+                      <p className="text-sm text-zinc-500">
+                        {t('loans.started')} {formatDate(loan.startDate)} &middot; {loan.durationMonths} {t('loans.months')} &middot; {loan.interestRate}% {t('loans.interest')}
+                      </p>
+                      {(loan.tags || []).length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {(loan.tags || []).map(tag => (
+                            <span key={tag} className="inline-flex items-center bg-violet-500/15 text-violet-300 text-xs px-2 py-0.5 rounded-md">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <p className="text-sm text-zinc-500">
-                      Started {formatDate(loan.startDate)} &middot; {loan.durationMonths} months &middot; {loan.interestRate}% interest
-                    </p>
                   </div>
                   <div className="flex items-center gap-1">
                     <button onClick={() => openEdit(loan)} className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center">
@@ -189,19 +270,19 @@ export default function Loans({ state, setState }: Props) {
                   <CircleProgress percent={progress.percent} />
                   <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-5">
                     <div>
-                      <p className="text-xs text-zinc-500 mb-0.5">Total</p>
+                      <p className="text-xs text-zinc-500 mb-0.5">{t('common.total')}</p>
                       <p className="text-sm font-medium text-zinc-50">{formatCurrency(loan.totalAmount)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-zinc-500 mb-0.5">Paid</p>
+                      <p className="text-xs text-zinc-500 mb-0.5">{t('loans.paid')}</p>
                       <p className="text-sm font-medium text-emerald-400">{formatCurrency(progress.paid)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-zinc-500 mb-0.5">Remaining</p>
+                      <p className="text-xs text-zinc-500 mb-0.5">{t('loans.remaining')}</p>
                       <p className="text-sm font-medium text-red-400">{formatCurrency(progress.remaining)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-zinc-500 mb-0.5">Monthly</p>
+                      <p className="text-xs text-zinc-500 mb-0.5">{t('common.monthly')}</p>
                       <p className="text-sm font-medium text-violet-400">{formatCurrency(loan.monthlyPayment + loan.additionalSavingsPerMonth)}</p>
                     </div>
                   </div>
@@ -218,8 +299,8 @@ export default function Loans({ state, setState }: Props) {
                     />
                   </div>
                   <div className="flex justify-between mt-1.5">
-                    <span className="text-xs text-zinc-500">{progress.monthsElapsed} months elapsed</span>
-                    <span className="text-xs text-zinc-500">{Math.max(0, loan.durationMonths - progress.monthsElapsed)} months remaining</span>
+                    <span className="text-xs text-zinc-500">{progress.monthsElapsed} {t('loans.months_elapsed')}</span>
+                    <span className="text-xs text-zinc-500">{Math.max(0, loan.durationMonths - progress.monthsElapsed)} {t('loans.months_remaining')}</span>
                   </div>
                 </div>
 
@@ -229,7 +310,7 @@ export default function Loans({ state, setState }: Props) {
                   className="mt-4 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center gap-1.5 transition-colors"
                 >
                   <ChevronDown size={14} className={cn('transition-transform', isExpanded && 'rotate-180')} />
-                  {isExpanded ? 'Hide Details' : 'Show Details'}
+                  {isExpanded ? t('loans.hide_details') : t('loans.show_details')}
                 </button>
               </div>
 
@@ -246,7 +327,7 @@ export default function Loans({ state, setState }: Props) {
                     <div className="border-t border-zinc-800 p-6 space-y-6">
                       {/* Chart */}
                       <div>
-                        <h4 className="text-sm font-medium text-zinc-50 mb-4">Repayment Schedule</h4>
+                        <h4 className="text-sm font-medium text-zinc-50 mb-4">{t('loans.repayment_schedule')}</h4>
                         <div className="h-64">
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={schedule}>
@@ -268,8 +349,8 @@ export default function Loans({ state, setState }: Props) {
                                 labelStyle={{ color: '#a1a1aa' }}
                                 formatter={(val: number) => formatCurrency(val)}
                               />
-                              <Area type="monotone" dataKey="remainingDebt" name="Remaining Debt" stroke="#f87171" fill="#f87171" fillOpacity={0.1} />
-                              <Area type="monotone" dataKey="totalSaved" name="Savings" stroke="#34d399" fill="#34d399" fillOpacity={0.1} />
+                              <Area type="monotone" dataKey="remainingDebt" name={t('loans.remaining_debt')} stroke="#f87171" fill="#f87171" fillOpacity={0.1} />
+                              <Area type="monotone" dataKey="totalSaved" name={t('savings.title')} stroke="#34d399" fill="#34d399" fillOpacity={0.1} />
                             </AreaChart>
                           </ResponsiveContainer>
                         </div>
@@ -280,12 +361,12 @@ export default function Loans({ state, setState }: Props) {
                         <table className="w-full">
                           <thead className="bg-zinc-950/50">
                             <tr>
-                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">#</th>
-                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">Date</th>
-                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Payment</th>
-                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Principal</th>
-                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Savings</th>
-                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Remaining</th>
+                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">{t('schedule.nr')}</th>
+                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">{t('schedule.date')}</th>
+                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">{t('schedule.payment')}</th>
+                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">{t('schedule.principal')}</th>
+                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">{t('schedule.savings')}</th>
+                              <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">{t('schedule.remaining')}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -315,18 +396,18 @@ export default function Loans({ state, setState }: Props) {
       {state.loans.length > 1 && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
           <div className="px-6 py-4">
-            <h3 className="text-sm font-medium text-zinc-50">Loan Summary</h3>
+            <h3 className="text-sm font-medium text-zinc-50">{t('loans.loan_summary')}</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-zinc-950/50">
                 <tr>
-                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">Name</th>
-                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">Vehicle</th>
-                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Total</th>
-                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Monthly</th>
-                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Remaining</th>
-                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Progress</th>
+                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">{t('common.name')}</th>
+                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">{t('common.vehicle')}</th>
+                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">{t('common.total')}</th>
+                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">{t('common.monthly')}</th>
+                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">{t('loans.remaining')}</th>
+                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">{t('loans.progress')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -351,7 +432,7 @@ export default function Loans({ state, setState }: Props) {
                   );
                 })}
                 <tr className="bg-zinc-950/30">
-                  <td className="px-4 py-3.5 text-sm text-zinc-50 font-semibold">Total</td>
+                  <td className="px-4 py-3.5 text-sm text-zinc-50 font-semibold">{t('common.total')}</td>
                   <td className="px-4 py-3.5" />
                   <td className="px-4 py-3.5 text-sm text-zinc-50 font-semibold text-right">
                     {formatCurrency(state.loans.reduce((s, l) => s + l.totalAmount, 0))}
@@ -374,15 +455,15 @@ export default function Loans({ state, setState }: Props) {
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editing ? 'Edit Loan' : 'Add Loan'}
+        title={editing ? t('loans.edit') : t('loans.add')}
         size="lg"
         footer={
           <>
             <button onClick={() => setModalOpen(false)} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm">
-              Cancel
+              {t('common.cancel')}
             </button>
             <button onClick={handleSave} className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium">
-              {editing ? 'Save Changes' : 'Add Loan'}
+              {editing ? t('common.save_changes') : t('loans.add')}
             </button>
           </>
         }
@@ -390,21 +471,21 @@ export default function Loans({ state, setState }: Props) {
         <div className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Vehicle</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.vehicle')}</label>
               <select
                 value={form.vehicleId}
                 onChange={e => setForm({ ...form, vehicleId: e.target.value })}
                 className={selectClasses}
                 style={{ background: chevronBg }}
               >
-                <option value="">Select vehicle</option>
+                <option value="">{t('common.select_vehicle')}</option>
                 {state.vehicles.map(v => (
                   <option key={v.id} value={v.id}>{v.name}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Name</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.name')}</label>
               <input
                 type="text"
                 value={form.name}
@@ -417,7 +498,7 @@ export default function Loans({ state, setState }: Props) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Total Amount</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('loans.total_amount')}</label>
               <input
                 type="number"
                 value={form.totalAmount || ''}
@@ -427,7 +508,7 @@ export default function Loans({ state, setState }: Props) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Monthly Payment</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('loans.monthly_payment')}</label>
               <input
                 type="number"
                 value={form.monthlyPayment || ''}
@@ -440,7 +521,7 @@ export default function Loans({ state, setState }: Props) {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Interest Rate (%)</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('loans.interest_rate')}</label>
               <input
                 type="number"
                 step="0.1"
@@ -451,7 +532,7 @@ export default function Loans({ state, setState }: Props) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Duration (months)</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('loans.duration')}</label>
               <input
                 type="number"
                 value={form.durationMonths || ''}
@@ -461,7 +542,7 @@ export default function Loans({ state, setState }: Props) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Extra Savings/mo</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('loans.extra_savings')}</label>
               <input
                 type="number"
                 value={form.additionalSavingsPerMonth || ''}
@@ -473,7 +554,7 @@ export default function Loans({ state, setState }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Start Date</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.start_date')}</label>
             <input
               type="date"
               value={form.startDate}
@@ -483,14 +564,30 @@ export default function Loans({ state, setState }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Notes</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.tags')}</label>
+            <TagInput
+              tags={form.tags || []}
+              onChange={tags => setForm({ ...form, tags })}
+              suggestions={allTags}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.notes')}</label>
             <textarea
               value={form.notes}
               onChange={e => setForm({ ...form, notes: e.target.value })}
-              placeholder="Optional notes..."
+              placeholder={t('common.optional_notes')}
               className="w-full min-h-[100px] h-auto bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 resize-none"
             />
           </div>
+
+          <ExtraFields
+            recordType="loan"
+            values={extraFieldValues}
+            onChange={setExtraFieldValues}
+            definitions={extraFieldDefs}
+          />
         </div>
       </Modal>
     </div>

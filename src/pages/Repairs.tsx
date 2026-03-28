@@ -1,14 +1,23 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Pencil, Trash2, ArrowUpDown, List, Clock } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowUpDown, List, Clock, Printer } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
   PieChart, Pie,
 } from 'recharts';
+import { api } from '../api';
 import Modal from '../components/Modal';
+import TagInput from '../components/TagInput';
+import TagFilter from '../components/TagFilter';
+import BulkActions from '../components/BulkActions';
+import ExtraFields from '../components/ExtraFields';
+import { useExtraFields } from '../hooks/useExtraFields';
+import ColumnSettings, { useColumnPreferences } from '../components/ColumnSettings';
 import { cn } from '../lib/utils';
 import { formatCurrency, formatDate, formatNumber, getTotalRepairCosts, getCategoryColor, getCategoryLabel } from '../utils';
 import { parseISO, format } from 'date-fns';
+import { useUnits } from '../hooks/useUnits';
+import { useI18n } from '../contexts/I18nContext';
 import type { AppState, Repair } from '../types';
 
 interface Props {
@@ -36,27 +45,64 @@ const emptyRepair: Omit<Repair, 'id' | 'createdAt'> = {
   cost: 0,
   mileage: 0,
   workshop: '',
+  tags: [],
 };
 
 type SortKey = 'date' | 'description' | 'category' | 'cost' | 'mileage' | 'workshop';
 type ViewMode = 'table' | 'timeline';
 
+const repairsColumns = [
+  { key: 'vehicle', label: 'Vehicle' },
+  { key: 'date', label: 'Date' },
+  { key: 'description', label: 'Description' },
+  { key: 'category', label: 'Category' },
+  { key: 'cost', label: 'Cost' },
+  { key: 'mileage', label: 'Mileage' },
+  { key: 'workshop', label: 'Workshop' },
+];
+
 export default function Repairs({ state, setState }: Props) {
+  const { t } = useI18n();
+  const { fmtDistance, distanceUnit } = useUnits();
+  const extraFieldDefs = useExtraFields();
+  const repairExtraFieldDefs = useMemo(() =>
+    extraFieldDefs.filter(d => d.recordType === 'repair').sort((a, b) => a.sortOrder - b.sortOrder),
+    [extraFieldDefs]
+  );
+  const allRepairsColumns = useMemo(() => [
+    ...repairsColumns,
+    ...repairExtraFieldDefs.map(d => ({ key: `extra_${d.fieldName}`, label: d.fieldName })),
+  ], [repairExtraFieldDefs]);
+  const { visibleColumns } = useColumnPreferences('repairs', allRepairsColumns);
+  const isVisible = (col: string) => visibleColumns.some(c => c.key === col);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Repair | null>(null);
   const [form, setForm] = useState(emptyRepair);
+  const [extraFieldValues, setExtraFieldValues] = useState<Record<string, string>>({});
   const [filterVehicle, setFilterVehicle] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [tagFilterMode, setTagFilterMode] = useState<'include' | 'exclude'>('include');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortAsc, setSortAsc] = useState(false);
   const [view, setView] = useState<ViewMode>('table');
+
+  const allTags = useMemo(() => [...new Set(state.repairs.flatMap(r => r.tags || []))], [state.repairs]);
 
   const filtered = useMemo(() => {
     let items = [...state.repairs];
     if (filterVehicle) items = items.filter(r => r.vehicleId === filterVehicle);
     if (filterCategory) items = items.filter(r => r.category === filterCategory);
+    if (filterTags.length > 0) {
+      if (tagFilterMode === 'include') {
+        items = items.filter(r => (r.tags || []).some(t => filterTags.includes(t)));
+      } else {
+        items = items.filter(r => !(r.tags || []).some(t => filterTags.includes(t)));
+      }
+    }
     return items;
-  }, [state.repairs, filterVehicle, filterCategory]);
+  }, [state.repairs, filterVehicle, filterCategory, filterTags, tagFilterMode]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -135,6 +181,7 @@ export default function Repairs({ state, setState }: Props) {
   const openAdd = () => {
     setEditing(null);
     setForm({ ...emptyRepair, vehicleId: state.vehicles[0]?.id || '', date: new Date().toISOString().split('T')[0] });
+    setExtraFieldValues({});
     setModalOpen(true);
   };
 
@@ -149,32 +196,68 @@ export default function Repairs({ state, setState }: Props) {
       cost: repair.cost,
       mileage: repair.mileage,
       workshop: repair.workshop,
+      tags: repair.tags || [],
     });
+    setExtraFieldValues((repair as any).extraFields || {});
     setModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.description.trim() || !form.vehicleId) return;
-    if (editing) {
-      setState({
-        ...state,
-        repairs: state.repairs.map(r =>
-          r.id === editing.id ? { ...r, ...form } : r
-        ),
-      });
-    } else {
-      const newRepair: Repair = {
-        ...form,
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString(),
-      };
-      setState({ ...state, repairs: [...state.repairs, newRepair] });
+    const payload = { ...form, extraFields: extraFieldValues };
+    try {
+      if (editing) {
+        const updated = await api.updateRepair(editing.id, payload);
+        setState({
+          ...state,
+          repairs: state.repairs.map(r =>
+            r.id === editing.id ? updated : r
+          ),
+        });
+      } else {
+        const newRepair = await api.createRepair(payload);
+        setState({ ...state, repairs: [...state.repairs, newRepair] });
+      }
+      setModalOpen(false);
+    } catch {
+      // ignore
     }
-    setModalOpen(false);
   };
 
-  const handleDelete = (id: string) => {
-    setState({ ...state, repairs: state.repairs.filter(r => r.id !== id) });
+  const handleBulkDelete = async () => {
+    try {
+      for (const id of selectedIds) {
+        await api.deleteRepair(id);
+      }
+      setState({ ...state, repairs: state.repairs.filter(r => !selectedIds.has(r.id)) });
+      setSelectedIds(new Set());
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await api.deleteRepair(id);
+      setState({ ...state, repairs: state.repairs.filter(r => r.id !== id) });
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleBulkMove = async (destType: string) => {
+    try {
+      await api.moveRecords(Array.from(selectedIds), 'repairs', destType);
+      const [repairs, services, upgrades] = await Promise.all([
+        api.getRepairs(),
+        api.getServices(),
+        api.getUpgrades(),
+      ]);
+      setState({ ...state, repairs, serviceRecords: services, upgradeRecords: upgrades });
+      setSelectedIds(new Set());
+    } catch {
+      // ignore
+    }
   };
 
   const selectClasses = "w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 outline-none focus:border-violet-500/50 appearance-none";
@@ -194,13 +277,28 @@ export default function Repairs({ state, setState }: Props) {
 
   return (
     <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-zinc-400">{t('repairs.subtitle')}</p>
+        <div className="flex items-center gap-3">
+          <ColumnSettings tableKey="repairs" allColumns={allRepairsColumns} />
+          <TagFilter
+            allTags={allTags}
+            selectedTags={filterTags}
+            onTagsChange={setFilterTags}
+            filterMode={tagFilterMode}
+            onFilterModeChange={setTagFilterMode}
+          />
+        </div>
+      </div>
+
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'Total Spent', value: formatCurrency(totalCost), color: 'text-red-400' },
-          { label: 'Repairs', value: String(filtered.length), color: 'text-violet-400' },
-          { label: 'Average Cost', value: formatCurrency(avgCost), color: 'text-sky-400' },
-          { label: 'Highest', value: formatCurrency(maxCost), color: 'text-amber-400' },
+          { label: t('repairs.total_spent'), value: formatCurrency(totalCost), color: 'text-red-400' },
+          { label: t('repairs.repair_count'), value: String(filtered.length), color: 'text-violet-400' },
+          { label: t('repairs.avg_cost'), value: formatCurrency(avgCost), color: 'text-sky-400' },
+          { label: t('repairs.highest'), value: formatCurrency(maxCost), color: 'text-amber-400' },
         ].map(s => (
           <div key={s.label}>
             <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{s.label}</p>
@@ -213,28 +311,28 @@ export default function Repairs({ state, setState }: Props) {
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
         <div className="flex flex-col md:flex-row gap-5">
           <div className="flex-1">
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Vehicle</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.vehicle')}</label>
             <select
               value={filterVehicle}
               onChange={e => setFilterVehicle(e.target.value)}
               className={selectClasses}
               style={{ background: chevronBg }}
             >
-              <option value="">All Vehicles</option>
+              <option value="">{t('costs.all_vehicles')}</option>
               {state.vehicles.map(v => (
                 <option key={v.id} value={v.id}>{v.name}</option>
               ))}
             </select>
           </div>
           <div className="flex-1">
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Category</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.category')}</label>
             <select
               value={filterCategory}
               onChange={e => setFilterCategory(e.target.value)}
               className={selectClasses}
               style={{ background: chevronBg }}
             >
-              <option value="">All Categories</option>
+              <option value="">{t('common.all_categories')}</option>
               {repairCategories.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
@@ -249,7 +347,7 @@ export default function Repairs({ state, setState }: Props) {
               )}
             >
               <List size={16} />
-              Table
+              {t('repairs.table_view')}
             </button>
             <button
               onClick={() => setView('timeline')}
@@ -259,15 +357,36 @@ export default function Repairs({ state, setState }: Props) {
               )}
             >
               <Clock size={16} />
-              Timeline
+              {t('repairs.timeline_view')}
+            </button>
+            <button onClick={() => window.print()} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-2 no-print">
+              <Printer size={16} />
+              {t('common.print')}
             </button>
             <button onClick={openAdd} className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2">
               <Plus size={16} />
-              Add
+              {t('common.add')}
             </button>
           </div>
         </div>
       </div>
+
+      {/* Bulk Actions */}
+      <BulkActions
+        selectedCount={selectedIds.size}
+        selectedIds={Array.from(selectedIds)}
+        onDelete={handleBulkDelete}
+        onDeselect={() => setSelectedIds(new Set())}
+        recordType="repairs"
+        vehicles={state.vehicles}
+        showMove={true}
+        onMove={handleBulkMove}
+        onComplete={async () => {
+          const repairs = await api.getRepairs();
+          setState({ ...state, repairs });
+          setSelectedIds(new Set());
+        }}
+      />
 
       {/* Table view */}
       {view === 'table' && (
@@ -276,21 +395,35 @@ export default function Repairs({ state, setState }: Props) {
             <table className="w-full">
               <thead className="bg-zinc-950/50">
                 <tr>
-                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">Vehicle</th>
-                  <SortHeader label="Date" col="date" />
-                  <SortHeader label="Description" col="description" />
-                  <SortHeader label="Category" col="category" />
-                  <SortHeader label="Cost" col="cost" />
-                  <SortHeader label="Mileage" col="mileage" />
-                  <SortHeader label="Workshop" col="workshop" />
-                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Actions</th>
+                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">
+                    <input
+                      type="checkbox"
+                      checked={sorted.length > 0 && selectedIds.size === sorted.length}
+                      onChange={e => {
+                        if (e.target.checked) setSelectedIds(new Set(sorted.map(r => r.id)));
+                        else setSelectedIds(new Set());
+                      }}
+                      className="rounded border-zinc-700 bg-zinc-800"
+                    />
+                  </th>
+                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">{t('common.vehicle')}</th>
+                  <SortHeader label={t('common.date')} col="date" />
+                  <SortHeader label={t('common.description')} col="description" />
+                  <SortHeader label={t('common.category')} col="category" />
+                  <SortHeader label={t('common.cost')} col="cost" />
+                  <SortHeader label={t('common.mileage')} col="mileage" />
+                  <SortHeader label={t('repairs.workshop')} col="workshop" />
+                  {repairExtraFieldDefs.map(d => (
+                    <th key={d.id} className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider">{d.fieldName}</th>
+                  ))}
+                  <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
                 {sorted.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-12 text-center text-sm text-zinc-500">
-                      No repairs found. Add your first repair to start tracking.
+                    <td colSpan={9 + repairExtraFieldDefs.length} className="px-4 py-12 text-center text-sm text-zinc-500">
+                      {t('repairs.no_repairs')}
                     </td>
                   </tr>
                 ) : (
@@ -299,8 +432,24 @@ export default function Repairs({ state, setState }: Props) {
                       key={repair.id}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors"
+                      className={cn(
+                        "border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors",
+                        selectedIds.has(repair.id) && 'bg-violet-500/5'
+                      )}
                     >
+                      <td className="px-4 py-3.5 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(repair.id)}
+                          onChange={e => {
+                            const next = new Set(selectedIds);
+                            if (e.target.checked) next.add(repair.id);
+                            else next.delete(repair.id);
+                            setSelectedIds(next);
+                          }}
+                          className="rounded border-zinc-700 bg-zinc-800"
+                        />
+                      </td>
                       <td className="px-4 py-3.5 text-sm text-zinc-400">{getVehicleName(repair.vehicleId)}</td>
                       <td className="px-4 py-3.5 text-sm text-zinc-400">{formatDate(repair.date)}</td>
                       <td className="px-4 py-3.5 text-sm text-zinc-50 font-medium">{repair.description}</td>
@@ -311,8 +460,13 @@ export default function Repairs({ state, setState }: Props) {
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-sm text-red-400 font-medium">{formatCurrency(repair.cost)}</td>
-                      <td className="px-4 py-3.5 text-sm text-zinc-400">{repair.mileage ? `${formatNumber(repair.mileage)} km` : '-'}</td>
+                      <td className="px-4 py-3.5 text-sm text-zinc-400">{repair.mileage ? fmtDistance(repair.mileage) : '-'}</td>
                       <td className="px-4 py-3.5 text-sm text-zinc-400">{repair.workshop || '-'}</td>
+                      {repairExtraFieldDefs.map(d => (
+                        <td key={d.id} className="px-4 py-3.5 text-sm text-zinc-400">
+                          {((repair as any).extraFields || {})[d.fieldName] || '-'}
+                        </td>
+                      ))}
                       <td className="px-4 py-3.5 text-sm text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => openEdit(repair)} className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center">
@@ -337,7 +491,7 @@ export default function Repairs({ state, setState }: Props) {
         <div className="space-y-6">
           {timelineGroups.length === 0 ? (
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
-              <p className="text-sm text-zinc-500">No repairs found.</p>
+              <p className="text-sm text-zinc-500">{t('repairs.no_repairs_found')}</p>
             </div>
           ) : (
             timelineGroups.map(([month, repairs]) => (
@@ -372,7 +526,7 @@ export default function Repairs({ state, setState }: Props) {
                                 {repair.category}
                               </span>
                               {repair.workshop && <span>{repair.workshop}</span>}
-                              {repair.mileage > 0 && <span>{formatNumber(repair.mileage)} km</span>}
+                              {repair.mileage > 0 && <span>{fmtDistance(repair.mileage)}</span>}
                             </div>
                             {repair.notes && (
                               <p className="text-xs text-zinc-500 mt-1.5">{repair.notes}</p>
@@ -405,7 +559,7 @@ export default function Repairs({ state, setState }: Props) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Monthly bar chart */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <h3 className="text-sm font-medium text-zinc-50 mb-5">Monthly Repair Costs</h3>
+          <h3 className="text-sm font-medium text-zinc-50 mb-5">{t('repairs.monthly_costs')}</h3>
           {monthlyData.length > 0 ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -428,18 +582,18 @@ export default function Repairs({ state, setState }: Props) {
                     labelStyle={{ color: '#a1a1aa' }}
                     formatter={(val: number) => formatCurrency(val)}
                   />
-                  <Bar dataKey="total" name="Cost" radius={[4, 4, 0, 0]} fill="#f87171" />
+                  <Bar dataKey="total" name={t('common.cost')} radius={[4, 4, 0, 0]} fill="#f87171" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-sm text-zinc-500 text-center py-12">No data</p>
+            <p className="text-sm text-zinc-500 text-center py-12">{t('common.no_data')}</p>
           )}
         </div>
 
         {/* Category pie chart */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <h3 className="text-sm font-medium text-zinc-50 mb-5">By Category</h3>
+          <h3 className="text-sm font-medium text-zinc-50 mb-5">{t('repairs.by_category')}</h3>
           {categoryPieData.length > 0 ? (
             <div className="h-64 flex items-center">
               <div className="w-1/2 h-full">
@@ -478,7 +632,7 @@ export default function Repairs({ state, setState }: Props) {
               </div>
             </div>
           ) : (
-            <p className="text-sm text-zinc-500 text-center py-12">No data</p>
+            <p className="text-sm text-zinc-500 text-center py-12">{t('common.no_data')}</p>
           )}
         </div>
       </div>
@@ -487,15 +641,15 @@ export default function Repairs({ state, setState }: Props) {
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editing ? 'Edit Repair' : 'Add Repair'}
+        title={editing ? t('repairs.edit') : t('repairs.add')}
         size="lg"
         footer={
           <>
             <button onClick={() => setModalOpen(false)} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm">
-              Cancel
+              {t('common.cancel')}
             </button>
             <button onClick={handleSave} className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium">
-              {editing ? 'Save Changes' : 'Add Repair'}
+              {editing ? t('common.save_changes') : t('repairs.add')}
             </button>
           </>
         }
@@ -503,21 +657,21 @@ export default function Repairs({ state, setState }: Props) {
         <div className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Vehicle</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.vehicle')}</label>
               <select
                 value={form.vehicleId}
                 onChange={e => setForm({ ...form, vehicleId: e.target.value })}
                 className={selectClasses}
                 style={{ background: chevronBg }}
               >
-                <option value="">Select vehicle</option>
+                <option value="">{t('common.select_vehicle')}</option>
                 {state.vehicles.map(v => (
                   <option key={v.id} value={v.id}>{v.name}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Date</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.date')}</label>
               <input
                 type="date"
                 value={form.date}
@@ -528,19 +682,19 @@ export default function Repairs({ state, setState }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Description</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.description')}</label>
             <input
               type="text"
               value={form.description}
               onChange={e => setForm({ ...form, description: e.target.value })}
-              placeholder="e.g. Brake pad replacement"
+              placeholder={t('repairs.description_placeholder')}
               className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Category</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.category')}</label>
               <select
                 value={form.category}
                 onChange={e => setForm({ ...form, category: e.target.value })}
@@ -553,7 +707,7 @@ export default function Repairs({ state, setState }: Props) {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Cost</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.cost')}</label>
               <input
                 type="number"
                 value={form.cost || ''}
@@ -563,7 +717,7 @@ export default function Repairs({ state, setState }: Props) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Mileage (km)</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.mileage')} ({distanceUnit})</label>
               <input
                 type="number"
                 value={form.mileage || ''}
@@ -575,25 +729,41 @@ export default function Repairs({ state, setState }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Workshop</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('repairs.workshop')}</label>
             <input
               type="text"
               value={form.workshop}
               onChange={e => setForm({ ...form, workshop: e.target.value })}
-              placeholder="Workshop name"
+              placeholder={t('repairs.workshop_placeholder')}
               className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Notes</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.tags')}</label>
+            <TagInput
+              tags={form.tags || []}
+              onChange={tags => setForm({ ...form, tags })}
+              suggestions={allTags}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.notes')}</label>
             <textarea
               value={form.notes}
               onChange={e => setForm({ ...form, notes: e.target.value })}
-              placeholder="Optional notes..."
+              placeholder={t('common.optional_notes')}
               className="w-full min-h-[100px] h-auto bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 resize-none"
             />
           </div>
+
+          <ExtraFields
+            recordType="repairs"
+            values={extraFieldValues}
+            onChange={setExtraFieldValues}
+            definitions={extraFieldDefs}
+          />
         </div>
       </Modal>
     </div>

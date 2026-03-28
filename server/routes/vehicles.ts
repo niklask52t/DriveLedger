@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 import { getPool } from '../db';
 import { combinedAuthMiddleware } from '../middleware';
 import { toCamelCase, toSnakeCase, rowsToCamelCase } from '../utils';
+import { fireWebhooks } from '../webhookTrigger.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
@@ -61,12 +62,18 @@ router.post('/', async (req: Request, res: Response) => {
         id, user_id, name, brand, model, variant, license_plate, hsn, tsn,
         first_registration, purchase_price, purchase_date, current_mileage,
         annual_mileage, fuel_type, avg_consumption, fuel_price, horse_power,
-        image_url, status, mobile_de_link, notes, color
+        image_url, status, mobile_de_link, notes, color,
+        sold_price, sold_date, is_electric, map_data,
+        use_hours, odometer_optional, dashboard_metrics,
+        odometer_multiplier, odometer_difference, tags, exclude_from_kiosk
       ) VALUES (
         ?, ?, ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?,
         ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?,
+        ?, ?, ?, ?,
+        ?, ?, ?,
+        ?, ?, ?, ?
       )
     `, [
       id,
@@ -91,12 +98,25 @@ router.post('/', async (req: Request, res: Response) => {
       data.status || 'owned',
       data.mobile_de_link || '',
       data.notes || '',
-      data.color || ''
+      data.color || '',
+      data.sold_price ?? null,
+      data.sold_date ?? null,
+      data.is_electric ? 1 : 0,
+      data.map_data ? JSON.stringify(data.map_data) : null,
+      data.use_hours ? 1 : 0,
+      data.odometer_optional ? 1 : 0,
+      data.dashboard_metrics ? JSON.stringify(data.dashboard_metrics) : '["total_cost","cost_per_km"]',
+      data.odometer_multiplier ?? 1.0,
+      data.odometer_difference ?? 0,
+      data.tags ? JSON.stringify(data.tags) : null,
+      data.exclude_from_kiosk ? 1 : 0
     ]);
 
     const [createdRows] = await pool.execute('SELECT * FROM vehicles WHERE id = ?', [id]);
     const created = (createdRows as any[])[0];
-    return res.status(201).json(toCamelCase(created));
+    const result = toCamelCase(created);
+    fireWebhooks(userId, 'vehicle.created', result);
+    return res.status(201).json(result);
   } catch (err: any) {
     console.error('[VEHICLES] Create error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -118,6 +138,11 @@ router.put('/:id', async (req: Request, res: Response) => {
     }
 
     const data = toSnakeCase(req.body);
+
+    // Handle map_data serialization
+    const mapDataValue = data.map_data !== undefined
+      ? (data.map_data ? JSON.stringify(data.map_data) : null)
+      : undefined;
 
     await pool.execute(`
       UPDATE vehicles SET
@@ -141,7 +166,18 @@ router.put('/:id', async (req: Request, res: Response) => {
         status = COALESCE(?, status),
         mobile_de_link = COALESCE(?, mobile_de_link),
         notes = COALESCE(?, notes),
-        color = COALESCE(?, color)
+        color = COALESCE(?, color),
+        sold_price = COALESCE(?, sold_price),
+        sold_date = COALESCE(?, sold_date),
+        is_electric = COALESCE(?, is_electric),
+        map_data = COALESCE(?, map_data),
+        use_hours = COALESCE(?, use_hours),
+        odometer_optional = COALESCE(?, odometer_optional),
+        dashboard_metrics = COALESCE(?, dashboard_metrics),
+        odometer_multiplier = COALESCE(?, odometer_multiplier),
+        odometer_difference = COALESCE(?, odometer_difference),
+        tags = COALESCE(?, tags),
+        exclude_from_kiosk = COALESCE(?, exclude_from_kiosk)
       WHERE id = ? AND user_id = ?
     `, [
       data.name ?? null,
@@ -165,13 +201,26 @@ router.put('/:id', async (req: Request, res: Response) => {
       data.mobile_de_link ?? null,
       data.notes ?? null,
       data.color ?? null,
+      data.sold_price ?? null,
+      data.sold_date ?? null,
+      data.is_electric !== undefined ? (data.is_electric ? 1 : 0) : null,
+      mapDataValue ?? null,
+      data.use_hours !== undefined ? (data.use_hours ? 1 : 0) : null,
+      data.odometer_optional !== undefined ? (data.odometer_optional ? 1 : 0) : null,
+      data.dashboard_metrics !== undefined ? JSON.stringify(data.dashboard_metrics) : null,
+      data.odometer_multiplier ?? null,
+      data.odometer_difference ?? null,
+      data.tags !== undefined ? JSON.stringify(data.tags) : null,
+      data.exclude_from_kiosk !== undefined ? (data.exclude_from_kiosk ? 1 : 0) : null,
       id,
       userId
     ]);
 
     const [updatedRows] = await pool.execute('SELECT * FROM vehicles WHERE id = ?', [id]);
     const updated = (updatedRows as any[])[0];
-    return res.status(200).json(toCamelCase(updated));
+    const result = toCamelCase(updated);
+    fireWebhooks(userId, 'vehicle.updated', result);
+    return res.status(200).json(result);
   } catch (err: any) {
     console.error('[VEHICLES] Update error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -257,6 +306,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
       conn.release();
     }
 
+    fireWebhooks(userId, 'vehicle.deleted', { id });
     return res.status(200).json({ message: 'Vehicle and all related data deleted' });
   } catch (err: any) {
     console.error('[VEHICLES] Delete error:', err);

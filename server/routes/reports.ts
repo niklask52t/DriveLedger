@@ -116,4 +116,132 @@ router.get('/vehicle/:vehicleId/maintenance', async (req: Request, res: Response
   }
 });
 
+// GET /vehicle/:vehicleId/history?year=YYYY - chronological history of all records
+router.get('/vehicle/:vehicleId/history', async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    const userId = (req as any).user.id;
+    const { vehicleId } = req.params;
+    const year = req.query.year as string | undefined;
+
+    // Verify vehicle ownership
+    const [vehicleRows] = await pool.execute('SELECT id FROM vehicles WHERE id = ? AND user_id = ?', [vehicleId, userId]);
+    const vehicle = (vehicleRows as any[])[0];
+    if (!vehicle) {
+      return res.status(404).json({ error: 'Vehicle not found' });
+    }
+
+    const dateFilter = year ? ' AND date LIKE ?' : '';
+    const baseParams = [userId, vehicleId];
+    const yearParams = year ? [...baseParams, `${year}%`] : baseParams;
+
+    const queries = [
+      { type: 'service', query: `SELECT id, 'service' as record_type, description, cost, date, mileage FROM service_records WHERE user_id = ? AND vehicle_id = ?${dateFilter}` },
+      { type: 'repair', query: `SELECT id, 'repair' as record_type, description, cost, date, mileage FROM repairs WHERE user_id = ? AND vehicle_id = ?${dateFilter}` },
+      { type: 'upgrade', query: `SELECT id, 'upgrade' as record_type, description, cost, date, mileage FROM upgrade_records WHERE user_id = ? AND vehicle_id = ?${dateFilter}` },
+      { type: 'fuel', query: `SELECT id, 'fuel' as record_type, CONCAT(fuel_amount, ' L') as description, fuel_cost as cost, date, mileage FROM fuel_records WHERE user_id = ? AND vehicle_id = ?${dateFilter}` },
+      { type: 'tax', query: `SELECT id, 'tax' as record_type, description, cost, date, 0 as mileage FROM taxes WHERE user_id = ? AND vehicle_id = ?${dateFilter}` },
+      { type: 'inspection', query: `SELECT id, 'inspection' as record_type, title as description, cost, date, mileage FROM inspections WHERE user_id = ? AND vehicle_id = ?${dateFilter}` },
+      { type: 'odometer', query: `SELECT id, 'odometer' as record_type, notes as description, 0 as cost, date, mileage FROM odometer_records WHERE user_id = ? AND vehicle_id = ?${dateFilter}` },
+    ];
+
+    const allRecords: any[] = [];
+    for (const q of queries) {
+      const [rows] = await pool.execute(q.query, yearParams);
+      allRecords.push(...(rows as any[]));
+    }
+
+    // Sort by date descending
+    allRecords.sort((a, b) => {
+      const dateA = a.date || '';
+      const dateB = b.date || '';
+      return dateB.localeCompare(dateA);
+    });
+
+    // Convert snake_case to camelCase for the record_type field
+    const result = allRecords.map(r => ({
+      id: r.id,
+      recordType: r.record_type,
+      description: r.description || '',
+      cost: r.cost || 0,
+      date: r.date || '',
+      mileage: r.mileage || 0,
+    }));
+
+    return res.status(200).json(result);
+  } catch (err: any) {
+    console.error('[REPORTS] Vehicle history error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /vehicle/:vehicleId/monthly - Monthly aggregated data for charts
+router.get('/vehicle/:vehicleId/monthly', async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    const userId = (req as any).user.id;
+    const { vehicleId } = req.params;
+
+    // Verify vehicle ownership
+    const [vehicleRows] = await pool.execute('SELECT * FROM vehicles WHERE id = ? AND user_id = ?', [vehicleId, userId]);
+    const vehicle = (vehicleRows as any[])[0];
+    if (!vehicle) {
+      return res.status(404).json({ error: 'Vehicle not found' });
+    }
+
+    // Cost by month per type
+    const [services] = await pool.execute(
+      `SELECT DATE_FORMAT(date, '%Y-%m') as month, SUM(cost) as total FROM service_records WHERE user_id = ? AND vehicle_id = ? GROUP BY month ORDER BY month`,
+      [userId, vehicleId]
+    );
+    const [repairs] = await pool.execute(
+      `SELECT DATE_FORMAT(date, '%Y-%m') as month, SUM(cost) as total FROM repairs WHERE user_id = ? AND vehicle_id = ? GROUP BY month ORDER BY month`,
+      [userId, vehicleId]
+    );
+    const [upgrades] = await pool.execute(
+      `SELECT DATE_FORMAT(date, '%Y-%m') as month, SUM(cost) as total FROM upgrade_records WHERE user_id = ? AND vehicle_id = ? GROUP BY month ORDER BY month`,
+      [userId, vehicleId]
+    );
+    const [fuel] = await pool.execute(
+      `SELECT DATE_FORMAT(date, '%Y-%m') as month, SUM(fuel_cost) as total, SUM(fuel_amount) as liters FROM fuel_records WHERE user_id = ? AND vehicle_id = ? GROUP BY month ORDER BY month`,
+      [userId, vehicleId]
+    );
+    const [taxes] = await pool.execute(
+      `SELECT DATE_FORMAT(date, '%Y-%m') as month, SUM(cost) as total FROM taxes WHERE user_id = ? AND vehicle_id = ? GROUP BY month ORDER BY month`,
+      [userId, vehicleId]
+    );
+
+    // Distance by month
+    const [odometer] = await pool.execute(
+      `SELECT DATE_FORMAT(date, '%Y-%m') as month, MAX(mileage) - MIN(mileage) as distance FROM odometer_records WHERE user_id = ? AND vehicle_id = ? GROUP BY month ORDER BY month`,
+      [userId, vehicleId]
+    );
+
+    // Fuel economy by month (L/100km)
+    const [fuelEconomy] = await pool.execute(
+      `SELECT DATE_FORMAT(f.date, '%Y-%m') as month,
+              SUM(f.fuel_amount) as totalLiters,
+              MAX(f.mileage) - MIN(f.mileage) as distance
+       FROM fuel_records f
+       WHERE f.user_id = ? AND f.vehicle_id = ? AND f.is_partial_fill = 0
+       GROUP BY month
+       HAVING distance > 0
+       ORDER BY month`,
+      [userId, vehicleId]
+    );
+
+    res.json({
+      costByMonth: { services, repairs, upgrades, fuel, taxes },
+      distanceByMonth: odometer,
+      fuelEconomyByMonth: (fuelEconomy as any[]).map(r => ({
+        month: r.month,
+        lPer100km: r.distance > 0 ? (r.totalLiters / r.distance) * 100 : 0,
+      })),
+    });
+  } catch (err: any) {
+    console.error('[REPORTS] Monthly report error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

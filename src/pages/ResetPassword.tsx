@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Eye, EyeOff, Loader2, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { api, ApiError } from '../api';
 import type { Page } from '../types';
+import { useI18n } from '../contexts/I18nContext';
 
 interface ResetPasswordProps {
   onNavigate: (page: Page) => void;
@@ -16,13 +17,14 @@ function getStrength(pw: string): { score: number; color: string; label: string 
   if (/[0-9]/.test(pw)) score++;
   if (/[^A-Za-z0-9]/.test(pw)) score++;
 
-  if (score <= 2) return { score, color: 'bg-red-400', label: 'Weak' };
-  if (score <= 3) return { score, color: 'bg-amber-400', label: 'Fair' };
-  if (score <= 4) return { score, color: 'bg-sky-400', label: 'Good' };
-  return { score, color: 'bg-emerald-400', label: 'Strong' };
+  if (score <= 2) return { score, color: 'bg-red-400', labelKey: 'password.weak' };
+  if (score <= 3) return { score, color: 'bg-amber-400', labelKey: 'password.fair' };
+  if (score <= 4) return { score, color: 'bg-sky-400', labelKey: 'password.good' };
+  return { score, color: 'bg-emerald-400', labelKey: 'password.strong' };
 }
 
 export default function ResetPassword({ onNavigate }: ResetPasswordProps) {
+  const { t } = useI18n();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -44,17 +46,17 @@ export default function ResetPassword({ onNavigate }: ResetPasswordProps) {
     if (!password || !confirmPassword) return;
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      setError(t('password.passwords_no_match'));
       return;
     }
 
     if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
+      setError(t('password.min_8_error'));
       return;
     }
 
     if (!token) {
-      setError('No reset token found. Please use the link from your email.');
+      setError(t('reset.no_token'));
       return;
     }
 
@@ -68,7 +70,7 @@ export default function ResetPassword({ onNavigate }: ResetPasswordProps) {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError('An unexpected error occurred. Please try again.');
+        setError(t('auth.unexpected_error'));
       }
     } finally {
       setLoading(false);
@@ -85,24 +87,24 @@ export default function ResetPassword({ onNavigate }: ResetPasswordProps) {
               <div className="w-12 h-12 rounded-full bg-emerald-400/10 flex items-center justify-center mx-auto mb-5">
                 <CheckCircle2 size={22} className="text-emerald-400" />
               </div>
-              <h2 className="text-lg font-semibold text-zinc-50 mb-2">Password reset successful</h2>
+              <h2 className="text-lg font-semibold text-zinc-50 mb-2">{t('reset.success_title')}</h2>
               <p className="text-sm text-zinc-400 leading-relaxed mb-6">
-                Your password has been updated. You can now sign in with your new password.
+                {t('reset.success_desc')}
               </p>
               <button
                 onClick={() => onNavigate('login')}
                 className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium transition-colors inline-flex items-center gap-2"
               >
-                Go to sign in
+                {t('reset.go_to_sign_in')}
               </button>
             </div>
           ) : (
             /* Form */
             <>
               <div className="text-center mb-6">
-                <h2 className="text-lg font-semibold text-zinc-50 mb-2">Reset your password</h2>
+                <h2 className="text-lg font-semibold text-zinc-50 mb-2">{t('reset.title')}</h2>
                 <p className="text-sm text-zinc-400 leading-relaxed">
-                  Choose a new password for your account.
+                  {t('reset.description')}
                 </p>
               </div>
 
@@ -115,20 +117,20 @@ export default function ResetPassword({ onNavigate }: ResetPasswordProps) {
               {!token && (
                 <div className="bg-amber-400/10 border border-amber-400/20 rounded-lg px-4 py-3 mb-5">
                   <p className="text-sm text-amber-400">
-                    No reset token found in the URL. Please use the link sent to your email.
+                    {t('reset.no_token_url')}
                   </p>
                 </div>
               )}
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">New password</label>
+                  <label className="block text-sm font-medium text-zinc-400 mb-2">{t('auth.new_password')}</label>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter new password"
+                      placeholder={t('auth.enter_new_password')}
                       className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 pr-10 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 transition-colors"
                       autoComplete="new-password"
                       autoFocus
@@ -151,19 +153,19 @@ export default function ResetPassword({ onNavigate }: ResetPasswordProps) {
                           style={{ width: `${Math.min(100, (strength.score / 6) * 100)}%` }}
                         />
                       </div>
-                      <p className="text-xs text-zinc-500 mt-1.5">{strength.label}</p>
+                      <p className="text-xs text-zinc-500 mt-1.5">{t(strength.labelKey)}</p>
                     </div>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">Confirm new password</label>
+                  <label className="block text-sm font-medium text-zinc-400 mb-2">{t('auth.confirm_new_password')}</label>
                   <div className="relative">
                     <input
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Repeat new password"
+                      placeholder={t('auth.repeat_new_password')}
                       className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 pr-10 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 transition-colors"
                       autoComplete="new-password"
                     />
@@ -183,7 +185,7 @@ export default function ResetPassword({ onNavigate }: ResetPasswordProps) {
                   className="w-full bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {loading && <Loader2 size={16} className="animate-spin" />}
-                  Reset password
+                  {t('auth.reset_password')}
                 </button>
               </form>
 
@@ -193,7 +195,7 @@ export default function ResetPassword({ onNavigate }: ResetPasswordProps) {
                   className="text-sm text-violet-400 hover:text-violet-300 transition-colors font-medium inline-flex items-center gap-2"
                 >
                   <ArrowLeft size={14} />
-                  Back to sign in
+                  {t('auth.back_to_login')}
                 </button>
               </div>
             </>

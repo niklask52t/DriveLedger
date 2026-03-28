@@ -1,17 +1,25 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   PieChart, Pie, Cell, BarChart, Bar, AreaChart, Area,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
-import { Car, Wrench, PiggyBank, TrendingUp, Fuel, ClipboardCheck, Receipt, AlertTriangle, Package } from 'lucide-react';
-import type { AppState, Page } from '../types';
+import { Car, Wrench, PiggyBank, TrendingUp, Fuel, ClipboardCheck, Receipt, AlertTriangle, Package, Settings2, Plus, X, Loader2 } from 'lucide-react';
+import type { AppState, Page, DashboardWidget as WidgetData, WidgetType, CustomWidgetCode } from '../types';
 import {
   formatCurrency, toMonthly, toYearly, getCategoryLabel,
   getCategoryColor, getCostsByCategory, getCostsByPerson,
   getTotalMonthlyCosts, getTotalYearlyCosts, getTotalRepairCosts,
   getSavingsBalance, getSavingsProgress, getLoanProgress,
 } from '../utils';
+import { api } from '../api';
+import DashboardWidgetCard from '../components/DashboardWidget';
+import CustomWidgetRenderer from '../components/CustomWidgetRenderer';
+import Modal from '../components/Modal';
+import { useI18n } from '../contexts/I18nContext';
+import { useUserConfig } from '../contexts/UserConfigContext';
+import { useUnits } from '../hooks/useUnits';
+import { getVehicleLabel } from '../utils/vehicleLabel';
 
 interface DashboardProps {
   state: AppState;
@@ -39,11 +47,104 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
+const WIDGET_TYPE_KEYS: { value: WidgetType; key: string }[] = [
+  { value: 'cost_summary', key: 'dashboard.widget_type.cost_summary' },
+  { value: 'fuel_economy', key: 'dashboard.widget_type.fuel_economy' },
+  { value: 'upcoming_reminders', key: 'dashboard.widget_type.upcoming_reminders' },
+  { value: 'recent_records', key: 'dashboard.widget_type.recent_records' },
+  { value: 'vehicle_status', key: 'dashboard.widget_type.vehicle_status' },
+  { value: 'custom_chart', key: 'dashboard.widget_type.custom_chart' },
+];
+
 export default function Dashboard({ state, onNavigate }: DashboardProps) {
+  const { t } = useI18n();
+  const { config } = useUserConfig();
+  const { fmtDistance, fmtFuelEconomy } = useUnits();
   const { vehicles, costs, loans, repairs, savingsGoals, savingsTransactions, persons,
     serviceRecords, fuelRecords, inspections, taxRecords, supplies } = state;
 
   const [selectedYear, setSelectedYear] = useState<string>('all');
+
+  // Widget state
+  const [widgets, setWidgets] = useState<WidgetData[]>([]);
+  const [widgetsLoaded, setWidgetsLoaded] = useState(false);
+  const [showWidgetManager, setShowWidgetManager] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [newWidgetName, setNewWidgetName] = useState('');
+  const [newWidgetType, setNewWidgetType] = useState<WidgetType>('cost_summary');
+  const [addingWidget, setAddingWidget] = useState(false);
+
+  // Custom widget code state
+  const [customWidgetCode, setCustomWidgetCode] = useState<CustomWidgetCode[]>([]);
+
+  // Load widgets
+  const loadWidgets = useCallback(async () => {
+    try {
+      const data = await api.getWidgets();
+      setWidgets(data);
+    } catch {
+      // Silently fail - widgets are optional
+    } finally {
+      setWidgetsLoaded(true);
+    }
+  }, []);
+
+  // Load custom widget code (admin only, silently fails for non-admins)
+  const loadCustomWidgetCode = useCallback(async () => {
+    try {
+      const data = await api.getCustomWidgetCode();
+      setCustomWidgetCode(data.filter(w => w.enabled));
+    } catch {
+      // Silently fail - custom widgets are optional / admin-only
+    }
+  }, []);
+
+  useEffect(() => {
+    loadWidgets();
+    loadCustomWidgetCode();
+  }, [loadWidgets, loadCustomWidgetCode]);
+
+  const handleAddWidget = async () => {
+    if (!newWidgetName.trim()) return;
+    setAddingWidget(true);
+    try {
+      const created = await api.createWidget({ name: newWidgetName.trim(), type: newWidgetType });
+      setWidgets(prev => [...prev, created]);
+      setNewWidgetName('');
+      setNewWidgetType('cost_summary');
+    } catch {
+      // ignore
+    } finally {
+      setAddingWidget(false);
+    }
+  };
+
+  const handleDeleteWidget = async (id: string) => {
+    try {
+      await api.deleteWidget(id);
+      setWidgets(prev => prev.filter(w => w.id !== id));
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleMoveWidget = async (id: string, direction: 'up' | 'down') => {
+    const idx = widgets.findIndex(w => w.id === id);
+    if (idx === -1) return;
+    const newWidgets = [...widgets];
+    if (direction === 'up' && idx > 0) {
+      [newWidgets[idx - 1], newWidgets[idx]] = [newWidgets[idx], newWidgets[idx - 1]];
+    } else if (direction === 'down' && idx < newWidgets.length - 1) {
+      [newWidgets[idx + 1], newWidgets[idx]] = [newWidgets[idx], newWidgets[idx + 1]];
+    }
+    setWidgets(newWidgets);
+    // Update sort orders
+    for (let i = 0; i < newWidgets.length; i++) {
+      if (newWidgets[i].sortOrder !== i) {
+        api.updateWidget(newWidgets[i].id, { sortOrder: i }).catch(() => {});
+      }
+    }
+  };
 
   const availableYears = useMemo(() => {
     const years = new Set<number>();
@@ -134,15 +235,15 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
     const items: { type: string; label: string; detail: string; severity: 'warning' | 'info' }[] = [];
 
     // Overdue taxes
-    taxRecords.forEach(t => {
-      if (t.dueDate) {
-        const due = new Date(t.dueDate);
+    taxRecords.forEach(tx => {
+      if (tx.dueDate) {
+        const due = new Date(tx.dueDate);
         if (due <= now) {
-          const vehicle = vehicles.find(v => v.id === t.vehicleId);
+          const vehicle = vehicles.find(v => v.id === tx.vehicleId);
           items.push({
             type: 'tax',
-            label: t.description || 'Tax payment',
-            detail: `${vehicle?.name || 'Unknown'} - due ${t.dueDate}`,
+            label: tx.description || t('taxes.tax_payment'),
+            detail: `${vehicle?.name || '-'} - ${tx.dueDate}`,
             severity: 'warning',
           });
         }
@@ -157,8 +258,8 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
         const vehicle = vehicles.find(v => v.id === insp.vehicleId);
         items.push({
           type: 'inspection',
-          label: insp.title || 'Inspection',
-          detail: `${vehicle?.name || 'Unknown'} - ${insp.date}`,
+          label: insp.title || t('nav.inspections'),
+          detail: `${vehicle?.name || '-'} - ${insp.date}`,
           severity: 'info',
         });
       }
@@ -170,7 +271,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
         items.push({
           type: 'supply',
           label: s.name,
-          detail: `${s.quantity} remaining`,
+          detail: t('supplies.remaining', { quantity: s.quantity }),
           severity: s.quantity === 0 ? 'warning' : 'info',
         });
       }
@@ -200,47 +301,81 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
 
   return (
     <div className="space-y-8">
-      {/* Year Filter */}
-      <motion.div {...fadeUp} className="flex items-center justify-end">
-        <select
-          value={selectedYear}
-          onChange={(e) => setSelectedYear(e.target.value)}
-          className="h-9 bg-zinc-900 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 outline-none focus:border-violet-500/50"
-        >
-          <option value="all">All Years</option>
-          {availableYears.map(y => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
+      {/* Year Filter + Customize */}
+      <motion.div {...fadeUp} className="flex items-center justify-between">
+        <div />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowWidgetManager(true)}
+            className="h-9 bg-zinc-900 border border-zinc-800 rounded-lg px-4 text-sm text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 transition-colors inline-flex items-center gap-2"
+          >
+            <Settings2 size={14} />
+            {t('dashboard.customize')}
+          </button>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(e.target.value)}
+            className="h-9 bg-zinc-900 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 outline-none focus:border-violet-500/50"
+          >
+            <option value="all">{t('common.all_years')}</option>
+            {availableYears.map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
       </motion.div>
+
+      {/* Custom Widgets */}
+      {widgetsLoaded && widgets.length > 0 && (
+        <motion.div {...fadeUp} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {widgets.map(w => (
+            <DashboardWidgetCard
+              key={w.id}
+              widget={w}
+              state={state}
+              onDelete={handleDeleteWidget}
+              isEditing={isEditing}
+            />
+          ))}
+        </motion.div>
+      )}
+
+      {/* Custom Widget Code (HTML/JS widgets) */}
+      {customWidgetCode.length > 0 && (
+        <motion.div {...fadeUp} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {customWidgetCode.map(w => (
+            <CustomWidgetRenderer key={w.id} code={w.code} name={w.name} />
+          ))}
+        </motion.div>
+      )}
 
       {/* Stats */}
       <motion.div {...fadeUp} className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
         <div>
           <p className="text-3xl font-bold text-violet-400">{vehicles.length}</p>
-          <p className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Vehicles</p>
+          <p className="text-xs text-zinc-500 uppercase tracking-wider mt-1">{t('dashboard.vehicles')}</p>
         </div>
         <div>
           <p className="text-3xl font-bold text-emerald-400">{formatCurrency(totalMonthly)}</p>
-          <p className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Monthly Costs</p>
+          <p className="text-xs text-zinc-500 uppercase tracking-wider mt-1">{t('dashboard.monthly_costs')}</p>
         </div>
         <div>
           <p className="text-3xl font-bold text-amber-400">{formatCurrency(totalYearly)}</p>
-          <p className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Yearly Costs</p>
+          <p className="text-xs text-zinc-500 uppercase tracking-wider mt-1">{t('dashboard.yearly_costs')}</p>
         </div>
         <div>
           <p className="text-3xl font-bold text-red-400">{loans.length}</p>
-          <p className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Active Loans</p>
+          <p className="text-xs text-zinc-500 uppercase tracking-wider mt-1">{t('dashboard.active_loans')}</p>
         </div>
         <div>
           <p className="text-3xl font-bold text-cyan-400">{serviceRecords.length}</p>
-          <p className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Services</p>
+          <p className="text-xs text-zinc-500 uppercase tracking-wider mt-1">{t('dashboard.services')}</p>
         </div>
         <div>
           <p className="text-3xl font-bold text-orange-400">
-            {avgFuelConsumption !== null ? `${avgFuelConsumption} L` : '-'}
+            {avgFuelConsumption !== null ? fmtFuelEconomy(avgFuelConsumption) : '-'}
           </p>
-          <p className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Avg L/100km</p>
+          <p className="text-xs text-zinc-500 uppercase tracking-wider mt-1">{t('dashboard.avg_l_100km')}</p>
         </div>
       </motion.div>
 
@@ -248,7 +383,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
       <motion.div {...fadeUp} transition={{ duration: 0.35, delay: 0.05 }} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Pie - Categories */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <h3 className="text-sm font-medium text-zinc-400 mb-4">Costs by Category</h3>
+          <h3 className="text-sm font-medium text-zinc-400 mb-4">{t('costs.by_category_dashboard')}</h3>
           {categoryData.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
@@ -270,7 +405,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
             </ResponsiveContainer>
           ) : (
             <div className="h-[220px] flex items-center justify-center text-sm text-zinc-600">
-              No cost data
+              {t('common.no_cost_data')}
             </div>
           )}
           {categoryData.length > 0 && (
@@ -287,7 +422,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
 
         {/* Bar - Person */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <h3 className="text-sm font-medium text-zinc-400 mb-4">Costs by Person</h3>
+          <h3 className="text-sm font-medium text-zinc-400 mb-4">{t('costs.by_person_dashboard')}</h3>
           {personData.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={personData}>
@@ -304,14 +439,14 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
             </ResponsiveContainer>
           ) : (
             <div className="h-[220px] flex items-center justify-center text-sm text-zinc-600">
-              No cost data
+              {t('common.no_cost_data')}
             </div>
           )}
         </div>
 
         {/* Area - Timeline */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <h3 className="text-sm font-medium text-zinc-400 mb-4">Cost Timeline</h3>
+          <h3 className="text-sm font-medium text-zinc-400 mb-4">{t('costs.timeline')}</h3>
           {timelineData.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={timelineData}>
@@ -337,7 +472,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
             </ResponsiveContainer>
           ) : (
             <div className="h-[220px] flex items-center justify-center text-sm text-zinc-600">
-              No timeline data
+              {t('common.no_timeline_data')}
             </div>
           )}
         </div>
@@ -345,31 +480,66 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
 
       {/* Vehicles */}
       <motion.div {...fadeUp} transition={{ duration: 0.35, delay: 0.1 }}>
-        <h2 className="text-lg font-semibold text-zinc-50 mb-4">Your Vehicles</h2>
+        <h2 className="text-lg font-semibold text-zinc-50 mb-4">{t('vehicles.your_vehicles')}</h2>
         {vehicleCards.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {vehicleCards.map(v => (
-              <div
-                key={v.id}
-                onClick={() => onNavigate('vehicle-detail', v.id)}
-                className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 cursor-pointer hover:border-zinc-700 transition-colors"
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <span
-                    className="w-3 h-3 rounded-full shrink-0"
-                    style={{ backgroundColor: v.color || '#8b5cf6' }}
-                  />
-                  <span className="font-semibold text-zinc-50 truncate">{v.name}</span>
+            {vehicleCards.map(v => {
+              const metrics = (v as any).dashboardMetrics || ['total_cost', 'cost_per_km'];
+              const parsedMetrics: string[] = typeof metrics === 'string' ? (() => { try { return JSON.parse(metrics); } catch { return ['total_cost','cost_per_km']; } })() : metrics;
+              const vCosts = filteredCosts.filter(c => c.vehicleId === v.id);
+              const vRepairs = filteredRepairs.filter(r => r.vehicleId === v.id);
+              const vFuel = fuelRecords.filter(f => f.vehicleId === v.id);
+              const vServices = serviceRecords.filter(s => s.vehicleId === v.id);
+              const totalCostVal = vCosts.reduce((s, c) => s + toMonthly(c.amount, c.frequency) * 12, 0)
+                + vRepairs.reduce((s, r) => s + r.cost, 0)
+                + vServices.reduce((s, s2) => s + s2.cost, 0)
+                + vFuel.reduce((s, f) => s + f.fuelCost, 0);
+              const costPerKm = v.currentMileage > 0 ? totalCostVal / v.currentMileage : 0;
+              const depreciation = v.purchasePrice > 0 ? v.purchasePrice - (v.soldPrice || 0) : 0;
+
+              const metricLabels: Record<string, { label: string; value: string }> = {
+                total_cost: { label: 'Total Cost', value: formatCurrency(totalCostVal) },
+                cost_per_km: { label: v.useHours ? 'Cost/h' : 'Cost/km', value: formatCurrency(costPerKm) },
+                monthly_cost: { label: 'Monthly', value: formatCurrency(v.monthly) },
+                fuel_economy: { label: 'Fuel', value: avgFuelConsumption !== null ? fmtFuelEconomy(avgFuelConsumption) : '-' },
+                mileage: { label: v.useHours ? 'Hours' : 'Mileage', value: fmtDistance(v.currentMileage) },
+                depreciation: { label: 'Depreciation', value: formatCurrency(depreciation) },
+              };
+
+              return (
+                <div
+                  key={v.id}
+                  onClick={() => onNavigate('vehicle-detail', v.id)}
+                  className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 cursor-pointer hover:border-zinc-700 transition-colors"
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <span
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{ backgroundColor: v.color || '#8b5cf6' }}
+                    />
+                    <span className="font-semibold text-zinc-50 truncate">{getVehicleLabel(v, config)}</span>
+                  </div>
+                  <p className="text-sm text-zinc-400 mb-3">{v.brand} {v.model}</p>
+                  <div className="space-y-1">
+                    {parsedMetrics.slice(0, 3).map((m: string) => {
+                      const info = metricLabels[m];
+                      if (!info) return null;
+                      return (
+                        <div key={m} className="flex items-center justify-between">
+                          <span className="text-xs text-zinc-500">{info.label}</span>
+                          <span className="text-sm font-medium text-emerald-400">{info.value}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <p className="text-sm text-zinc-400 mb-3">{v.brand} {v.model}</p>
-                <p className="text-sm font-medium text-emerald-400">{formatCurrency(v.monthly)}/mo</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-10 text-center">
             <Car className="mx-auto text-zinc-600 mb-3" size={32} />
-            <p className="text-sm text-zinc-500">No vehicles added yet</p>
+            <p className="text-sm text-zinc-500">{t('vehicles.no_vehicles_dashboard')}</p>
           </div>
         )}
       </motion.div>
@@ -380,7 +550,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
           <div className="flex items-center gap-2 mb-5">
             <PiggyBank size={16} className="text-emerald-400" />
-            <h3 className="text-sm font-medium text-zinc-50">Savings Goals</h3>
+            <h3 className="text-sm font-medium text-zinc-50">{t('dashboard.savings_goals')}</h3>
           </div>
           {savingsData.length > 0 ? (
             <div className="space-y-4">
@@ -404,7 +574,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-zinc-600 text-center py-6">No savings goals</p>
+            <p className="text-sm text-zinc-600 text-center py-6">{t('savings.no_goals_dashboard')}</p>
           )}
         </div>
 
@@ -413,9 +583,9 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
               <Wrench size={16} className="text-red-400" />
-              <h3 className="text-sm font-medium text-zinc-50">Recent Repairs</h3>
+              <h3 className="text-sm font-medium text-zinc-50">{t('dashboard.recent_repairs')}</h3>
             </div>
-            <span className="text-xs text-zinc-500">{formatCurrency(getTotalRepairCosts(filteredRepairs))} total</span>
+            <span className="text-xs text-zinc-500">{formatCurrency(getTotalRepairCosts(filteredRepairs))} {t('dashboard.total')}</span>
           </div>
           {recentRepairs.length > 0 ? (
             <div className="space-y-3">
@@ -425,7 +595,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
                   <div key={r.id} className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm text-zinc-300 truncate">{r.description}</p>
-                      <p className="text-xs text-zinc-500">{vehicle?.name} &middot; {r.date}</p>
+                      <p className="text-xs text-zinc-500">{vehicle ? getVehicleLabel(vehicle, config) : '-'} &middot; {r.date}</p>
                     </div>
                     <span className="text-sm font-medium text-red-400 shrink-0">
                       {formatCurrency(r.cost)}
@@ -435,7 +605,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
               })}
             </div>
           ) : (
-            <p className="text-sm text-zinc-600 text-center py-6">No repairs recorded</p>
+            <p className="text-sm text-zinc-600 text-center py-6">{t('repairs.no_repairs_dashboard')}</p>
           )}
         </div>
 
@@ -443,7 +613,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
           <div className="flex items-center gap-2 mb-5">
             <TrendingUp size={16} className="text-amber-400" />
-            <h3 className="text-sm font-medium text-zinc-50">Loan Progress</h3>
+            <h3 className="text-sm font-medium text-zinc-50">{t('dashboard.loan_progress')}</h3>
           </div>
           {loanData.length > 0 ? (
             <div className="space-y-4">
@@ -467,7 +637,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-zinc-600 text-center py-6">No active loans</p>
+            <p className="text-sm text-zinc-600 text-center py-6">{t('loans.no_active_loans')}</p>
           )}
         </div>
 
@@ -475,7 +645,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
           <div className="flex items-center gap-2 mb-5">
             <AlertTriangle size={16} className="text-orange-400" />
-            <h3 className="text-sm font-medium text-zinc-50">Upcoming</h3>
+            <h3 className="text-sm font-medium text-zinc-50">{t('dashboard.upcoming')}</h3>
           </div>
           {upcomingItems.length > 0 ? (
             <div className="space-y-3">
@@ -490,10 +660,102 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-zinc-600 text-center py-6">Nothing upcoming</p>
+            <p className="text-sm text-zinc-600 text-center py-6">{t('dashboard.nothing_upcoming')}</p>
           )}
         </div>
       </motion.div>
+
+      {/* Widget Manager Modal */}
+      <Modal
+        isOpen={showWidgetManager}
+        onClose={() => setShowWidgetManager(false)}
+        title={t('dashboard.customize_dashboard')}
+        size="lg"
+      >
+        <div className="space-y-6">
+          {/* Add new widget */}
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-300 mb-3">{t('dashboard.add_widget')}</h3>
+            <div className="flex items-center gap-3">
+              <input
+                type="text"
+                value={newWidgetName}
+                onChange={e => setNewWidgetName(e.target.value)}
+                placeholder={t('dashboard.widget_name')}
+                className="flex-1 h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 outline-none focus:border-violet-500/50"
+                onKeyDown={e => { if (e.key === 'Enter') handleAddWidget(); }}
+              />
+              <select
+                value={newWidgetType}
+                onChange={e => setNewWidgetType(e.target.value as WidgetType)}
+                className="h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 outline-none focus:border-violet-500/50"
+              >
+                {WIDGET_TYPE_KEYS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{t(opt.key)}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleAddWidget}
+                disabled={addingWidget || !newWidgetName.trim()}
+                className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-4 text-sm font-medium inline-flex items-center gap-2 transition-colors disabled:opacity-50 shrink-0"
+              >
+                {addingWidget ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                {t('common.add')}
+              </button>
+            </div>
+          </div>
+
+          {/* Active widgets */}
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-300 mb-3">
+              {t('dashboard.active_widgets_count', { count: widgets.length })}
+            </h3>
+            {widgets.length === 0 ? (
+              <p className="text-sm text-zinc-600 text-center py-6">
+                {t('dashboard.no_widgets')}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {widgets.map((w, idx) => (
+                  <div
+                    key={w.id}
+                    className="flex items-center justify-between px-4 py-3 bg-zinc-800/30 rounded-lg hover:bg-zinc-800/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-sm text-zinc-300 truncate">{w.name}</span>
+                      <span className="text-xs bg-zinc-800 text-zinc-500 px-2 py-0.5 rounded-full shrink-0">
+                        {WIDGET_TYPE_KEYS.find(o => o.value === w.widgetType) ? t(WIDGET_TYPE_KEYS.find(o => o.value === w.widgetType)!.key) : w.widgetType}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleMoveWidget(w.id, 'up')}
+                        disabled={idx === 0}
+                        className="text-zinc-500 hover:text-zinc-300 disabled:opacity-30 p-1 rounded"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 15l-6-6-6 6"/></svg>
+                      </button>
+                      <button
+                        onClick={() => handleMoveWidget(w.id, 'down')}
+                        disabled={idx === widgets.length - 1}
+                        className="text-zinc-500 hover:text-zinc-300 disabled:opacity-30 p-1 rounded"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteWidget(w.id)}
+                        className="text-zinc-500 hover:text-red-400 p-1 rounded transition-colors ml-1"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

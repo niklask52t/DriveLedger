@@ -41,7 +41,15 @@ import webhookRoutes from './routes/webhooks.js';
 import sharingRoutes from './routes/sharing.js';
 import bulkRoutes from './routes/bulk.js';
 import kioskRoutes from './routes/kiosk.js';
+import userConfigRoutes from './routes/user-config.js';
 import lubeloggerImportRoutes from './routes/lubelogger-import.js';
+import csvRoutes from './routes/csv.js';
+import extraFieldRoutes from './routes/extra-fields.js';
+import oidcRoutes from './routes/oidc.js';
+import widgetRoutes from './routes/widgets.js';
+import customWidgetRoutes from './routes/custom-widgets.js';
+import householdRoutes from './routes/households.js';
+import translationRoutes from './routes/translations.js';
 import { startReminderScheduler } from './reminder-scheduler.js';
 import { isEmailEnabled } from './email.js';
 
@@ -57,6 +65,7 @@ app.use(cors({
 }));
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
+app.use(express.text({ limit: '10mb', type: 'text/csv' }));
 
 // Rate limiting
 app.use('/api/', generalRateLimiter);
@@ -77,13 +86,13 @@ app.use('/api/data', dataRoutes);
 app.use('/api/reminders', reminderRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/upgrades', upgradeRoutes);
-app.use('/api/fuel', fuelRoutes);
-app.use('/api/odometer', odometerRoutes);
+app.use('/api/fuel-records', fuelRoutes);
+app.use('/api/odometer-records', odometerRoutes);
 app.use('/api/supplies', supplyRoutes);
 app.use('/api/equipment', equipmentRoutes);
 app.use('/api/inspections', inspectionRoutes);
 app.use('/api/vehicle-notes', vehicleNoteRoutes);
-app.use('/api/taxes', taxRoutes);
+app.use('/api/tax-records', taxRoutes);
 app.use('/api/planner-tasks', plannerTaskRoutes);
 app.use('/api/attachments', attachmentRoutes);
 app.use('/api/search', searchRoutes);
@@ -92,18 +101,52 @@ app.use('/api/webhooks', webhookRoutes);
 app.use('/api/sharing', sharingRoutes);
 app.use('/api/bulk', bulkRoutes);
 app.use('/api/kiosk', kioskRoutes);
+app.use('/api/user-config', userConfigRoutes);
 app.use('/api/import/lubelogger', lubeloggerImportRoutes);
+app.use('/api/csv', csvRoutes);
+app.use('/api/extra-fields', extraFieldRoutes);
+app.use('/api/oidc', oidcRoutes);
+app.use('/api/widgets', widgetRoutes);
+app.use('/api/custom-widgets', customWidgetRoutes);
+app.use('/api/households', householdRoutes);
+app.use('/api/translations', translationRoutes);
 
 // Config endpoint (no auth) - lets frontend know about feature flags
 app.get('/api/config', (_req, res) => {
   res.json({
     emailEnabled: isEmailEnabled(),
+    oidcEnabled: process.env.OIDC_ENABLED === 'true',
+    oidcProviderName: process.env.OIDC_PROVIDER_NAME || 'SSO',
+    customLogoUrl: process.env.CUSTOM_LOGO_URL || '',
+    customMotd: process.env.CUSTOM_MOTD || '',
+    openRegistration: process.env.OPEN_REGISTRATION === 'true',
   });
 });
 
 // Health check
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// #11 API documentation endpoint
+app.get('/api/docs', (_req, res) => {
+  const routes: { method: string; path: string }[] = [];
+  app._router.stack.forEach((middleware: any) => {
+    if (middleware.route) {
+      routes.push({ method: Object.keys(middleware.route.methods)[0].toUpperCase(), path: middleware.route.path });
+    } else if (middleware.name === 'router') {
+      middleware.handle.stack.forEach((handler: any) => {
+        if (handler.route) {
+          const prefix = middleware.regexp?.toString().match(/\\\/([^\\]+)/)?.[1] || '';
+          routes.push({
+            method: Object.keys(handler.route.methods)[0].toUpperCase(),
+            path: prefix ? `/api/${prefix}${handler.route.path}` : handler.route.path,
+          });
+        }
+      });
+    }
+  });
+  res.json({ name: 'DriveLedger API', version: '2.0.0', endpoints: routes });
 });
 
 // Serve built frontend in production
@@ -143,7 +186,7 @@ async function createInitialAdmin(): Promise<void> {
   const [rows] = await pool.execute('SELECT COUNT(*) as count FROM users');
   const userCount = (rows as { count: number }[])[0];
 
-  if (userCount.count > 0) {
+  if (Number(userCount.count) > 0) {
     return;
   }
 

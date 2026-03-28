@@ -1,0 +1,164 @@
+/* ─── Theme System ─── */
+/* Dark theme (default) - matches existing zinc-950/zinc-900 design */
+
+:root,
+:root.dark,
+[data-theme="dark"] {
+  --bg-primary: #09090b;     /* zinc-950 */
+  --bg-secondary: #18181b;   /* zinc-900 */
+  --bg-tertiary: #27272a;    /* zinc-800 */
+  --bg-hover: rgba(39, 39, 42, 0.5);
+  --border: #27272a;          /* zinc-800 */
+  --border-light: rgba(39, 39, 42, 0.5);
+  --text-primary: #fafafa;    /* zinc-50 */
+  --text-secondary: #a1a1aa;  /* zinc-400 */
+  --text-muted: #71717a;      /* zinc-500 */
+  --text-faint: #52525b;      /* zinc-600 */
+  --accent: #8b5cf6;          /* violet-500 */
+  --accent-hover: #a78bfa;    /* violet-400 */
+  --accent-muted: rgba(139, 92, 246, 0.1);
+  --danger: #f87171;          /* red-400 */
+  --success: #34d399;         /* emerald-400 */
+  --warning: #fbbf24;         /* amber-400 */
+  --info: #38bdf8;            /* sky-400 */
+  --input-bg: #09090b;
+  --card-bg: #18181b;
+  --sidebar-bg: #18181b;
+  --header-bg: transparent;
+  --scrollbar-thumb: #3f3f46;
+  color-scheme: dark;
+}
+
+/* Light theme */
+:root.light,
+[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f4f4f5;    /* zinc-100 */
+  --bg-tertiary: #e4e4e7;     /* zinc-200 */
+  --bg-hover: rgba(228, 228, 231, 0.5);
+  --border: #d4d4d8;           /* zinc-300 */
+  --border-light: rgba(212, 212, 216, 0.5);
+  --text-primary: #18181b;     /* zinc-900 */
+  --text-secondary: #52525b;   /* zinc-600 */
+  --text-muted: #71717a;       /* zinc-500 */
+  --text-faint: #a1a1aa;       /* zinc-400 */
+  --accent: #7c3aed;           /* violet-600 */
+  --accent-hover: #6d28d9;     /* violet-700 */
+  --accent-muted: rgba(124, 58, 237, 0.1);
+  --danger: #ef4444;           /* red-500 */
+  --success: #10b981;          /* emerald-500 */
+  --warning: #f59e0b;          /* amber-500 */
+  --info: #0ea5e9;             /* sky-500 */
+  --input-bg: #ffffff;
+  --card-bg: #f4f4f5;
+  --sidebar-bg: #f4f4f5;
+  --header-bg: transparent;
+  --scrollbar-thumb: #a1a1aa;
+  color-scheme: light;
+}
+
+/* ─── Light-theme overrides for global elements ─── */
+
+:root.light body,
+[data-theme="light"] body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+:root.light ::-webkit-scrollbar-thumb,
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+
+/*
+  Light-mode color swaps for Tailwind utility classes.
+  These override the hardcoded dark colors used throughout the app
+  so existing components "just work" in light mode without changes.
+*/
+
+/* ── Background colors ── */
+:root.light .bg-zinc-950  { background-color: var(--bg-primary) !important; }
+:root.light .bg-zinc-900  { background-color: var(--bg-secondary) !important; }
+:root.light .bg-zinc-800  { background-color: var(--bg-tertiary) !important; }
+:root.light .bg-zinc-900\/50,
+:root.light .bg-zinc-900\/80 { background-color: var(--bg-secondary) !important; }
+:root.light .bg-zinc-800\/50 { background-color: var(--bg-hover) !important; }
+
+/* ── Text colors ── */
+:root.light .text-zinc-50  { color: var(--text-primary) !important; }
+:root.light .text-zinc-100 { color: var(--text-primary) !important; }
+:root.light .text-zinc-200 { color: #3f3f46 !important; }
+:root.light .text-zinc-300 { color: #52525b !important; }
+:root.light .text-zinc-400 { color: var(--text-secondary) !important; }
+:root.light .text-zinc-500 { color: var(--text-muted) !important; }
+:root.light .text-zinc-600 { color: var(--text-faint) !important; }
+:root.light .text-white    { color: var(--text-primary) !important; }
+
+/* ── Border colors ── */
+:root.light .border-zinc-800 { border-color: var(--border) !important; }
+:root.light .border-zinc-700 { border-color: var(--border) !important; }
+:root.light .border-zinc-800\/50 { border-color: var(--border-light) !important; }
+
+/* ── Divide colors ── */
+:root.light .divide-zinc-800 > :not(:first-child) { border-color: var(--border) !important; }
+
+/* ── Ring colors ── */
+:root.light .ring-zinc-800 { --tw-ring-color: var(--border) !important; }
+
+/* ── Placeholder colors ── */
+:root.light .placeholder-zinc-600::placeholder,
+:root.light .placeholder\\:text-zinc-600::placeholder { color: var(--text-faint) !important; }
+
+/* ── Hover states ── */
+:root.light .hover\:bg-zinc-800:hover  { background-color: var(--bg-tertiary) !important; }
+:root.light .hover\:bg-zinc-800\/50:hover { background-color: var(--bg-hover) !important; }
+:root.light .hover\:bg-zinc-700:hover { background-color: #d4d4d8 !important; }
+:root.light .hover\:text-zinc-300:hover { color: #3f3f46 !important; }
+:root.light .hover\:text-zinc-200:hover { color: #27272a !important; }
+:root.light .hover\:text-zinc-50:hover  { color: var(--text-primary) !important; }
+:root.light .hover\:text-white:hover    { color: var(--text-primary) !important; }
+:root.light .hover\:border-zinc-700:hover { border-color: #a1a1aa !important; }
+
+/* ── Focus states ── */
+:root.light .focus\:ring-zinc-700:focus { --tw-ring-color: #a1a1aa !important; }
+:root.light .focus\:border-zinc-600:focus { border-color: #a1a1aa !important; }
+
+/* ── Accent / violet buttons should keep white text in light mode ── */
+:root.light .bg-violet-500 .text-white,
+:root.light .bg-violet-600 .text-white,
+:root.light .bg-violet-500,
+:root.light .bg-violet-600 {
+  color: #ffffff !important;
+}
+:root.light .bg-violet-500 { background-color: var(--accent) !important; }
+:root.light .hover\:bg-violet-400:hover { background-color: var(--accent-hover) !important; }
+:root.light .bg-violet-500\/10 { background-color: var(--accent-muted) !important; }
+:root.light .bg-violet-400\/10 { background-color: var(--accent-muted) !important; }
+
+/* ── Status badge colors (keep original tones but adjust for light bg) ── */
+:root.light .bg-red-400\/10    { background-color: rgba(239, 68, 68, 0.1) !important; }
+:root.light .bg-emerald-400\/10 { background-color: rgba(16, 185, 129, 0.1) !important; }
+:root.light .bg-amber-400\/10  { background-color: rgba(245, 158, 11, 0.1) !important; }
+:root.light .bg-sky-400\/10    { background-color: rgba(14, 165, 233, 0.1) !important; }
+
+/* ── Input / form elements ── */
+:root.light input,
+:root.light textarea,
+:root.light select {
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+:root.light input::placeholder,
+:root.light textarea::placeholder {
+  color: var(--text-faint);
+}
+
+/* ── Ensure buttons with explicit white text on colored bg stay white ── */
+:root.light button.bg-violet-500,
+:root.light button.bg-red-500,
+:root.light button.bg-emerald-500,
+:root.light a.bg-violet-500 {
+  color: #ffffff !important;
+}

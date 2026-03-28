@@ -1,30 +1,17 @@
-import { useState, useMemo } from 'react';
-import { Eye, EyeOff, Loader2, Check, X } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Eye, EyeOff, Loader2, Check, X, Globe } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { ApiError } from '../api';
-import type { Page } from '../types';
+import { useI18n } from '../contexts/I18nContext';
+import { api, ApiError } from '../api';
+import type { Page, AppConfig } from '../types';
 
 interface RegisterProps {
   onNavigate: (page: Page) => void;
 }
 
-function getStrength(pw: string): { score: number; color: string; label: string } {
-  let score = 0;
-  if (pw.length >= 8) score++;
-  if (pw.length >= 12) score++;
-  if (/[A-Z]/.test(pw)) score++;
-  if (/[a-z]/.test(pw)) score++;
-  if (/[0-9]/.test(pw)) score++;
-  if (/[^A-Za-z0-9]/.test(pw)) score++;
-
-  if (score <= 2) return { score, color: 'bg-red-400', label: 'Weak' };
-  if (score <= 3) return { score, color: 'bg-amber-400', label: 'Fair' };
-  if (score <= 4) return { score, color: 'bg-sky-400', label: 'Good' };
-  return { score, color: 'bg-emerald-400', label: 'Strong' };
-}
-
 export default function Register({ onNavigate }: RegisterProps) {
   const { register } = useAuth();
+  const { t, lang, setLang, languages } = useI18n();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,29 +21,52 @@ export default function Register({ onNavigate }: RegisterProps) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const [openRegistration, setOpenRegistration] = useState(false);
 
-  const strength = useMemo(() => getStrength(password), [password]);
+  useEffect(() => {
+    api.getConfig().then((cfg: AppConfig) => {
+      setOpenRegistration(cfg.openRegistration === true);
+    }).catch(() => {});
+  }, []);
+
+  function getStrength(pw: string): { score: number; color: string; label: string } {
+    let score = 0;
+    if (pw.length >= 8) score++;
+    if (pw.length >= 12) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[a-z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw)) score++;
+
+    if (score <= 2) return { score, color: 'bg-red-400', label: t('password.weak') };
+    if (score <= 3) return { score, color: 'bg-amber-400', label: t('password.fair') };
+    if (score <= 4) return { score, color: 'bg-sky-400', label: t('password.good') };
+    return { score, color: 'bg-emerald-400', label: t('password.strong') };
+  }
+
+  const strength = useMemo(() => getStrength(password), [password, t]);
 
   const checks = useMemo(() => [
-    { label: 'At least 8 characters', met: password.length >= 8 },
-    { label: 'Uppercase letter', met: /[A-Z]/.test(password) },
-    { label: 'Lowercase letter', met: /[a-z]/.test(password) },
-    { label: 'Number', met: /[0-9]/.test(password) },
-    { label: 'Special character', met: /[^A-Za-z0-9]/.test(password) },
-    { label: 'Passwords match', met: password.length > 0 && password === confirmPassword },
-  ], [password, confirmPassword]);
+    { label: t('password.min_8_chars'), met: password.length >= 8 },
+    { label: t('password.uppercase'), met: /[A-Z]/.test(password) },
+    { label: t('password.lowercase'), met: /[a-z]/.test(password) },
+    { label: t('password.number'), met: /[0-9]/.test(password) },
+    { label: t('password.special_char'), met: /[^A-Za-z0-9]/.test(password) },
+    { label: t('password.passwords_match'), met: password.length > 0 && password === confirmPassword },
+  ], [password, confirmPassword, t]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!username.trim() || !email.trim() || !password || !confirmPassword || !registrationToken.trim()) return;
+    if (!username.trim() || !email.trim() || !password || !confirmPassword || (!openRegistration && !registrationToken.trim())) return;
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      setError(t('password.passwords_no_match'));
       return;
     }
 
     if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
+      setError(t('password.min_8_error'));
       return;
     }
 
@@ -69,7 +79,7 @@ export default function Register({ onNavigate }: RegisterProps) {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError('An unexpected error occurred. Please try again.');
+        setError(t('auth.unexpected_error'));
       }
     } finally {
       setLoading(false);
@@ -77,16 +87,46 @@ export default function Register({ onNavigate }: RegisterProps) {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex relative">
+      {/* Language switcher */}
+      <div className="absolute top-4 right-4 z-10">
+        <div className="relative">
+          <button
+            onClick={() => setLangMenuOpen(!langMenuOpen)}
+            className="flex items-center gap-2 text-zinc-500 hover:text-zinc-300 transition-colors text-sm bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 cursor-pointer"
+          >
+            <Globe size={14} />
+            <span>{languages.find((l) => l.code === lang)?.label ?? lang}</span>
+          </button>
+          {langMenuOpen && (
+            <div className="absolute right-0 mt-1 bg-zinc-900 border border-zinc-800 rounded-lg shadow-lg overflow-hidden min-w-[120px]">
+              {languages.map((l) => (
+                <button
+                  key={l.code}
+                  onClick={() => { setLang(l.code); setLangMenuOpen(false); }}
+                  className={`w-full text-left px-3 py-2 text-sm transition-colors cursor-pointer ${
+                    l.code === lang
+                      ? 'bg-violet-500/10 text-violet-400'
+                      : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Left branding panel */}
       <div className="hidden lg:flex w-[480px] shrink-0 bg-zinc-900 border-r border-zinc-800 flex-col items-center justify-center px-12">
         <div className="max-w-xs text-center">
           <img src="/logo.png" alt="DriveLedger" className="h-16 w-auto object-contain mx-auto mb-8" />
           <h1 className="text-3xl font-bold text-zinc-50 mb-4">
-            Start managing your vehicles.
+            {t('auth.start_managing')}
           </h1>
           <p className="text-zinc-400 text-base leading-relaxed">
-            Create an account to track expenses, plan purchases and stay on top of maintenance.
+            {t('auth.create_account_desc')}
           </p>
         </div>
       </div>
@@ -99,8 +139,8 @@ export default function Register({ onNavigate }: RegisterProps) {
             <img src="/logo.png" alt="DriveLedger" className="h-9 w-auto object-contain" />
           </div>
 
-          <h2 className="text-2xl font-semibold text-zinc-50 mb-1">Create account</h2>
-          <p className="text-sm text-zinc-500 mb-8">Fill in the details below to get started.</p>
+          <h2 className="text-2xl font-semibold text-zinc-50 mb-1">{t('auth.sign_up')}</h2>
+          <p className="text-sm text-zinc-500 mb-8">{t('auth.fill_details')}</p>
 
           {error && (
             <div className="bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-3 mb-6">
@@ -110,7 +150,7 @@ export default function Register({ onNavigate }: RegisterProps) {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Username</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('auth.username')}</label>
               <input
                 type="text"
                 value={username}
@@ -123,7 +163,7 @@ export default function Register({ onNavigate }: RegisterProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Email</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('auth.email')}</label>
               <input
                 type="email"
                 value={email}
@@ -135,13 +175,13 @@ export default function Register({ onNavigate }: RegisterProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Password</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('auth.password')}</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Create a strong password"
+                  placeholder={t('auth.create_strong_password')}
                   className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 pr-10 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 transition-colors"
                   autoComplete="new-password"
                 />
@@ -169,13 +209,13 @@ export default function Register({ onNavigate }: RegisterProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Confirm password</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('auth.confirm_password')}</label>
               <div className="relative">
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Repeat your password"
+                  placeholder={t('auth.repeat_password')}
                   className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 pr-10 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 transition-colors"
                   autoComplete="new-password"
                 />
@@ -205,16 +245,18 @@ export default function Register({ onNavigate }: RegisterProps) {
               </div>
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Registration token</label>
-              <input
-                type="text"
-                value={registrationToken}
-                onChange={(e) => setRegistrationToken(e.target.value)}
-                placeholder="Paste your invitation token"
-                className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 transition-colors"
-              />
-            </div>
+            {!openRegistration && (
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-2">{t('auth.registration_token')}</label>
+                <input
+                  type="text"
+                  value={registrationToken}
+                  onChange={(e) => setRegistrationToken(e.target.value)}
+                  placeholder={t('auth.paste_invitation_token')}
+                  className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 transition-colors"
+                />
+              </div>
+            )}
 
             <button
               type="submit"
@@ -222,17 +264,17 @@ export default function Register({ onNavigate }: RegisterProps) {
               className="w-full bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading && <Loader2 size={16} className="animate-spin" />}
-              Create account
+              {t('auth.sign_up')}
             </button>
           </form>
 
           <p className="mt-8 text-center text-sm text-zinc-500">
-            Already have an account?{' '}
+            {t('auth.have_account')}{' '}
             <button
               onClick={() => onNavigate('login')}
               className="text-violet-400 hover:text-violet-300 transition-colors font-medium"
             >
-              Sign in
+              {t('auth.sign_in')}
             </button>
           </p>
         </div>

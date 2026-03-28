@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
 import { verifyAccessToken, hashToken } from './auth.js';
+import { comparePassword } from './auth.js';
 import { getPool } from './db.js';
 
 // Extend Express Request type
@@ -90,7 +91,6 @@ export async function apiTokenMiddleware(req: Request, res: Response, next: Next
   const secret = credentials.slice(separatorIndex + 1);
 
   const tokenHash = hashToken(token);
-  const secretHash = hashToken(secret);
 
   try {
     const pool = getPool();
@@ -110,7 +110,8 @@ export async function apiTokenMiddleware(req: Request, res: Response, next: Next
       return;
     }
 
-    if (apiToken.secret_hash !== secretHash) {
+    const secretValid = await comparePassword(secret, apiToken.secret_hash);
+    if (!secretValid) {
       res.status(401).json({ error: 'Invalid API secret' });
       return;
     }

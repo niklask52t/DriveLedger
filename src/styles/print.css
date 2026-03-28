@@ -1,0 +1,93 @@
+@media print {
+  /* Hide non-printable elements */
+  aside,
+  nav,
+  header,
+  button,
+  .no-print,
+  [role="dialog"],
+  .fixed {
+    display: none !important;
+  }
+
+  /* Reset layout */
+  main {
+    margin-left: 0 !important;
+    padding: 0 !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 12pt;
+  }
+
+  /* Format tables for print */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 10pt;
+  }
+
+  th,
+  td {
+    border: 1px solid #ccc !important;
+    padding: 6px 8px !important;
+    color: black !important;
+    background: white !important;
+  }
+
+  th {
+    background: #f0f0f0 !important;
+    font-weight: 600 !important;
+  }
+
+  /* Ensure cards/grid items display nicely */
+  .bg-zinc-900,
+  .bg-zinc-950,
+  .bg-zinc-800 {
+    background: white !important;
+    border: 1px solid #ddd !important;
+  }
+
+  /* Make text readable */
+  .text-zinc-50,
+  .text-zinc-100,
+  .text-zinc-200,
+  .text-zinc-300,
+  .text-zinc-400 {
+    color: #333 !important;
+  }
+
+  .text-zinc-500,
+  .text-zinc-600 {
+    color: #666 !important;
+  }
+
+  /* Remove shadows and gradients */
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Print header */
+  .print-header {
+    display: block !important;
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 16pt;
+    font-weight: bold;
+  }
+
+  /* Page breaks */
+  tr {
+    page-break-inside: avoid;
+  }
+
+  /* Ensure links show URL */
+  a[href]::after {
+    content: " (" attr(href) ")";
+    font-size: 8pt;
+    color: #666;
+  }
+}

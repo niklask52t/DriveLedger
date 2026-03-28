@@ -134,13 +134,32 @@ router.delete('/users/:id', async (req: Request, res: Response) => {
     const conn = await pool.getConnection();
     await conn.beginTransaction();
     try {
-      // Delete savings transactions first (depends on savings_goals)
+      // Delete child records that reference vehicles first
+      await conn.execute('DELETE FROM user_config WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM attachments WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM vehicle_shares WHERE vehicle_id IN (SELECT id FROM vehicles WHERE user_id = ?)', [id]);
+      await conn.execute('DELETE FROM extra_field_definitions WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM supply_requisitions WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM inspection_templates WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM plan_templates WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM custom_widget_code WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM service_records WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM upgrade_records WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM fuel_records WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM odometer_records WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM inspections WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM vehicle_notes WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM taxes WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM supplies WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM equipment WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM planner_tasks WHERE user_id = ?', [id]);
       await conn.execute('DELETE FROM savings_transactions WHERE user_id = ?', [id]);
       await conn.execute('DELETE FROM reminders WHERE user_id = ?', [id]);
       await conn.execute('DELETE FROM savings_goals WHERE user_id = ?', [id]);
       await conn.execute('DELETE FROM costs WHERE user_id = ?', [id]);
       await conn.execute('DELETE FROM loans WHERE user_id = ?', [id]);
       await conn.execute('DELETE FROM repairs WHERE user_id = ?', [id]);
+      await conn.execute('DELETE FROM webhooks WHERE user_id = ?', [id]);
       await conn.execute('DELETE FROM planned_purchases WHERE user_id = ?', [id]);
       await conn.execute('DELETE FROM persons WHERE user_id = ?', [id]);
       await conn.execute('DELETE FROM api_tokens WHERE user_id = ?', [id]);

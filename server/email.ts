@@ -1,5 +1,9 @@
 import nodemailer from 'nodemailer';
 
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 const SMTP_HOST = process.env.SMTP_HOST;
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
 const SMTP_USER = process.env.SMTP_USER;
@@ -90,7 +94,7 @@ export async function sendRegistrationEmail(to: string, username: string): Promi
   }
   const subject = 'Welcome to DriveLedger!';
   const html = wrapHtml(subject, `
-    <h2>Welcome, ${username}!</h2>
+    <h2>Welcome, ${escapeHtml(username)}!</h2>
     <p>Your DriveLedger account has been created successfully.</p>
     <p>You can now start tracking your vehicle finances, costs, repairs, and more — all in one place.</p>
     <p>If you have any questions, feel free to reach out.</p>
@@ -163,11 +167,11 @@ export async function sendReminderEmail(to: string, reminderTitle: string, remin
     return;
   }
   const subject = `Reminder: ${reminderTitle} — DriveLedger`;
-  const entityLabel = entityType ? `<p style="font-size: 13px; color: #888;">Related to: <strong>${entityType}</strong></p>` : '';
+  const entityLabel = entityType ? `<p style="font-size: 13px; color: #888;">Related to: <strong>${escapeHtml(entityType)}</strong></p>` : '';
   const html = wrapHtml(subject, `
-    <h2>${reminderTitle}</h2>
+    <h2>${escapeHtml(reminderTitle)}</h2>
     ${entityLabel}
-    <p>${reminderBody || 'This is a reminder you set up in DriveLedger.'}</p>
+    <p>${escapeHtml(reminderBody || 'This is a reminder you set up in DriveLedger.')}</p>
     <p style="margin-top: 30px; font-size: 14px; color: #666;">Log in to DriveLedger to view or manage your reminders.</p>
     <p><strong>The DriveLedger Team</strong></p>
   `);

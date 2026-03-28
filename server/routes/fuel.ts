@@ -3,6 +3,8 @@ import { v4 as uuid } from 'uuid';
 import { getPool } from '../db';
 import { combinedAuthMiddleware } from '../middleware';
 import { toCamelCase, toSnakeCase, rowsToCamelCase } from '../utils';
+import { fireWebhooks } from '../webhookTrigger.js';
+import { autoInsertOdometer } from '../auto-odometer.js';
 
 const router = Router();
 router.use(combinedAuthMiddleware);
@@ -37,7 +39,51 @@ router.get('/', async (req: Request, res: Response) => {
       rows = result as any[];
     }
 
-    return res.status(200).json(rows.map(parseFuelRow));
+    const parsed = rows.map(parseFuelRow);
+
+    // Compute per-row fuel economy grouped by vehicle
+    const byVehicle = new Map<string, any[]>();
+    for (const r of parsed) {
+      const arr = byVehicle.get(r.vehicleId) || [];
+      arr.push(r);
+      byVehicle.set(r.vehicleId, arr);
+    }
+
+    for (const [, records] of byVehicle) {
+      const sorted = [...records].sort((a: any, b: any) => a.mileage - b.mileage);
+      let lastFullFillMileage = 0;
+      let accumulatedLiters = 0;
+
+      for (const record of sorted) {
+        if (record.isMissedEntry) {
+          lastFullFillMileage = record.mileage;
+          accumulatedLiters = 0;
+          record.fuelEconomy = null;
+          continue;
+        }
+
+        accumulatedLiters += record.fuelAmount;
+
+        if (!record.isPartialFill && lastFullFillMileage > 0) {
+          const distance = record.mileage - lastFullFillMileage;
+          if (distance > 0) {
+            record.fuelEconomy = Math.round(((accumulatedLiters / distance) * 100) * 100) / 100;
+          } else {
+            record.fuelEconomy = null;
+          }
+          lastFullFillMileage = record.mileage;
+          accumulatedLiters = 0;
+        } else if (record.isPartialFill) {
+          record.fuelEconomy = null;
+        } else {
+          lastFullFillMileage = record.mileage;
+          accumulatedLiters = 0;
+          record.fuelEconomy = null;
+        }
+      }
+    }
+
+    return res.status(200).json(parsed);
   } catch (err: any) {
     console.error('[FUEL] List error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -162,7 +208,16 @@ router.post('/', async (req: Request, res: Response) => {
 
     const [createdRows] = await pool.execute('SELECT * FROM fuel_records WHERE id = ?', [id]);
     const created = (createdRows as any[])[0];
-    return res.status(201).json(parseFuelRow(created));
+    const result = parseFuelRow(created);
+    fireWebhooks(userId, 'record.created', { type: 'fuel', ...result });
+
+    // Auto-insert odometer record if mileage is provided
+    const fuelMileage = Number(data.mileage) || 0;
+    if (fuelMileage > 0) {
+      await autoInsertOdometer(userId, data.vehicle_id, fuelMileage, data.date || '');
+    }
+
+    return res.status(201).json(result);
   } catch (err: any) {
     console.error('[FUEL] Create error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -215,7 +270,9 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     const [updatedRows] = await pool.execute('SELECT * FROM fuel_records WHERE id = ?', [id]);
     const updated = (updatedRows as any[])[0];
-    return res.status(200).json(parseFuelRow(updated));
+    const result = parseFuelRow(updated);
+    fireWebhooks(userId, 'record.updated', { type: 'fuel', ...result });
+    return res.status(200).json(result);
   } catch (err: any) {
     console.error('[FUEL] Update error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -237,6 +294,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
     await pool.execute('DELETE FROM fuel_records WHERE id = ? AND user_id = ?', [id, userId]);
 
+    fireWebhooks(userId, 'record.deleted', { type: 'fuel', id });
     return res.status(200).json({ message: 'Fuel record deleted' });
   } catch (err: any) {
     console.error('[FUEL] Delete error:', err);

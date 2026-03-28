@@ -1,5 +1,6 @@
 import { Star } from 'lucide-react';
 import { formatCurrency, formatNumber, getFuelTypeLabel } from '../../utils';
+import { useUnits } from '../../hooks/useUnits';
 import type { PlannedPurchase } from '../../types';
 
 interface ComparisonTableProps {
@@ -13,6 +14,7 @@ interface ComparisonRow {
 }
 
 export default function ComparisonTable({ purchases }: ComparisonTableProps) {
+  const { fmtDistance } = useUnits();
   if (purchases.length < 2) {
     return (
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
@@ -68,7 +70,7 @@ export default function ComparisonTable({ purchases }: ComparisonTableProps) {
     },
     {
       label: 'Mileage',
-      values: purchases.map((p) => (p.mileage > 0 ? `${formatNumber(p.mileage)} km` : '-')),
+      values: purchases.map((p) => (p.mileage > 0 ? fmtDistance(p.mileage) : '-')),
     },
     {
       label: 'Fuel Type',

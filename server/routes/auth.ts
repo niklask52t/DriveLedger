@@ -15,16 +15,21 @@ import { isEmailEnabled, sendRegistrationEmail, sendVerificationEmail, sendPassw
 
 const router = Router();
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const COOKIE_LIFESPAN_DAYS = parseInt(process.env.COOKIE_LIFESPAN_DAYS || '7', 10);
+const COOKIE_MAX_AGE = COOKIE_LIFESPAN_DAYS * 24 * 60 * 60 * 1000;
 
 // POST /register
 router.post('/register', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
     const { email, username, password, registrationToken } = req.body;
+    const openRegistration = process.env.OPEN_REGISTRATION === 'true';
 
     // Validate required fields
-    if (!email || !username || !password || !registrationToken) {
-      return res.status(400).json({ error: 'Email, username, password, and registration token are required' });
+    if (!email || !username || !password || (!openRegistration && !registrationToken)) {
+      return res.status(400).json({ error: openRegistration
+        ? 'Email, username, and password are required'
+        : 'Email, username, password, and registration token are required' });
     }
 
     // Validate email format
@@ -38,15 +43,18 @@ router.post('/register', async (req: Request, res: Response) => {
       return res.status(400).json({ error: passwordCheck.message });
     }
 
-    // Validate registration token
-    const [tokenRows] = await pool.execute(
-      'SELECT * FROM registration_tokens WHERE token = ? AND used = 0 AND expires_at > NOW()',
-      [registrationToken]
-    );
-    const tokenRow = (tokenRows as any[])[0];
+    // Validate registration token (skip if open registration)
+    let tokenRow: any = null;
+    if (!openRegistration) {
+      const [tokenRows] = await pool.execute(
+        'SELECT * FROM registration_tokens WHERE token = ? AND used = 0 AND expires_at > NOW()',
+        [registrationToken]
+      );
+      tokenRow = (tokenRows as any[])[0];
 
-    if (!tokenRow) {
-      return res.status(400).json({ error: 'Invalid, used, or expired registration token' });
+      if (!tokenRow) {
+        return res.status(400).json({ error: 'Invalid, used, or expired registration token' });
+      }
     }
 
     // Check if email or username already exists
@@ -80,11 +88,13 @@ router.post('/register', async (req: Request, res: Response) => {
       [userId, email, username, passwordHash, emailVerified, verificationToken, verificationExpires, now, now]
     );
 
-    // Mark registration token as used
-    await pool.execute(
-      'UPDATE registration_tokens SET used = 1, used_by = ? WHERE id = ?',
-      [userId, tokenRow.id]
-    );
+    // Mark registration token as used (only if token was validated)
+    if (tokenRow) {
+      await pool.execute(
+        'UPDATE registration_tokens SET used = 1, used_by = ? WHERE id = ?',
+        [userId, tokenRow.id]
+      );
+    }
 
     // Send emails
     if (emailEnabled) {
@@ -102,7 +112,7 @@ router.post('/register', async (req: Request, res: Response) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: COOKIE_MAX_AGE,
     });
 
     return res.status(201).json({
@@ -159,7 +169,7 @@ router.post('/login', async (req: Request, res: Response) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: COOKIE_MAX_AGE,
     });
 
     return res.status(200).json({
@@ -443,7 +453,7 @@ router.post('/change-password', combinedAuthMiddleware, async (req: Request, res
       return res.status(400).json({ error: 'Current password and new password are required' });
     }
 
-    if (!isValidPassword(newPassword)) {
+    if (!isValidPassword(newPassword).valid) {
       return res.status(400).json({ error: 'New password must be at least 8 characters with uppercase, lowercase, and number' });
     }
 
@@ -483,12 +493,32 @@ router.delete('/account', combinedAuthMiddleware, async (req: Request, res: Resp
     const conn = await pool.getConnection();
     await conn.beginTransaction();
     try {
+      // Delete child records that reference vehicles first
+      await conn.execute('DELETE FROM user_config WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM attachments WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM vehicle_shares WHERE vehicle_id IN (SELECT id FROM vehicles WHERE user_id = ?)', [userId]);
+      await conn.execute('DELETE FROM extra_field_definitions WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM supply_requisitions WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM inspection_templates WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM plan_templates WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM custom_widget_code WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM service_records WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM upgrade_records WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM fuel_records WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM odometer_records WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM inspections WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM vehicle_notes WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM taxes WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM supplies WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM equipment WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM planner_tasks WHERE user_id = ?', [userId]);
       await conn.execute('DELETE FROM reminders WHERE user_id = ?', [userId]);
       await conn.execute('DELETE FROM savings_transactions WHERE user_id = ?', [userId]);
       await conn.execute('DELETE FROM savings_goals WHERE user_id = ?', [userId]);
       await conn.execute('DELETE FROM repairs WHERE user_id = ?', [userId]);
       await conn.execute('DELETE FROM costs WHERE user_id = ?', [userId]);
       await conn.execute('DELETE FROM loans WHERE user_id = ?', [userId]);
+      await conn.execute('DELETE FROM webhooks WHERE user_id = ?', [userId]);
       await conn.execute('DELETE FROM vehicles WHERE user_id = ?', [userId]);
       await conn.execute('DELETE FROM planned_purchases WHERE user_id = ?', [userId]);
       await conn.execute('DELETE FROM persons WHERE user_id = ?', [userId]);

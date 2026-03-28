@@ -9,6 +9,7 @@ import ComparisonTable from '../components/purchase/ComparisonTable';
 import FinancingCalculator from '../components/purchase/FinancingCalculator';
 import PurchaseForm from '../components/purchase/PurchaseForm';
 import type { AppState, Page, PlannedPurchase } from '../types';
+import { useI18n } from '../contexts/I18nContext';
 
 interface Props {
   state: AppState;
@@ -42,6 +43,7 @@ const emptyPurchase: Partial<PlannedPurchase> = {
 };
 
 export default function PurchasePlanner({ state, setState, onNavigate }: Props) {
+  const { t } = useI18n();
   const { plannedPurchases } = state;
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -129,9 +131,9 @@ export default function PurchasePlanner({ state, setState, onNavigate }: Props) 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-50">Purchase Planner</h1>
+          <h1 className="text-2xl font-bold text-zinc-50">{t('purchase_planner.title')}</h1>
           <p className="text-sm text-zinc-500 mt-1">
-            Compare vehicles and plan your next purchase
+            {t('purchase_planner.subtitle')}
             {plannedPurchases.length > 0 && (
               <span className="ml-2 text-zinc-400">
                 &middot; {plannedPurchases.length} vehicle{plannedPurchases.length !== 1 ? 's' : ''} &middot; Total {formatCurrency(totalEstimated)}
@@ -150,14 +152,14 @@ export default function PurchasePlanner({ state, setState, onNavigate }: Props) 
             )}
           >
             <Calculator size={16} />
-            Calculator
+            {t('purchase_planner.calculator')}
           </button>
           <button
             onClick={openAdd}
             className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium flex items-center gap-2"
           >
             <Plus size={16} />
-            Add Vehicle
+            {t('purchase_planner.add')}
           </button>
         </div>
       </div>
@@ -174,13 +176,13 @@ export default function PurchasePlanner({ state, setState, onNavigate }: Props) 
             <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center mx-auto mb-4">
               <Plus size={24} className="text-zinc-500" />
             </div>
-            <p className="text-zinc-400 text-sm">No planned purchases yet</p>
-            <p className="text-zinc-600 text-xs mt-1">Add a vehicle to start comparing options</p>
+            <p className="text-zinc-400 text-sm">{t('purchase_planner.no_purchases')}</p>
+            <p className="text-zinc-600 text-xs mt-1">{t('purchase_planner.no_purchases_hint')}</p>
             <button
               onClick={openAdd}
               className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium mt-5"
             >
-              Add Your First Vehicle
+              {t('purchase_planner.add_first')}
             </button>
           </div>
         </div>
@@ -207,7 +209,7 @@ export default function PurchasePlanner({ state, setState, onNavigate }: Props) 
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editingId ? 'Edit Vehicle' : 'Add Vehicle'}
+        title={editingId ? t('purchase_planner.edit_vehicle') : t('purchase_planner.add')}
         size="3xl"
         footer={
           <>
@@ -226,14 +228,14 @@ export default function PurchasePlanner({ state, setState, onNavigate }: Props) 
               onClick={() => setModalOpen(false)}
               className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               onClick={handleSave}
               disabled={saving || !form.brand || !form.model}
               className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium disabled:opacity-50"
             >
-              {saving ? 'Saving...' : editingId ? 'Update' : 'Create'}
+              {saving ? t('common.saving') : editingId ? t('common.update') : t('common.create')}
             </button>
           </>
         }

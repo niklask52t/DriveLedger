@@ -4,6 +4,9 @@ import type {
   Reminder, AppConfig, ServiceRecord, UpgradeRecord, FuelRecord,
   OdometerRecord, Supply, Equipment, Inspection, VehicleNote,
   TaxRecord, PlannerTask, Attachment, SearchResult, TaskStage,
+  UserConfig, InspectionTemplate, PlanTemplate, SupplyRequisition,
+  ExtraFieldDefinition, DashboardWidget, Household, HouseholdMember,
+  CustomWidgetCode,
 } from './types';
 
 const API_BASE = '/api';
@@ -133,6 +136,16 @@ class ApiClient {
 
   async getConfig(): Promise<AppConfig> {
     return this.request<AppConfig>('GET', '/config');
+  }
+
+  // ─── User Config ──────────────────────────────────────
+
+  async getUserConfig(): Promise<UserConfig> {
+    return this.request<UserConfig>('GET', '/user-config');
+  }
+
+  async updateUserConfig(data: Partial<UserConfig>): Promise<UserConfig> {
+    return this.request<UserConfig>('PUT', '/user-config', data);
   }
 
   // ─── Email Verification ─────────────────────────────
@@ -383,7 +396,11 @@ class ApiClient {
   }
 
   async snoozeReminder(id: string, newDate: string): Promise<Reminder> {
-    return this.request<Reminder>('POST', `/reminders/${id}/snooze`, { remindAt: newDate });
+    return this.request<Reminder>('POST', `/reminders/${id}/snooze`, { remind_at: newDate });
+  }
+
+  async completeReminder(id: string): Promise<Reminder> {
+    return this.request<Reminder>('POST', `/reminders/${id}/complete`);
   }
 
   // ─── Data Management ──────────────────────────────────
@@ -476,10 +493,19 @@ class ApiClient {
     return this.request<void>('DELETE', `/odometer-records/${id}`);
   }
 
+  async recalculateOdometerDistances(vehicleId: string): Promise<OdometerRecord[]> {
+    return this.request<OdometerRecord[]>('POST', `/odometer-records/recalculate/${vehicleId}`);
+  }
+
   // ─── Supplies ─────────────────────────────────────────
 
-  async getSupplies(): Promise<Supply[]> {
-    return this.request<Supply[]>('GET', '/supplies');
+  async getSupplies(filter?: 'all' | 'shop' | 'vehicle'): Promise<Supply[]> {
+    const query = filter && filter !== 'all' ? `?filter=${filter}` : '';
+    return this.request<Supply[]>('GET', `/supplies${query}`);
+  }
+
+  async getShopSupplies(): Promise<Supply[]> {
+    return this.request<Supply[]>('GET', '/supplies/shop');
   }
 
   async createSupply(data: Partial<Supply>): Promise<Supply> {
@@ -492,6 +518,18 @@ class ApiClient {
 
   async deleteSupply(id: string): Promise<void> {
     return this.request<void>('DELETE', `/supplies/${id}`);
+  }
+
+  async requisitionSupply(id: string, data: { quantity: number; recordType: string; recordId: string; description: string }): Promise<Supply> {
+    return this.request<Supply>('POST', `/supplies/${id}/requisition`, data);
+  }
+
+  async getSupplyRequisitions(id: string): Promise<SupplyRequisition[]> {
+    return this.request<SupplyRequisition[]>('GET', `/supplies/${id}/requisitions`);
+  }
+
+  async restoreSupply(id: string, requisitionId: string): Promise<Supply> {
+    return this.request<Supply>('POST', `/supplies/${id}/restore`, { requisitionId });
   }
 
   // ─── Equipment ────────────────────────────────────────
@@ -516,6 +554,10 @@ class ApiClient {
     return this.request<Equipment>('PATCH', `/equipment/${id}/reassign`, { vehicleId });
   }
 
+  async getEquipmentDistanceSummary(): Promise<Record<string, number>> {
+    return this.request<Record<string, number>>('GET', '/equipment/distance-summary');
+  }
+
   // ─── Inspections ──────────────────────────────────────
 
   async getInspections(): Promise<Inspection[]> {
@@ -532,6 +574,20 @@ class ApiClient {
 
   async deleteInspection(id: string): Promise<void> {
     return this.request<void>('DELETE', `/inspections/${id}`);
+  }
+
+  // ─── Inspection Templates ──────────────────────────────
+
+  async getInspectionTemplates(): Promise<InspectionTemplate[]> {
+    return this.request<InspectionTemplate[]>('GET', '/inspections/templates');
+  }
+
+  async createInspectionTemplate(data: { name: string; fields: any[] }): Promise<InspectionTemplate> {
+    return this.request<InspectionTemplate>('POST', '/inspections/templates', data);
+  }
+
+  async deleteInspectionTemplate(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/inspections/templates/${id}`);
   }
 
   // ─── Vehicle Notes ────────────────────────────────────
@@ -556,6 +612,10 @@ class ApiClient {
     return this.request<VehicleNote>('PATCH', `/vehicle-notes/${id}/toggle-pin`);
   }
 
+  async bulkPinNotes(noteIds: string[], pinned: boolean): Promise<VehicleNote[]> {
+    return this.request<VehicleNote[]>('POST', '/vehicle-notes/bulk-pin', { noteIds, pinned });
+  }
+
   // ─── Tax Records ──────────────────────────────────────
 
   async getTaxRecords(): Promise<TaxRecord[]> {
@@ -572,6 +632,10 @@ class ApiClient {
 
   async deleteTaxRecord(id: string): Promise<void> {
     return this.request<void>('DELETE', `/tax-records/${id}`);
+  }
+
+  async advanceTaxRecord(id: string): Promise<TaxRecord> {
+    return this.request<TaxRecord>('POST', `/tax-records/${id}/advance`);
   }
 
   // ─── Planner Tasks ───────────────────────────────────
@@ -594,6 +658,48 @@ class ApiClient {
 
   async updateTaskStage(id: string, stage: TaskStage): Promise<PlannerTask> {
     return this.request<PlannerTask>('PATCH', `/planner-tasks/${id}/stage`, { stage });
+  }
+
+  // ─── Plan Templates ───────────────────────────────────
+
+  async getPlanTemplates(): Promise<PlanTemplate[]> {
+    return this.request<PlanTemplate[]>('GET', '/planner-tasks/templates');
+  }
+
+  async createPlanTemplate(data: Partial<PlanTemplate>): Promise<PlanTemplate> {
+    return this.request<PlanTemplate>('POST', '/planner-tasks/templates', data);
+  }
+
+  async deletePlanTemplate(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/planner-tasks/templates/${id}`);
+  }
+
+  async createTaskFromTemplate(templateId: string, vehicleId: string): Promise<PlannerTask> {
+    return this.request<PlannerTask>('POST', `/planner-tasks/from-template/${templateId}`, { vehicleId });
+  }
+
+  async convertPlanToRecord(taskId: string, targetType?: string): Promise<{ recordId: string; recordType: string }> {
+    return this.request<{ recordId: string; recordType: string }>('POST', `/planner-tasks/${taskId}/convert`, { targetType });
+  }
+
+  // ─── Bulk Move ─────────────────────────────────────────
+
+  async moveRecords(recordIds: string[], fromType: string, toType: string): Promise<{ moved: number }> {
+    return this.request<{ moved: number }>('POST', '/bulk/move', { ids: recordIds, fromType, toType });
+  }
+
+  // ─── Bulk Edit & Duplicate ─────────────────────────────
+
+  async bulkEdit(recordIds: string[], recordType: string, updates: Record<string, any>): Promise<{ updated: number }> {
+    return this.request<{ updated: number }>('POST', '/bulk/edit', { recordIds, recordType, updates });
+  }
+
+  async bulkDuplicate(recordIds: string[], recordType: string, targetVehicleId?: string): Promise<{ duplicated: number }> {
+    return this.request<{ duplicated: number }>('POST', '/bulk/duplicate', { recordIds, recordType, targetVehicleId });
+  }
+
+  async bulkDuplicateToVehicle(recordIds: string[], recordType: string, targetVehicleId: string): Promise<{ duplicated: number }> {
+    return this.request<{ duplicated: number }>('POST', '/bulk/duplicate-to-vehicle', { recordIds, recordType, targetVehicleId });
   }
 
   // ─── Attachments ──────────────────────────────────────
@@ -623,6 +729,18 @@ class ApiClient {
     return this.request<void>('DELETE', `/attachments/${id}`);
   }
 
+  async addLinkAttachment(recordType: string, recordId: string, url: string, name?: string): Promise<Attachment> {
+    return this.request<Attachment>('POST', '/attachments/link', { recordType, recordId, url, name });
+  }
+
+  async addReferenceAttachment(recordType: string, recordId: string, refRecordType: string, refRecordId: string): Promise<Attachment> {
+    return this.request<Attachment>('POST', '/attachments/reference', { recordType, recordId, refRecordType, refRecordId });
+  }
+
+  async renameAttachment(id: string, name: string): Promise<Attachment> {
+    return this.request<Attachment>('PUT', `/attachments/${id}/rename`, { name });
+  }
+
   // ─── Search ───────────────────────────────────────────
 
   async globalSearch(query: string): Promise<SearchResult[]> {
@@ -634,6 +752,154 @@ class ApiClient {
   async getMaintenanceReport(vehicleId: string, year?: number): Promise<Record<string, unknown>> {
     const params = year ? `?year=${year}` : '';
     return this.request<Record<string, unknown>>('GET', `/reports/maintenance/${vehicleId}${params}`);
+  }
+
+  // ─── Monthly Report ──────────────────────────────────────
+
+  async getMonthlyReport(vehicleId: string): Promise<Record<string, any>> {
+    return this.request<Record<string, any>>('GET', `/reports/vehicle/${vehicleId}/monthly`);
+  }
+
+  // ─── Full Backup / Restore (admin only) ────────────────
+
+  async fullBackup(): Promise<Record<string, any>> {
+    return this.request<Record<string, any>>('GET', '/data/backup');
+  }
+
+  async fullRestore(data: Record<string, any>): Promise<{ restored: number }> {
+    return this.request<{ restored: number }>('POST', '/data/restore', { data });
+  }
+
+  // ─── Vehicle History ──────────────────────────────────────
+
+  async getVehicleHistory(vehicleId: string, year?: string): Promise<any[]> {
+    const qs = year ? `?year=${year}` : '';
+    return this.request<any[]>('GET', `/reports/vehicle/${vehicleId}/history${qs}`);
+  }
+
+  // ─── CSV Import/Export ────────────────────────────────────
+
+  async exportCsv(recordType: string, params?: { vehicleId?: string; startDate?: string; endDate?: string; tags?: string; tagFilter?: string }): Promise<string> {
+    const query = new URLSearchParams();
+    if (params?.vehicleId) query.set('vehicleId', params.vehicleId);
+    if (params?.startDate) query.set('startDate', params.startDate);
+    if (params?.endDate) query.set('endDate', params.endDate);
+    if (params?.tags) query.set('tags', params.tags);
+    if (params?.tagFilter) query.set('tagFilter', params.tagFilter);
+    const qs = query.toString();
+    const url = `/csv/export/${recordType}${qs ? '?' + qs : ''}`;
+    const headers: Record<string, string> = {};
+    if (this.accessToken) headers['Authorization'] = `Bearer ${this.accessToken}`;
+    const res = await fetch(`${API_BASE}${url}`, {
+      method: 'GET',
+      headers,
+      credentials: 'include',
+    });
+    if (!res.ok) throw new ApiError(res.status, await res.text());
+    return res.text();
+  }
+
+  async importCsv(recordType: string, csv: string, mapping?: Record<string, string>): Promise<{ count: number }> {
+    return this.request<{ count: number }>('POST', `/csv/import/${recordType}`, { csv, mapping });
+  }
+
+  async getCsvSample(recordType: string): Promise<string> {
+    const headers: Record<string, string> = {};
+    if (this.accessToken) headers['Authorization'] = `Bearer ${this.accessToken}`;
+    const res = await fetch(`${API_BASE}/csv/sample/${recordType}`, {
+      method: 'GET',
+      headers,
+      credentials: 'include',
+    });
+    if (!res.ok) throw new ApiError(res.status, await res.text());
+    return res.text();
+  }
+
+  async getCsvRecordTypes(): Promise<{ key: string; columns: string[] }[]> {
+    return this.request<{ key: string; columns: string[] }[]>('GET', '/csv/record-types');
+  }
+  // ─── Extra Fields ───────────────────────────────────
+
+  async getExtraFieldDefinitions(): Promise<ExtraFieldDefinition[]> {
+    return this.request<ExtraFieldDefinition[]>('GET', '/extra-fields');
+  }
+
+  async createExtraFieldDefinition(data: Omit<ExtraFieldDefinition, 'id' | 'createdAt'>): Promise<ExtraFieldDefinition> {
+    return this.request<ExtraFieldDefinition>('POST', '/extra-fields', data);
+  }
+
+  async updateExtraFieldDefinition(id: string, data: Partial<ExtraFieldDefinition>): Promise<ExtraFieldDefinition> {
+    return this.request<ExtraFieldDefinition>('PUT', `/extra-fields/${id}`, data);
+  }
+
+  async deleteExtraFieldDefinition(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/extra-fields/${id}`);
+  }
+
+  // ─── Dashboard Widgets ───────────────────────────────
+
+  async getWidgets(): Promise<DashboardWidget[]> {
+    return this.request<DashboardWidget[]>('GET', '/widgets');
+  }
+
+  async createWidget(data: { name: string; type: string; config?: Record<string, any> }): Promise<DashboardWidget> {
+    return this.request<DashboardWidget>('POST', '/widgets', data);
+  }
+
+  async updateWidget(id: string, data: Partial<{ name: string; type: string; config: Record<string, any>; sortOrder: number }>): Promise<DashboardWidget> {
+    return this.request<DashboardWidget>('PUT', `/widgets/${id}`, data);
+  }
+
+  async deleteWidget(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/widgets/${id}`);
+  }
+
+  // ─── Custom Widget Code ──────────────────────────────
+
+  async getCustomWidgetCode(): Promise<CustomWidgetCode[]> {
+    return this.request('GET', '/custom-widgets');
+  }
+
+  async createCustomWidgetCode(data: { name: string; code: string; enabled?: boolean; sortOrder?: number }): Promise<CustomWidgetCode> {
+    return this.request('POST', '/custom-widgets', data);
+  }
+
+  async updateCustomWidgetCode(id: string, data: Partial<CustomWidgetCode>): Promise<CustomWidgetCode> {
+    return this.request('PUT', `/custom-widgets/${id}`, data);
+  }
+
+  async deleteCustomWidgetCode(id: string): Promise<void> {
+    return this.request('DELETE', `/custom-widgets/${id}`);
+  }
+
+  // ─── Households ──────────────────────────────────────
+
+  async getHouseholds(): Promise<Household[]> {
+    return this.request<Household[]>('GET', '/households');
+  }
+
+  async createHousehold(name: string): Promise<Household> {
+    return this.request<Household>('POST', '/households', { name });
+  }
+
+  async updateHousehold(id: string, name: string): Promise<Household> {
+    return this.request<Household>('PUT', `/households/${id}`, { name });
+  }
+
+  async deleteHousehold(id: string): Promise<void> {
+    return this.request<void>('DELETE', `/households/${id}`);
+  }
+
+  async getHouseholdMembers(householdId: string): Promise<HouseholdMember[]> {
+    return this.request<HouseholdMember[]>('GET', `/households/${householdId}/members`);
+  }
+
+  async addHouseholdMember(householdId: string, email: string, permissions?: string[]): Promise<HouseholdMember> {
+    return this.request<HouseholdMember>('POST', `/households/${householdId}/members`, { email, permissions });
+  }
+
+  async removeHouseholdMember(householdId: string, memberId: string): Promise<void> {
+    return this.request<void>('DELETE', `/households/${householdId}/members/${memberId}`);
   }
 }
 

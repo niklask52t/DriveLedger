@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { v4 as uuid } from 'uuid';
 import { getPool } from '../db.js';
 import { combinedAuthMiddleware } from '../middleware.js';
 import { toSnakeCase } from '../utils.js';
@@ -37,7 +38,7 @@ const UPDATABLE_COLUMNS: Record<string, string[]> = {
   inspections: ['date', 'title', 'overall_result', 'mileage', 'cost', 'notes'],
   vehicle_notes: ['title', 'content', 'is_pinned', 'tags'],
   taxes: ['date', 'description', 'cost', 'is_recurring', 'recurring_interval', 'due_date', 'notes', 'tags'],
-  planner_tasks: ['title', 'description', 'priority', 'stage', 'category', 'notes'],
+  planner_tasks: ['title', 'description', 'priority', 'stage', 'category', 'notes', 'target_type', 'estimated_cost'],
 };
 
 function getTableName(recordType: string): string | null {
@@ -45,14 +46,17 @@ function getTableName(recordType: string): string | null {
 }
 
 // POST /bulk/edit - Bulk update records
+// Accepts both { ids } and { recordIds } for backward compat
+// Special value "---" clears the field (sets to empty string)
 router.post('/edit', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
     const userId = (req as any).user.id;
-    const { recordType, ids, updates } = req.body;
+    const { recordType, ids, recordIds, updates } = req.body;
+    const idList = Array.isArray(recordIds) && recordIds.length > 0 ? recordIds : ids;
 
-    if (!recordType || !Array.isArray(ids) || ids.length === 0 || !updates || typeof updates !== 'object') {
-      return res.status(400).json({ error: 'recordType, ids (non-empty array), and updates (object) are required' });
+    if (!recordType || !Array.isArray(idList) || idList.length === 0 || !updates || typeof updates !== 'object') {
+      return res.status(400).json({ error: 'recordType, ids/recordIds (non-empty array), and updates (object) are required' });
     }
 
     const tableName = getTableName(recordType);
@@ -63,15 +67,19 @@ router.post('/edit', async (req: Request, res: Response) => {
     const allowedColumns = UPDATABLE_COLUMNS[tableName] || [];
     const snakeUpdates = toSnakeCase(updates);
 
-    // Build SET clause with only allowed columns
+    // Filter out null/undefined values - only non-empty fields are applied
     const setClauses: string[] = [];
     const values: any[] = [];
 
     for (const [col, val] of Object.entries(snakeUpdates)) {
+      if (val === null || val === undefined) continue;
       if (allowedColumns.includes(col)) {
         setClauses.push(`${col} = ?`);
         if (col === 'tags') {
           values.push(val ? JSON.stringify(val) : null);
+        } else if (val === '---') {
+          // Special clear value
+          values.push('');
         } else {
           values.push(val);
         }
@@ -83,14 +91,14 @@ router.post('/edit', async (req: Request, res: Response) => {
     }
 
     // Build placeholders for IN clause
-    const placeholders = ids.map(() => '?').join(', ');
+    const placeholders = idList.map(() => '?').join(', ');
     const query = `UPDATE ${tableName} SET ${setClauses.join(', ')} WHERE id IN (${placeholders}) AND user_id = ?`;
-    values.push(...ids, userId);
+    values.push(...idList, userId);
 
     const [result] = await pool.execute(query, values);
-    const affected = (result as any).affectedRows || 0;
+    const updated = (result as any).affectedRows || 0;
 
-    return res.status(200).json({ message: 'Bulk edit complete', affected });
+    return res.status(200).json({ message: 'Bulk edit complete', updated, affected: updated });
   } catch (err: any) {
     console.error('[BULK] Edit error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -276,6 +284,134 @@ router.post('/tag', async (req: Request, res: Response) => {
     return res.status(200).json({ message: 'Bulk tag update complete', affected: updated });
   } catch (err: any) {
     console.error('[BULK] Tag error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /bulk/duplicate - Duplicate records (optionally to another vehicle)
+router.post('/duplicate', async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    const userId = (req as any).user.id;
+    const { recordIds, recordType, targetVehicleId } = req.body;
+
+    if (!recordType || !Array.isArray(recordIds) || recordIds.length === 0) {
+      return res.status(400).json({ error: 'recordType and recordIds (non-empty array) are required' });
+    }
+
+    const tableName = getTableName(recordType);
+    if (!tableName) {
+      return res.status(400).json({ error: `Invalid recordType: ${recordType}` });
+    }
+
+    const placeholders = recordIds.map(() => '?').join(', ');
+    const [rows] = await pool.execute(
+      `SELECT * FROM ${tableName} WHERE id IN (${placeholders}) AND user_id = ?`,
+      [...recordIds, userId]
+    );
+    const records = rows as any[];
+
+    if (records.length === 0) {
+      return res.status(404).json({ error: 'No matching records found' });
+    }
+
+    // Get column names from the first record, excluding 'id' and 'created_at'
+    const allColumns = Object.keys(records[0]);
+    const copyColumns = allColumns.filter(c => c !== 'id' && c !== 'created_at');
+
+    let duplicated = 0;
+    for (const record of records) {
+      const newId = uuid();
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const colNames = ['id', ...copyColumns, 'created_at'];
+      const colPlaceholders = colNames.map(() => '?').join(', ');
+      const colValues = [
+        newId,
+        ...copyColumns.map(c => {
+          if (c === 'vehicle_id' && targetVehicleId) return targetVehicleId;
+          return record[c];
+        }),
+        now,
+      ];
+
+      await pool.execute(
+        `INSERT INTO ${tableName} (${colNames.join(', ')}) VALUES (${colPlaceholders})`,
+        colValues
+      );
+      duplicated++;
+    }
+
+    return res.status(200).json({ message: 'Bulk duplicate complete', duplicated });
+  } catch (err: any) {
+    console.error('[BULK] Duplicate error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /bulk/duplicate-to-vehicle - Duplicate records to a specific vehicle
+router.post('/duplicate-to-vehicle', async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    const userId = (req as any).user.id;
+    const { recordIds, recordType, targetVehicleId } = req.body;
+
+    if (!recordType || !Array.isArray(recordIds) || recordIds.length === 0 || !targetVehicleId) {
+      return res.status(400).json({ error: 'recordType, recordIds (non-empty array), and targetVehicleId are required' });
+    }
+
+    const tableName = getTableName(recordType);
+    if (!tableName) {
+      return res.status(400).json({ error: `Invalid recordType: ${recordType}` });
+    }
+
+    // Verify target vehicle belongs to user
+    const [vehicleRows] = await pool.execute(
+      'SELECT id FROM vehicles WHERE id = ? AND user_id = ?',
+      [targetVehicleId, userId]
+    );
+    if ((vehicleRows as any[]).length === 0) {
+      return res.status(404).json({ error: 'Target vehicle not found' });
+    }
+
+    const placeholders = recordIds.map(() => '?').join(', ');
+    const [rows] = await pool.execute(
+      `SELECT * FROM ${tableName} WHERE id IN (${placeholders}) AND user_id = ?`,
+      [...recordIds, userId]
+    );
+    const records = rows as any[];
+
+    if (records.length === 0) {
+      return res.status(404).json({ error: 'No matching records found' });
+    }
+
+    const allColumns = Object.keys(records[0]);
+    const copyColumns = allColumns.filter(c => c !== 'id' && c !== 'created_at');
+
+    let duplicated = 0;
+    for (const record of records) {
+      const newId = uuid();
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const colNames = ['id', ...copyColumns, 'created_at'];
+      const colPlaceholders = colNames.map(() => '?').join(', ');
+      const colValues = [
+        newId,
+        ...copyColumns.map(c => {
+          if (c === 'vehicle_id') return targetVehicleId;
+          return record[c];
+        }),
+        now,
+      ];
+
+      await pool.execute(
+        `INSERT INTO ${tableName} (${colNames.join(', ')}) VALUES (${colPlaceholders})`,
+        colValues
+      );
+      duplicated++;
+    }
+
+    return res.status(200).json({ message: 'Bulk duplicate to vehicle complete', duplicated });
+  } catch (err: any) {
+    console.error('[BULK] Duplicate to vehicle error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

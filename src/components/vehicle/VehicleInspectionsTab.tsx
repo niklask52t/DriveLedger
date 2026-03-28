@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Modal from '../Modal';
 import { api } from '../../api';
 import { formatCurrency, formatDate, formatNumber } from '../../utils';
+import { useI18n } from '../../contexts/I18nContext';
+import { useUnits } from '../../hooks/useUnits';
 import type { AppState, Inspection, InspectionItem, InspectionResult } from '../../types';
 
 const inputClass =
@@ -47,6 +49,8 @@ const emptyForm = {
 };
 
 export default function VehicleInspectionsTab({ vehicleId, state, setState }: Props) {
+  const { t } = useI18n();
+  const { fmtDistance, distanceUnit } = useUnits();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -135,20 +139,20 @@ export default function VehicleInspectionsTab({ vehicleId, state, setState }: Pr
     <div>
       <div className="flex items-center justify-between mb-6">
         <p className="text-sm text-zinc-400">
-          {records.length} inspection{records.length !== 1 ? 's' : ''} &middot; Total: {formatCurrency(totalCost)}
+          {t('vehicle_tab.inspections.count', { count: records.length })} &middot; {t('common.total')}: {formatCurrency(totalCost)}
         </p>
         <button
           onClick={openAdd}
           className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2 transition-colors"
         >
           <Plus size={16} />
-          Add Inspection
+          {t('vehicle_tab.inspections.add')}
         </button>
       </div>
 
       {records.length === 0 ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
-          <p className="text-zinc-500 text-sm">No inspections recorded yet.</p>
+          <p className="text-zinc-500 text-sm">{t('vehicle_tab.inspections.no_inspections')}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -173,10 +177,10 @@ export default function VehicleInspectionsTab({ vehicleId, state, setState }: Pr
                       </div>
                       <div className="flex items-center gap-3 text-xs text-zinc-500">
                         <span>{formatDate(r.date)}</span>
-                        {r.mileage > 0 && <span>{formatNumber(r.mileage)} km</span>}
+                        {r.mileage > 0 && <span>{fmtDistance(r.mileage)}</span>}
                         {r.items.length > 0 && (
                           <span>
-                            {passCount} passed, {failCount} failed
+                            {t('vehicle_tab.inspections.passed', { count: passCount })}, {t('vehicle_tab.inspections.failed', { count: failCount })}
                           </span>
                         )}
                         {r.cost > 0 && <span>{formatCurrency(r.cost)}</span>}
@@ -196,13 +200,13 @@ export default function VehicleInspectionsTab({ vehicleId, state, setState }: Pr
                           onClick={() => { handleDelete(r.id); setDeleteConfirm(null); }}
                           className="bg-red-400/10 text-red-400 hover:bg-red-400/20 rounded-lg h-9 px-3 text-xs transition-colors"
                         >
-                          Confirm
+                          {t('common.confirm')}
                         </button>
                         <button
                           onClick={() => setDeleteConfirm(null)}
                           className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-xs transition-colors"
                         >
-                          Cancel
+                          {t('common.cancel')}
                         </button>
                       </div>
                     ) : (
@@ -257,7 +261,7 @@ export default function VehicleInspectionsTab({ vehicleId, state, setState }: Pr
       <Modal
         isOpen={showModal}
         onClose={() => { setShowModal(false); setEditingId(null); }}
-        title={editingId ? 'Edit Inspection' : 'Add Inspection'}
+        title={editingId ? t('vehicle_tab.inspections.edit') : t('vehicle_tab.inspections.add')}
         size="xl"
         footer={
           <>
@@ -265,20 +269,20 @@ export default function VehicleInspectionsTab({ vehicleId, state, setState }: Pr
               onClick={() => { setShowModal(false); setEditingId(null); }}
               className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm transition-colors"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               onClick={handleSave}
               className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium transition-colors"
             >
-              {editingId ? 'Update' : 'Add'}
+              {editingId ? t('common.update') : t('common.add')}
             </button>
           </>
         }
       >
         <div className="space-y-5">
           <div>
-            <label className={labelClass}>Title</label>
+            <label className={labelClass}>{t('common.title')}</label>
             <input
               type="text"
               className={inputClass}
@@ -289,7 +293,7 @@ export default function VehicleInspectionsTab({ vehicleId, state, setState }: Pr
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className={labelClass}>Date</label>
+              <label className={labelClass}>{t('common.date')}</label>
               <input
                 type="date"
                 className={inputClass}
@@ -298,7 +302,7 @@ export default function VehicleInspectionsTab({ vehicleId, state, setState }: Pr
               />
             </div>
             <div>
-              <label className={labelClass}>Overall Result</label>
+              <label className={labelClass}>{t('vehicle_tab.inspections.overall_result')}</label>
               <select
                 className={selectClass}
                 style={{ backgroundImage: selectChevron, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center' }}
@@ -311,7 +315,7 @@ export default function VehicleInspectionsTab({ vehicleId, state, setState }: Pr
               </select>
             </div>
             <div>
-              <label className={labelClass}>Cost (EUR)</label>
+              <label className={labelClass}>{t('vehicle_tab.inspections.cost_eur')}</label>
               <input
                 type="number"
                 step="0.01"
@@ -323,7 +327,7 @@ export default function VehicleInspectionsTab({ vehicleId, state, setState }: Pr
             </div>
           </div>
           <div>
-            <label className={labelClass}>Mileage (km)</label>
+            <label className={labelClass}>{t('common.mileage')} ({distanceUnit})</label>
             <input
               type="number"
               className={inputClass}
@@ -336,13 +340,13 @@ export default function VehicleInspectionsTab({ vehicleId, state, setState }: Pr
           {/* Items builder */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <label className="text-sm font-medium text-zinc-400">Inspection Items</label>
+              <label className="text-sm font-medium text-zinc-400">{t('vehicle_tab.inspections.inspection_items')}</label>
               <button
                 type="button"
                 onClick={addItem}
                 className="text-xs text-violet-400 hover:text-violet-300 transition-colors"
               >
-                + Add Item
+                {t('vehicle_tab.inspections.add_item')}
               </button>
             </div>
             <div className="space-y-2">
@@ -351,7 +355,7 @@ export default function VehicleInspectionsTab({ vehicleId, state, setState }: Pr
                   <input
                     type="text"
                     className="flex-1 h-9 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
-                    placeholder="Item name"
+                    placeholder={t('vehicle_tab.inspections.item_name')}
                     value={item.name}
                     onChange={(e) => updateItem(i, 'name', e.target.value)}
                   />
@@ -368,7 +372,7 @@ export default function VehicleInspectionsTab({ vehicleId, state, setState }: Pr
                   <input
                     type="text"
                     className="w-36 h-9 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
-                    placeholder="Notes"
+                    placeholder={t('common.notes')}
                     value={item.notes}
                     onChange={(e) => updateItem(i, 'notes', e.target.value)}
                   />
@@ -386,10 +390,10 @@ export default function VehicleInspectionsTab({ vehicleId, state, setState }: Pr
           </div>
 
           <div>
-            <label className={labelClass}>Notes</label>
+            <label className={labelClass}>{t('common.notes')}</label>
             <textarea
               className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 min-h-[80px] resize-none"
-              placeholder="Optional notes..."
+              placeholder={t('common.optional_notes')}
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />

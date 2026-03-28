@@ -172,6 +172,65 @@ router.put('/:id/pin', async (req: Request, res: Response) => {
   }
 });
 
+// PATCH /:id/toggle-pin - toggle is_pinned (alias for frontend compatibility)
+router.patch('/:id/toggle-pin', async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    const userId = (req as any).user.id;
+    const { id } = req.params;
+
+    const [existingRows] = await pool.execute('SELECT * FROM vehicle_notes WHERE id = ? AND user_id = ?', [id, userId]);
+    const existing = (existingRows as any[])[0];
+    if (!existing) {
+      return res.status(404).json({ error: 'Vehicle note not found' });
+    }
+
+    const newPinned = existing.is_pinned ? 0 : 1;
+    await pool.execute('UPDATE vehicle_notes SET is_pinned = ? WHERE id = ? AND user_id = ?', [newPinned, id, userId]);
+
+    const [updatedRows] = await pool.execute('SELECT * FROM vehicle_notes WHERE id = ?', [id]);
+    const updated = (updatedRows as any[])[0];
+    return res.status(200).json(parseNoteRow(updated));
+  } catch (err: any) {
+    console.error('[VEHICLE-NOTES] Toggle pin error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /bulk-pin - bulk pin/unpin notes
+router.post('/bulk-pin', async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    const userId = (req as any).user.id;
+    const { noteIds, pinned } = req.body;
+
+    if (!Array.isArray(noteIds) || noteIds.length === 0) {
+      return res.status(400).json({ error: 'noteIds array is required' });
+    }
+    if (typeof pinned !== 'boolean') {
+      return res.status(400).json({ error: 'pinned boolean is required' });
+    }
+
+    const pinnedValue = pinned ? 1 : 0;
+    const placeholders = noteIds.map(() => '?').join(',');
+    await pool.execute(
+      `UPDATE vehicle_notes SET is_pinned = ? WHERE id IN (${placeholders}) AND user_id = ?`,
+      [pinnedValue, ...noteIds, userId]
+    );
+
+    // Return updated notes
+    const [rows] = await pool.execute(
+      `SELECT * FROM vehicle_notes WHERE id IN (${placeholders}) AND user_id = ?`,
+      [...noteIds, userId]
+    );
+
+    return res.status(200).json((rows as any[]).map(parseNoteRow));
+  } catch (err: any) {
+    console.error('[VEHICLE-NOTES] Bulk pin error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // DELETE /:id - delete vehicle note
 router.delete('/:id', async (req: Request, res: Response) => {
   try {

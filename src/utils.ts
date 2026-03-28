@@ -1,4 +1,4 @@
-import type { Cost, CostFrequency, Loan, Repair, SavingsGoal, SavingsTransaction } from './types';
+import type { Cost, CostFrequency, Loan, Repair, SavingsGoal, SavingsTransaction, Vehicle } from './types';
 import { differenceInMonths, addMonths, format, parseISO } from 'date-fns';
 
 export function formatCurrency(amount: number): string {
@@ -194,6 +194,10 @@ export function getLoanProgress(loan: Loan): { paid: number; remaining: number; 
   return { paid, remaining, percent, monthsElapsed };
 }
 
-export function cn(...classes: (string | false | null | undefined)[]): string {
-  return classes.filter(Boolean).join(' ');
+/** Calculate adjusted mileage: (raw * multiplier) + difference */
+export function getAdjustedMileage(vehicle: Vehicle): number {
+  const multiplier = vehicle.odometerMultiplier ?? 1.0;
+  const difference = vehicle.odometerDifference ?? 0;
+  return Math.round(vehicle.currentMileage * multiplier + difference);
 }
+

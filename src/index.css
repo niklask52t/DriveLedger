@@ -1,9 +1,11 @@
 @import "tailwindcss";
+@import "./styles/themes.css";
+@import "./styles/print.css";
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  background: #09090b;
-  color: #fafafa;
+  background: var(--bg-primary, #09090b);
+  color: var(--text-primary, #fafafa);
   -webkit-font-smoothing: antialiased;
   cursor: default;
 }
@@ -13,10 +15,23 @@ body {
 }
 
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 99px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb, #3f3f46); border-radius: 99px; }
 
 input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 
 button, a, [role="button"], label[for], select {
   cursor: pointer;
+}
+
+/* Bell ring animation for urgent reminders */
+@keyframes bell-ring {
+  0%, 100% { transform: rotate(0deg); }
+  10% { transform: rotate(14deg); }
+  20% { transform: rotate(-14deg); }
+  30% { transform: rotate(10deg); }
+  40% { transform: rotate(-10deg); }
+  50% { transform: rotate(6deg); }
+  60% { transform: rotate(-4deg); }
+  70% { transform: rotate(2deg); }
+  80% { transform: rotate(0deg); }
 }

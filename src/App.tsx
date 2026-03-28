@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Loader2, RefreshCw, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { useUserConfig } from './contexts/UserConfigContext';
+import { useI18n } from './contexts/I18nContext';
 import { api, ApiError } from './api';
 import { loadState, emptyState, loadDueReminders } from './store';
 import type { Page, AppState, AppConfig, Reminder } from './types';
@@ -32,10 +34,13 @@ import Taxes from './pages/Taxes';
 import Supplies from './pages/Supplies';
 import Equipment from './pages/Equipment';
 import Planner from './pages/Planner';
+import Kiosk from './pages/Kiosk';
 
 
 function AppContent() {
   const { user, loading: authLoading, logout, refreshUser } = useAuth();
+  const { loadConfig } = useUserConfig();
+  const { lang, setCustomTranslations } = useI18n();
 
   // Read initial page + vehicleId from URL hash (e.g. #costs or #vehicle-detail/abc123)
   const getHashState = (): { page: Page; vehicleId: string | null } => {
@@ -46,7 +51,7 @@ function AppContent() {
       'dashboard','vehicles','vehicle-detail','costs','services','fuel','repairs',
       'inspections','taxes','loans','savings','supplies','equipment','reminders',
       'planner','purchase-planner','settings','wiki','login','register',
-      'forgot-password','reset-password'
+      'forgot-password','reset-password','kiosk'
     ];
     if (validPages.includes(page as Page)) {
       return { page: page as Page, vehicleId: vehicleId || null };
@@ -125,11 +130,31 @@ function AppContent() {
     }
   }, []);
 
+  // Load custom translations when user logs in or language changes
+  const loadCustomTranslations = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/translations/${lang}`, {
+        headers: api.getToken() ? { 'Authorization': `Bearer ${api.getToken()}` } : {},
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const custom = await res.json();
+        if (custom && typeof custom === 'object' && Object.keys(custom).length > 0) {
+          setCustomTranslations(custom);
+        }
+      }
+    } catch {
+      // Custom translations not available, use built-in
+    }
+  }, [lang, setCustomTranslations]);
+
   useEffect(() => {
     if (user) {
       loadData();
+      loadConfig();
+      loadCustomTranslations();
     }
-  }, [user, loadData]);
+  }, [user, loadData, loadConfig, loadCustomTranslations]);
 
   // Refresh helper
   const refreshData = useCallback(async () => {
@@ -196,6 +221,11 @@ function AppContent() {
         <Loader2 size={28} className="animate-spin text-violet-400" />
       </div>
     );
+  }
+
+  // ── Kiosk mode (standalone, no auth required) ──
+  if (currentPage === 'kiosk') {
+    return <Kiosk />;
   }
 
   // ── Not logged in ──
@@ -267,8 +297,7 @@ function AppContent() {
           <Vehicles
             state={state}
             setState={setState}
-            onNavigateToVehicle={navigateToVehicle}
-            refreshData={refreshData}
+            onNavigate={navigate}
           />
         );
       case 'vehicle-detail':
@@ -317,9 +346,8 @@ function AppContent() {
         return (
           <Reminders
             state={state}
-            dueReminders={dueReminders}
-            refreshData={refreshData}
-            appConfig={appConfig}
+            emailEnabled={appConfig.emailEnabled}
+            onRefreshDue={refreshData}
           />
         );
       case 'purchase-planner':
@@ -327,11 +355,11 @@ function AppContent() {
           <PurchasePlanner
             state={state}
             setState={setState}
-            refreshData={refreshData}
+            onNavigate={navigate}
           />
         );
       case 'services':
-        return <Vehicles state={state} setState={setState} onNavigate={navigate} />;
+        return <Vehicles state={state} setState={setState} onNavigate={navigate} />;  // Services are per-vehicle in VehicleDetail
       case 'fuel':
         return (
           <Fuel
@@ -381,18 +409,11 @@ function AppContent() {
           />
         );
       case 'settings':
-        return (
-          <Settings
-            state={state}
-            setState={setState}
-            user={user}
-            appConfig={appConfig}
-            refreshUser={refreshUser}
-            refreshData={refreshData}
-          />
-        );
+        return <Settings />;
       case 'wiki':
         return <Wiki />;
+      case 'kiosk':
+        return <Kiosk />;
       default:
         return (
           <Dashboard

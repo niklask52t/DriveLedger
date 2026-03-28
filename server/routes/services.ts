@@ -3,6 +3,9 @@ import { v4 as uuid } from 'uuid';
 import { getPool } from '../db';
 import { combinedAuthMiddleware } from '../middleware';
 import { toCamelCase, toSnakeCase, rowsToCamelCase } from '../utils';
+import { fireWebhooks } from '../webhookTrigger.js';
+import { autoInsertOdometer } from '../auto-odometer.js';
+import { pushbackReminders } from '../reminder-pushback.js';
 
 const router = Router();
 router.use(combinedAuthMiddleware);
@@ -105,6 +108,17 @@ router.post('/', async (req: Request, res: Response) => {
     const created = (createdRows as any[])[0];
     const obj = toCamelCase(created);
     if (typeof obj.tags === 'string') obj.tags = JSON.parse(obj.tags);
+    fireWebhooks(userId, 'record.created', { type: 'service', ...obj });
+
+    // Auto-insert odometer record if mileage is provided
+    const svcMileage = Number(data.mileage) || 0;
+    if (svcMileage > 0) {
+      await autoInsertOdometer(userId, data.vehicle_id, svcMileage, data.date || '');
+    }
+
+    // Push back recurring reminders for this vehicle
+    await pushbackReminders(userId, data.vehicle_id, svcMileage || undefined);
+
     return res.status(201).json(obj);
   } catch (err: any) {
     console.error('[SERVICES] Create error:', err);
@@ -154,6 +168,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     const updated = (updatedRows as any[])[0];
     const obj = toCamelCase(updated);
     if (typeof obj.tags === 'string') obj.tags = JSON.parse(obj.tags);
+    fireWebhooks(userId, 'record.updated', { type: 'service', ...obj });
     return res.status(200).json(obj);
   } catch (err: any) {
     console.error('[SERVICES] Update error:', err);
@@ -176,6 +191,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
     await pool.execute('DELETE FROM service_records WHERE id = ? AND user_id = ?', [id, userId]);
 
+    fireWebhooks(userId, 'record.deleted', { type: 'service', id });
     return res.status(200).json({ message: 'Service record deleted' });
   } catch (err: any) {
     console.error('[SERVICES] Delete error:', err);

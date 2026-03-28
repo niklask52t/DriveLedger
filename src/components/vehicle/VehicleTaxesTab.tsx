@@ -4,6 +4,7 @@ import Modal from '../Modal';
 import TagInput from '../TagInput';
 import { api } from '../../api';
 import { formatCurrency, formatDate } from '../../utils';
+import { useI18n } from '../../contexts/I18nContext';
 import type { AppState, TaxRecord } from '../../types';
 
 const inputClass =
@@ -46,6 +47,7 @@ function isOverdue(dueDate: string): boolean {
 }
 
 export default function VehicleTaxesTab({ vehicleId, state, setState }: Props) {
+  const { t } = useI18n();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -109,12 +111,12 @@ export default function VehicleTaxesTab({ vehicleId, state, setState }: Props) {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <p className="text-sm text-zinc-400">
-            {records.length} tax record{records.length !== 1 ? 's' : ''} &middot; Total: {formatCurrency(totalCost)}
+            {t("vehicle_tab.taxes.count", { count: records.length })} &middot; Total: {formatCurrency(totalCost)}
           </p>
           {overdueCount > 0 && (
             <span className="inline-flex items-center gap-1 text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-md">
               <AlertTriangle size={12} />
-              {overdueCount} overdue
+              {t("vehicle_tab.taxes.overdue_count", { count: overdueCount })}
             </span>
           )}
         </div>
@@ -129,7 +131,7 @@ export default function VehicleTaxesTab({ vehicleId, state, setState }: Props) {
 
       {records.length === 0 ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
-          <p className="text-zinc-500 text-sm">No tax records yet.</p>
+          <p className="text-zinc-500 text-sm">{t("vehicle_tab.taxes.no_taxes")}</p>
         </div>
       ) : (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
@@ -137,12 +139,12 @@ export default function VehicleTaxesTab({ vehicleId, state, setState }: Props) {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-zinc-800">
-                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">Date</th>
-                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">Description</th>
-                  <th className="px-4 py-3.5 text-right text-xs text-zinc-500 uppercase tracking-wider font-medium">Cost</th>
-                  <th className="px-4 py-3.5 text-center text-xs text-zinc-500 uppercase tracking-wider font-medium">Recurring?</th>
-                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">Due Date</th>
-                  <th className="px-4 py-3.5 text-right text-xs text-zinc-500 uppercase tracking-wider font-medium">Actions</th>
+                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">{t("common.date")}</th>
+                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">{t("common.description")}</th>
+                  <th className="px-4 py-3.5 text-right text-xs text-zinc-500 uppercase tracking-wider font-medium">{t("common.cost")}</th>
+                  <th className="px-4 py-3.5 text-center text-xs text-zinc-500 uppercase tracking-wider font-medium">{t("vehicle_tab.taxes.recurring")}?</th>
+                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">{t("common.due_date")}</th>
+                  <th className="px-4 py-3.5 text-right text-xs text-zinc-500 uppercase tracking-wider font-medium">{t("common.actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -218,7 +220,7 @@ export default function VehicleTaxesTab({ vehicleId, state, setState }: Props) {
       <Modal
         isOpen={showModal}
         onClose={() => { setShowModal(false); setEditingId(null); }}
-        title={editingId ? 'Edit Tax Record' : 'Add Tax Record'}
+        title={editingId ? t("vehicle_tab.taxes.edit") : t("vehicle_tab.taxes.add")}
         footer={
           <>
             <button
@@ -231,14 +233,14 @@ export default function VehicleTaxesTab({ vehicleId, state, setState }: Props) {
               onClick={handleSave}
               className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium transition-colors"
             >
-              {editingId ? 'Update' : 'Add'}
+              {editingId ? t("common.update") : t("common.add")}
             </button>
           </>
         }
       >
         <div className="space-y-5">
           <div>
-            <label className={labelClass}>Description</label>
+            <label className={labelClass}>{t("common.description")}</label>
             <input
               type="text"
               className={inputClass}
@@ -249,7 +251,7 @@ export default function VehicleTaxesTab({ vehicleId, state, setState }: Props) {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Date</label>
+              <label className={labelClass}>{t("common.date")}</label>
               <input
                 type="date"
                 className={inputClass}
@@ -258,7 +260,7 @@ export default function VehicleTaxesTab({ vehicleId, state, setState }: Props) {
               />
             </div>
             <div>
-              <label className={labelClass}>Cost (EUR)</label>
+              <label className={labelClass}>{t("common.cost")} (EUR)</label>
               <input
                 type="number"
                 step="0.01"
@@ -277,12 +279,12 @@ export default function VehicleTaxesTab({ vehicleId, state, setState }: Props) {
                 checked={form.isRecurring}
                 onChange={(e) => setForm({ ...form, isRecurring: e.target.checked })}
               />
-              <span className="text-sm text-zinc-300">Recurring</span>
+              <span className="text-sm text-zinc-300">{t("vehicle_tab.taxes.recurring")}</span>
             </label>
           </div>
           {form.isRecurring && (
             <div>
-              <label className={labelClass}>Interval</label>
+              <label className={labelClass}>{t("taxes.interval")}</label>
               <select
                 className={selectClass}
                 style={{ backgroundImage: selectChevron, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center' }}
@@ -297,7 +299,7 @@ export default function VehicleTaxesTab({ vehicleId, state, setState }: Props) {
             </div>
           )}
           <div>
-            <label className={labelClass}>Due Date</label>
+            <label className={labelClass}>{t("common.due_date")}</label>
             <input
               type="date"
               className={inputClass}
@@ -306,16 +308,16 @@ export default function VehicleTaxesTab({ vehicleId, state, setState }: Props) {
             />
           </div>
           <div>
-            <label className={labelClass}>Notes</label>
+            <label className={labelClass}>{t("common.notes")}</label>
             <textarea
               className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 min-h-[80px] resize-none"
-              placeholder="Optional notes..."
+              placeholder={t("common.optional_notes")}
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
           </div>
           <div>
-            <label className={labelClass}>Tags</label>
+            <label className={labelClass}>{t("common.tags")}</label>
             <TagInput tags={form.tags} onChange={(tags) => setForm({ ...form, tags })} />
           </div>
         </div>

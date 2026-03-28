@@ -1,14 +1,23 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Pencil, Trash2, ArrowUpDown, Fuel as FuelIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowUpDown, Fuel as FuelIcon, Printer } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts';
 import Modal from '../components/Modal';
+import TagInput from '../components/TagInput';
+import TagFilter from '../components/TagFilter';
+import BulkActions from '../components/BulkActions';
+import ExtraFields from '../components/ExtraFields';
+import { useExtraFields } from '../hooks/useExtraFields';
+import ColumnSettings, { useColumnPreferences } from '../components/ColumnSettings';
 import { cn } from '../lib/utils';
 import { formatCurrency, formatDate, formatNumber } from '../utils';
 import { parseISO, format } from 'date-fns';
 import { api } from '../api';
+import { useUnits } from '../hooks/useUnits';
+import { useI18n } from '../contexts/I18nContext';
+import { useUserConfig } from '../contexts/UserConfigContext';
 import type { AppState, FuelRecord } from '../types';
 
 interface Props {
@@ -27,24 +36,68 @@ const emptyForm = {
   fuelType: '',
   station: '',
   notes: '',
-  tags: '',
+  tags: [] as string[],
+  costInputMode: 'total' as 'total' | 'perUnit',
+  pricePerUnit: 0,
 };
 
 type SortKey = 'date' | 'mileage' | 'fuelAmount' | 'fuelCost' | 'station';
 
+const fuelColumns = [
+  { key: 'vehicle', label: 'Vehicle' },
+  { key: 'date', label: 'Date' },
+  { key: 'mileage', label: 'Mileage' },
+  { key: 'fuelAmount', label: 'Liters' },
+  { key: 'fuelCost', label: 'Cost' },
+  { key: 'consumption', label: 'L/100km' },
+  { key: 'station', label: 'Station' },
+  { key: 'partial', label: 'Partial?' },
+  { key: 'tags', label: 'Tags' },
+];
+
 export default function Fuel({ state, setState }: Props) {
+  const { t } = useI18n();
+  const { config } = useUserConfig();
+  const threeDecimal = config.threeDecimalFuel || false;
+  const fmtFuelCost = (v: number) => threeDecimal ? v.toFixed(3) : formatCurrency(v);
+  const fmtConsumption = (v: number) => threeDecimal ? v.toFixed(3) : v.toFixed(2);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<FuelRecord | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [extraFieldValues, setExtraFieldValues] = useState<Record<string, string>>({});
   const [filterVehicle, setFilterVehicle] = useState('');
+
+  // Detect if the filtered/selected vehicle is electric
+  const selectedVehicleElectric = useMemo(() => {
+    if (filterVehicle) {
+      const v = state.vehicles.find(v => v.id === filterVehicle);
+      return !!v?.isElectric;
+    }
+    return false;
+  }, [filterVehicle, state.vehicles]);
+
+  const { fmtDistance, fmtVolume, fmtFuelEconomy, distanceUnit, volumeUnit, fuelEconomyUnitLabel, toDisplayDistance, toDisplayVolume, toStorageDistance, toStorageVolume } = useUnits({ isElectric: selectedVehicleElectric });
+  const extraFieldDefs = useExtraFields();
+  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [tagFilterMode, setTagFilterMode] = useState<'include' | 'exclude'>('include');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortAsc, setSortAsc] = useState(false);
+
+  const allTags = useMemo(() => [...new Set(state.fuelRecords.flatMap(r => r.tags || []))], [state.fuelRecords]);
 
   const filtered = useMemo(() => {
     let items = [...state.fuelRecords];
     if (filterVehicle) items = items.filter(r => r.vehicleId === filterVehicle);
+    if (filterTags.length > 0) {
+      if (tagFilterMode === 'include') {
+        items = items.filter(r => (r.tags || []).some(t => filterTags.includes(t)));
+      } else {
+        items = items.filter(r => !(r.tags || []).some(t => filterTags.includes(t)));
+      }
+    }
     return items;
-  }, [state.fuelRecords, filterVehicle]);
+  }, [state.fuelRecords, filterVehicle, filterTags, tagFilterMode]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -62,22 +115,42 @@ export default function Fuel({ state, setState }: Props) {
     return arr;
   }, [filtered, sortKey, sortAsc]);
 
-  // Calculate L/100km for each record by comparing to previous fill
+  // Use server-provided fuelEconomy, fall back to client-side calculation
   const consumptionMap = useMemo(() => {
     const map = new Map<string, number>();
-    const byVehicle = new Map<string, FuelRecord[]>();
     for (const r of state.fuelRecords) {
-      const arr = byVehicle.get(r.vehicleId) || [];
-      arr.push(r);
-      byVehicle.set(r.vehicleId, arr);
+      if (r.fuelEconomy != null) {
+        map.set(r.id, r.fuelEconomy);
+      }
     }
-    for (const [, records] of byVehicle) {
-      const s = [...records].sort((a, b) => a.mileage - b.mileage);
-      for (let i = 1; i < s.length; i++) {
-        if (s[i].isPartialFill || s[i].isMissedEntry) continue;
-        const dist = s[i].mileage - s[i - 1].mileage;
-        if (dist > 0 && s[i].fuelAmount > 0) {
-          map.set(s[i].id, (s[i].fuelAmount / dist) * 100);
+    // Fallback: if no server values, compute client-side
+    if (map.size === 0) {
+      const byVehicle = new Map<string, FuelRecord[]>();
+      for (const r of state.fuelRecords) {
+        const arr = byVehicle.get(r.vehicleId) || [];
+        arr.push(r);
+        byVehicle.set(r.vehicleId, arr);
+      }
+      for (const [, records] of byVehicle) {
+        const s = [...records].sort((a, b) => a.mileage - b.mileage);
+        let lastFullFillMileage = 0;
+        let accLiters = 0;
+        for (const rec of s) {
+          if (rec.isMissedEntry) {
+            lastFullFillMileage = rec.mileage;
+            accLiters = 0;
+            continue;
+          }
+          accLiters += rec.fuelAmount;
+          if (!rec.isPartialFill && lastFullFillMileage > 0) {
+            const dist = rec.mileage - lastFullFillMileage;
+            if (dist > 0) map.set(rec.id, (accLiters / dist) * 100);
+            lastFullFillMileage = rec.mileage;
+            accLiters = 0;
+          } else if (!rec.isPartialFill) {
+            lastFullFillMileage = rec.mileage;
+            accLiters = 0;
+          }
         }
       }
     }
@@ -90,6 +163,20 @@ export default function Fuel({ state, setState }: Props) {
   const avgConsumption = consumptionValues.length > 0
     ? consumptionValues.reduce((a, b) => a + b, 0) / consumptionValues.length
     : 0;
+  const minConsumption = consumptionValues.length > 0 ? Math.min(...consumptionValues) : 0;
+  const maxConsumption = consumptionValues.length > 0 ? Math.max(...consumptionValues) : 0;
+
+  // Extra field definitions for fuel records as table columns
+  const fuelExtraFieldDefs = useMemo(() =>
+    extraFieldDefs.filter(d => d.recordType === 'fuel').sort((a, b) => a.sortOrder - b.sortOrder),
+    [extraFieldDefs]
+  );
+  const allFuelColumns = useMemo(() => [
+    ...fuelColumns,
+    ...fuelExtraFieldDefs.map(d => ({ key: `extra_${d.fieldName}`, label: d.fieldName })),
+  ], [fuelExtraFieldDefs]);
+  const { visibleColumns } = useColumnPreferences('fuel', allFuelColumns);
+  const isVisible = (col: string) => visibleColumns.some(c => c.key === col);
 
   // Chart data: L/100km over time per vehicle
   const chartData = useMemo(() => {
@@ -132,7 +219,12 @@ export default function Fuel({ state, setState }: Props) {
 
   const openAdd = () => {
     setEditing(null);
-    setForm({ ...emptyForm, vehicleId: state.vehicles[0]?.id || '', date: new Date().toISOString().split('T')[0] });
+    const defaultVehicle = state.vehicles[0];
+    const autoMileage = (config.enableAutoFillOdometer !== false && defaultVehicle)
+      ? defaultVehicle.currentMileage || 0
+      : 0;
+    setForm({ ...emptyForm, vehicleId: defaultVehicle?.id || '', date: new Date().toISOString().split('T')[0], mileage: autoMileage });
+    setExtraFieldValues({});
     setModalOpen(true);
   };
 
@@ -149,26 +241,30 @@ export default function Fuel({ state, setState }: Props) {
       fuelType: record.fuelType,
       station: record.station,
       notes: record.notes,
-      tags: (record.tags || []).join(', '),
+      tags: record.tags || [],
     });
+    setExtraFieldValues((record as any).extraFields || {});
     setModalOpen(true);
   };
 
   const handleSave = async () => {
     if (!form.vehicleId || !form.date) return;
-    const tags = form.tags.split(',').map(t => t.trim()).filter(Boolean);
+    const finalCost = form.costInputMode === 'perUnit'
+      ? Math.round(form.pricePerUnit * form.fuelAmount * 100) / 100
+      : form.fuelCost;
     const payload = {
       vehicleId: form.vehicleId,
       date: form.date,
       mileage: form.mileage,
       fuelAmount: form.fuelAmount,
-      fuelCost: form.fuelCost,
+      fuelCost: finalCost,
       isPartialFill: form.isPartialFill,
       isMissedEntry: form.isMissedEntry,
       fuelType: form.fuelType,
       station: form.station,
       notes: form.notes,
-      tags,
+      tags: form.tags,
+      extraFields: extraFieldValues,
     };
     try {
       if (editing) {
@@ -181,6 +277,18 @@ export default function Fuel({ state, setState }: Props) {
       setModalOpen(false);
     } catch (e) {
       console.error('Failed to save fuel record', e);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    try {
+      for (const id of selectedIds) {
+        await api.deleteFuelRecord(id);
+      }
+      setState({ ...state, fuelRecords: state.fuelRecords.filter(r => !selectedIds.has(r.id)) });
+      setSelectedIds(new Set());
+    } catch {
+      // ignore
     }
   };
 
@@ -213,20 +321,36 @@ export default function Fuel({ state, setState }: Props) {
     <div className="space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-sm text-zinc-400">Track fuel consumption and costs across your vehicles.</p>
-        <button onClick={openAdd} className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2">
-          <Plus size={16} />
-          Add Fill-up
-        </button>
+        <p className="text-sm text-zinc-400">{t('fuel.subtitle')}</p>
+        <div className="flex items-center gap-3">
+          <ColumnSettings tableKey="fuel" allColumns={allFuelColumns} />
+          <TagFilter
+            allTags={allTags}
+            selectedTags={filterTags}
+            onTagsChange={setFilterTags}
+            filterMode={tagFilterMode}
+            onFilterModeChange={setTagFilterMode}
+          />
+          <button onClick={() => window.print()} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-2 no-print">
+            <Printer size={16} />
+            {t('common.print')}
+          </button>
+          <button onClick={openAdd} className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2">
+            <Plus size={16} />
+            {t('fuel.add_fillup')}
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
         {[
-          { label: 'Total Spent', value: formatCurrency(totalSpent), color: 'text-red-400' },
-          { label: 'Total Liters', value: `${formatNumber(totalLiters, 1)} L`, color: 'text-sky-400' },
-          { label: 'Avg. L/100km', value: avgConsumption > 0 ? formatNumber(avgConsumption, 2) : '-', color: 'text-amber-400' },
-          { label: 'Fill-ups', value: String(filtered.length), color: 'text-violet-400' },
+          { label: t('fuel.total_cost'), value: formatCurrency(totalSpent), color: 'text-red-400' },
+          { label: `${t('common.total')} ${volumeUnit}`, value: fmtVolume(totalLiters), color: 'text-sky-400' },
+          { label: `${t('fuel.avg_consumption')} ${fuelEconomyUnitLabel}`, value: avgConsumption > 0 ? fmtFuelEconomy(avgConsumption) : '-', color: 'text-amber-400' },
+          { label: `Min ${fuelEconomyUnitLabel}`, value: minConsumption > 0 ? fmtFuelEconomy(minConsumption) : '-', color: 'text-emerald-400' },
+          { label: `Max ${fuelEconomyUnitLabel}`, value: maxConsumption > 0 ? fmtFuelEconomy(maxConsumption) : '-', color: 'text-red-400' },
+          { label: t('fuel.fill_ups'), value: String(filtered.length), color: 'text-violet-400' },
         ].map(s => (
           <div key={s.label}>
             <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{s.label}</p>
@@ -239,14 +363,14 @@ export default function Fuel({ state, setState }: Props) {
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
         <div className="flex flex-col md:flex-row gap-5">
           <div className="flex-1">
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Vehicle</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.vehicle')}</label>
             <select
               value={filterVehicle}
               onChange={e => setFilterVehicle(e.target.value)}
               className={selectClasses}
               style={{ background: chevronBg }}
             >
-              <option value="">All Vehicles</option>
+              <option value="">{t('costs.all_vehicles')}</option>
               {state.vehicles.map(v => (
                 <option key={v.id} value={v.id}>{v.name}</option>
               ))}
@@ -255,29 +379,58 @@ export default function Fuel({ state, setState }: Props) {
         </div>
       </div>
 
+      {/* Bulk Actions */}
+      <BulkActions
+        selectedCount={selectedIds.size}
+        selectedIds={Array.from(selectedIds)}
+        onDelete={handleBulkDelete}
+        onDeselect={() => setSelectedIds(new Set())}
+        recordType="fuel"
+        vehicles={state.vehicles}
+        onComplete={async () => {
+          const fuelRecords = await api.getFuelRecords();
+          setState({ ...state, fuelRecords });
+          setSelectedIds(new Set());
+        }}
+      />
+
       {/* Table */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-zinc-950/50">
               <tr>
-                <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">Vehicle</th>
-                <SortHeader label="Date" col="date" />
-                <SortHeader label="Mileage" col="mileage" />
-                <SortHeader label="Liters" col="fuelAmount" />
-                <SortHeader label="Cost" col="fuelCost" />
-                <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider">L/100km</th>
-                <SortHeader label="Station" col="station" />
-                <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider">Partial?</th>
-                <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider">Tags</th>
-                <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Actions</th>
+                <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">
+                  <input
+                    type="checkbox"
+                    checked={sorted.length > 0 && selectedIds.size === sorted.length}
+                    onChange={e => {
+                      if (e.target.checked) setSelectedIds(new Set(sorted.map(r => r.id)));
+                      else setSelectedIds(new Set());
+                    }}
+                    className="rounded border-zinc-700 bg-zinc-800"
+                  />
+                </th>
+                <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-left">{t('common.vehicle')}</th>
+                <SortHeader label={t('common.date')} col="date" />
+                <SortHeader label={t('common.mileage')} col="mileage" />
+                <SortHeader label={volumeUnit} col="fuelAmount" />
+                <SortHeader label={t('common.cost')} col="fuelCost" />
+                <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider">{fuelEconomyUnitLabel}</th>
+                <SortHeader label={t('fuel.station')} col="station" />
+                <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider">{t('fuel.partial_fill')}?</th>
+                <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider">{t('common.tags')}</th>
+                {fuelExtraFieldDefs.map(d => (
+                  <th key={d.id} className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider">{d.fieldName}</th>
+                ))}
+                <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody>
               {sorted.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-sm text-zinc-500">
-                    No fuel records found. Add your first fill-up to start tracking.
+                  <td colSpan={11 + fuelExtraFieldDefs.length} className="px-4 py-12 text-center text-sm text-zinc-500">
+                    {t('fuel.no_records')}
                   </td>
                 </tr>
               ) : (
@@ -288,20 +441,46 @@ export default function Fuel({ state, setState }: Props) {
                       key={record.id}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors"
+                      className={cn(
+                        "border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors",
+                        selectedIds.has(record.id) && 'bg-violet-500/5'
+                      )}
                     >
+                      <td className="px-4 py-3.5 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(record.id)}
+                          onChange={e => {
+                            const next = new Set(selectedIds);
+                            if (e.target.checked) next.add(record.id);
+                            else next.delete(record.id);
+                            setSelectedIds(next);
+                          }}
+                          className="rounded border-zinc-700 bg-zinc-800"
+                        />
+                      </td>
                       <td className="px-4 py-3.5 text-sm text-zinc-400">{getVehicleName(record.vehicleId)}</td>
                       <td className="px-4 py-3.5 text-sm text-zinc-400">{formatDate(record.date)}</td>
-                      <td className="px-4 py-3.5 text-sm text-zinc-400">{formatNumber(record.mileage)} km</td>
-                      <td className="px-4 py-3.5 text-sm text-zinc-50 font-medium">{formatNumber(record.fuelAmount, 2)} L</td>
-                      <td className="px-4 py-3.5 text-sm text-red-400 font-medium">{formatCurrency(record.fuelCost)}</td>
-                      <td className="px-4 py-3.5 text-sm text-amber-400 font-medium">
-                        {consumption !== undefined ? formatNumber(consumption, 2) : '-'}
+                      <td className="px-4 py-3.5 text-sm text-zinc-400">{fmtDistance(record.mileage)}</td>
+                      <td className="px-4 py-3.5 text-sm text-zinc-50 font-medium">{fmtVolume(record.fuelAmount)}</td>
+                      <td className="px-4 py-3.5 text-sm text-red-400 font-medium">{threeDecimal ? fmtFuelCost(record.fuelCost) : formatCurrency(record.fuelCost)}</td>
+                      <td className="px-4 py-3.5 text-sm font-medium">
+                        {consumption !== undefined ? (
+                          <span className={cn(
+                            avgConsumption > 0 && consumption <= avgConsumption * 0.9 ? 'text-emerald-400' :
+                            avgConsumption > 0 && consumption >= avgConsumption * 1.1 ? 'text-red-400' :
+                            'text-amber-400'
+                          )}>
+                            {threeDecimal ? fmtConsumption(consumption) : fmtFuelEconomy(consumption)}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-600">{'\u2014'}</span>
+                        )}
                       </td>
                       <td className="px-4 py-3.5 text-sm text-zinc-400">{record.station || '-'}</td>
                       <td className="px-4 py-3.5 text-sm text-center">
                         {record.isPartialFill && (
-                          <span className="inline-block px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 text-xs">Partial</span>
+                          <span className="inline-block px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 text-xs">{t('fuel.partial')}</span>
                         )}
                       </td>
                       <td className="px-4 py-3.5 text-sm">
@@ -311,6 +490,11 @@ export default function Fuel({ state, setState }: Props) {
                           ))}
                         </div>
                       </td>
+                      {fuelExtraFieldDefs.map(d => (
+                        <td key={d.id} className="px-4 py-3.5 text-sm text-zinc-400">
+                          {((record as any).extraFields || {})[d.fieldName] || '-'}
+                        </td>
+                      ))}
                       <td className="px-4 py-3.5 text-sm text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => openEdit(record)} className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center">
@@ -332,7 +516,7 @@ export default function Fuel({ state, setState }: Props) {
 
       {/* Consumption Chart */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-        <h3 className="text-sm font-medium text-zinc-50 mb-5">Fuel Consumption Over Time (L/100km)</h3>
+        <h3 className="text-sm font-medium text-zinc-50 mb-5">{t('fuel.consumption_over_time')} ({fuelEconomyUnitLabel})</h3>
         {chartData.length > 0 ? (
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -353,7 +537,7 @@ export default function Fuel({ state, setState }: Props) {
                 <Tooltip
                   contentStyle={{ backgroundColor: '#18181b', border: '1px solid #3f3f46', borderRadius: '0.5rem', fontSize: '0.8rem' }}
                   labelStyle={{ color: '#a1a1aa' }}
-                  formatter={(val: number) => `${formatNumber(val, 2)} L/100km`}
+                  formatter={(val: number) => `${formatNumber(val, 2)} ${fuelEconomyUnitLabel}`}
                 />
                 <Legend wrapperStyle={{ fontSize: '0.75rem', color: '#a1a1aa' }} />
                 {vehicleNames.map((name, i) => (
@@ -372,7 +556,7 @@ export default function Fuel({ state, setState }: Props) {
             </ResponsiveContainer>
           </div>
         ) : (
-          <p className="text-sm text-zinc-500 text-center py-12">Not enough data to calculate consumption. Add at least two non-partial fill-ups per vehicle.</p>
+          <p className="text-sm text-zinc-500 text-center py-12">{t('fuel.consumption_not_enough')}</p>
         )}
       </div>
 
@@ -380,15 +564,15 @@ export default function Fuel({ state, setState }: Props) {
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editing ? 'Edit Fill-up' : 'Add Fill-up'}
+        title={editing ? t('fuel.edit_fillup') : t('fuel.add_fillup')}
         size="lg"
         footer={
           <>
             <button onClick={() => setModalOpen(false)} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm">
-              Cancel
+              {t('common.cancel')}
             </button>
             <button onClick={handleSave} className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium">
-              {editing ? 'Save Changes' : 'Add Fill-up'}
+              {editing ? t('common.save_changes') : t('fuel.add_fillup')}
             </button>
           </>
         }
@@ -396,21 +580,21 @@ export default function Fuel({ state, setState }: Props) {
         <div className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Vehicle</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.vehicle')}</label>
               <select
                 value={form.vehicleId}
                 onChange={e => setForm({ ...form, vehicleId: e.target.value })}
                 className={selectClasses}
                 style={{ background: chevronBg }}
               >
-                <option value="">Select vehicle</option>
+                <option value="">{t('common.select_vehicle')}</option>
                 {state.vehicles.map(v => (
                   <option key={v.id} value={v.id}>{v.name}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Date</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.date')}</label>
               <input
                 type="date"
                 value={form.date}
@@ -422,7 +606,7 @@ export default function Fuel({ state, setState }: Props) {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Mileage (km)</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.mileage')} ({distanceUnit})</label>
               <input
                 type="number"
                 value={form.mileage || ''}
@@ -432,7 +616,7 @@ export default function Fuel({ state, setState }: Props) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Liters</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{volumeUnit}</label>
               <input
                 type="number"
                 step="0.01"
@@ -443,42 +627,77 @@ export default function Fuel({ state, setState }: Props) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Cost</label>
-              <input
-                type="number"
-                step="0.01"
-                value={form.fuelCost || ''}
-                onChange={e => setForm({ ...form, fuelCost: parseFloat(e.target.value) || 0 })}
-                placeholder="0.00"
-                className={inputClasses}
-              />
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-zinc-400">
+                  {form.costInputMode === 'perUnit' ? `Price per ${volumeUnit}` : t('common.cost')}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (form.costInputMode === 'total') {
+                      const ppu = form.fuelAmount > 0 ? form.fuelCost / form.fuelAmount : 0;
+                      setForm({ ...form, costInputMode: 'perUnit', pricePerUnit: Math.round(ppu * 1000) / 1000 });
+                    } else {
+                      setForm({ ...form, costInputMode: 'total', fuelCost: Math.round(form.pricePerUnit * form.fuelAmount * 100) / 100 });
+                    }
+                  }}
+                  className="text-xs text-violet-400 hover:text-violet-300"
+                >
+                  {form.costInputMode === 'perUnit' ? 'Switch to Total' : 'Switch to Per Unit'}
+                </button>
+              </div>
+              {form.costInputMode === 'perUnit' ? (
+                <input
+                  type="number"
+                  step="0.001"
+                  value={form.pricePerUnit || ''}
+                  onChange={e => {
+                    const ppu = parseFloat(e.target.value) || 0;
+                    setForm({ ...form, pricePerUnit: ppu, fuelCost: Math.round(ppu * form.fuelAmount * 100) / 100 });
+                  }}
+                  placeholder="0.000"
+                  className={inputClasses}
+                />
+              ) : (
+                <input
+                  type="number"
+                  step="0.01"
+                  value={form.fuelCost || ''}
+                  onChange={e => setForm({ ...form, fuelCost: parseFloat(e.target.value) || 0 })}
+                  placeholder="0.00"
+                  className={inputClasses}
+                />
+              )}
+              {form.costInputMode === 'perUnit' && form.fuelAmount > 0 && (
+                <p className="text-xs text-zinc-500 mt-1">Total: {formatCurrency(form.pricePerUnit * form.fuelAmount)}</p>
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Fuel Type</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('vehicles.fuel_type')}</label>
               <select
                 value={form.fuelType}
                 onChange={e => setForm({ ...form, fuelType: e.target.value })}
                 className={selectClasses}
                 style={{ background: chevronBg }}
               >
-                <option value="">Select type</option>
-                <option value="diesel">Diesel</option>
-                <option value="benzin">Gasoline</option>
-                <option value="elektro">Electric</option>
-                <option value="hybrid">Hybrid</option>
-                <option value="lpg">LPG</option>
+                <option value="">{t('fuel.select_type')}</option>
+                <option value="diesel">{t('fuel_type.diesel')}</option>
+                <option value="benzin">{t('fuel_type.benzin')}</option>
+                <option value="elektro">{t('fuel_type.elektro')}</option>
+                <option value="hybrid">{t('fuel_type.hybrid')}</option>
+                <option value="lpg">{t('fuel_type.lpg')}</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Station</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('fuel.station')}</label>
               <input
                 type="text"
                 value={form.station}
                 onChange={e => setForm({ ...form, station: e.target.value })}
-                placeholder="e.g. Shell, Aral"
+                placeholder={t('fuel.station_placeholder')}
                 className={inputClasses}
               />
             </div>
@@ -492,7 +711,7 @@ export default function Fuel({ state, setState }: Props) {
                 onChange={e => setForm({ ...form, isPartialFill: e.target.checked })}
                 className="w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-violet-500 focus:ring-violet-500/50"
               />
-              <span className="text-sm text-zinc-400">Partial fill</span>
+              <span className="text-sm text-zinc-400">{t('fuel.partial_fill_label')}</span>
             </label>
             <label className="inline-flex items-center gap-2 cursor-pointer">
               <input
@@ -501,30 +720,35 @@ export default function Fuel({ state, setState }: Props) {
                 onChange={e => setForm({ ...form, isMissedEntry: e.target.checked })}
                 className="w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-violet-500 focus:ring-violet-500/50"
               />
-              <span className="text-sm text-zinc-400">Missed entry</span>
+              <span className="text-sm text-zinc-400">{t('fuel.missed_entry_label')}</span>
             </label>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Tags (comma-separated)</label>
-            <input
-              type="text"
-              value={form.tags}
-              onChange={e => setForm({ ...form, tags: e.target.value })}
-              placeholder="e.g. highway, winter"
-              className={inputClasses}
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.tags')}</label>
+            <TagInput
+              tags={form.tags}
+              onChange={tags => setForm({ ...form, tags })}
+              suggestions={allTags}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Notes</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.notes')}</label>
             <textarea
               value={form.notes}
               onChange={e => setForm({ ...form, notes: e.target.value })}
-              placeholder="Optional notes..."
+              placeholder={t('common.optional_notes')}
               className="w-full min-h-[80px] h-auto bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 resize-none"
             />
           </div>
+
+          <ExtraFields
+            recordType="fuel"
+            values={extraFieldValues}
+            onChange={setExtraFieldValues}
+            definitions={extraFieldDefs}
+          />
         </div>
       </Modal>
     </div>

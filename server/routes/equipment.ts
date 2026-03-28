@@ -13,6 +13,41 @@ function parseEquipmentRow(row: any): any {
   return obj;
 }
 
+// GET /distance-summary - total distance per equipment from linked odometer records
+router.get('/distance-summary', async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    const userId = (req as any).user.id;
+
+    // Get all odometer records with equipment_ids
+    const [odomRows] = await pool.execute(
+      'SELECT mileage, initial_mileage, equipment_ids FROM odometer_records WHERE user_id = ? AND equipment_ids IS NOT NULL',
+      [userId]
+    );
+    const records = odomRows as any[];
+
+    const distanceMap: Record<string, number> = {};
+    for (const r of records) {
+      let eqIds: string[] = [];
+      if (typeof r.equipment_ids === 'string') {
+        try { eqIds = JSON.parse(r.equipment_ids); } catch { continue; }
+      } else if (Array.isArray(r.equipment_ids)) {
+        eqIds = r.equipment_ids;
+      }
+      const dist = (r.mileage || 0) - (r.initial_mileage || 0);
+      if (dist <= 0) continue;
+      for (const eqId of eqIds) {
+        distanceMap[eqId] = (distanceMap[eqId] || 0) + dist;
+      }
+    }
+
+    return res.status(200).json(distanceMap);
+  } catch (err: any) {
+    console.error('[EQUIPMENT] Distance summary error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET / - list all equipment, optional ?vehicleId=xxx
 router.get('/', async (req: Request, res: Response) => {
   try {

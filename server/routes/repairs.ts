@@ -3,6 +3,9 @@ import { v4 as uuid } from 'uuid';
 import { getPool } from '../db';
 import { combinedAuthMiddleware } from '../middleware';
 import { toCamelCase, toSnakeCase, rowsToCamelCase } from '../utils';
+import { fireWebhooks } from '../webhookTrigger.js';
+import { autoInsertOdometer } from '../auto-odometer.js';
+import { pushbackReminders } from '../reminder-pushback.js';
 
 const router = Router();
 router.use(combinedAuthMiddleware);
@@ -106,6 +109,17 @@ router.post('/', async (req: Request, res: Response) => {
     const created = (createdRows as any[])[0];
     const createdObj = toCamelCase(created);
     if (typeof createdObj.tags === 'string') createdObj.tags = JSON.parse(createdObj.tags);
+    fireWebhooks(userId, 'record.created', { type: 'repair', ...createdObj });
+
+    // Auto-insert odometer record if mileage is provided
+    const repairMileage = Number(data.mileage) || 0;
+    if (repairMileage > 0) {
+      await autoInsertOdometer(userId, data.vehicle_id, repairMileage, data.date || '');
+    }
+
+    // Push back recurring reminders for this vehicle
+    await pushbackReminders(userId, data.vehicle_id, repairMileage || undefined);
+
     return res.status(201).json(createdObj);
   } catch (err: any) {
     console.error('[REPAIRS] Create error:', err);
@@ -157,6 +171,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     const updated = (updatedRows as any[])[0];
     const updatedObj = toCamelCase(updated);
     if (typeof updatedObj.tags === 'string') updatedObj.tags = JSON.parse(updatedObj.tags);
+    fireWebhooks(userId, 'record.updated', { type: 'repair', ...updatedObj });
     return res.status(200).json(updatedObj);
   } catch (err: any) {
     console.error('[REPAIRS] Update error:', err);
@@ -179,6 +194,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
     await pool.execute('DELETE FROM repairs WHERE id = ? AND user_id = ?', [id, userId]);
 
+    fireWebhooks(userId, 'record.deleted', { type: 'repair', id });
     return res.status(200).json({ message: 'Repair deleted' });
   } catch (err: any) {
     console.error('[REPAIRS] Delete error:', err);

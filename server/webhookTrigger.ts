@@ -41,17 +41,37 @@ export async function fireWebhooks(userId: string, event: string, payload: any):
         .update(body)
         .digest('hex');
 
-      // Fire-and-forget
-      fetch(wh.url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Signature': signature,
-        },
-        body,
-      }).catch((err) => {
-        console.error(`[WEBHOOK] Failed to POST to ${wh.url}:`, err.message);
-      });
+      // Check for Discord webhook URL
+      if (wh.url.startsWith('discord://')) {
+        const discordUrl = wh.url.replace('discord://', 'https://discord.com/api/webhooks/');
+        const [action, type] = event.split('.');
+        fetch(discordUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            embeds: [{
+              title: `${action}: ${type}`,
+              description: JSON.stringify(payload, null, 2).substring(0, 1000),
+              color: action === 'created' ? 0x34d399 : action === 'deleted' ? 0xf87171 : 0xfbbf24,
+              timestamp: new Date().toISOString(),
+            }]
+          }),
+        }).catch((err) => {
+          console.error(`[WEBHOOK] Failed to POST to Discord ${discordUrl}:`, err.message);
+        });
+      } else {
+        // Fire-and-forget standard webhook
+        fetch(wh.url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Signature': signature,
+          },
+          body,
+        }).catch((err) => {
+          console.error(`[WEBHOOK] Failed to POST to ${wh.url}:`, err.message);
+        });
+      }
     }
   } catch (err: any) {
     console.error('[WEBHOOK] Error querying webhooks:', err.message);

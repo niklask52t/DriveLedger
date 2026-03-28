@@ -2,8 +2,15 @@ import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Pencil, Trash2, ChevronDown, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { api } from '../api';
 import Modal from '../components/Modal';
+import TagInput from '../components/TagInput';
+import BulkActions from '../components/BulkActions';
+import ExtraFields from '../components/ExtraFields';
+import { useExtraFields } from '../hooks/useExtraFields';
+import { useUnits } from '../hooks/useUnits';
 import { cn } from '../lib/utils';
+import { useI18n } from '../contexts/I18nContext';
 import { formatCurrency, formatDate, getSavingsBalance, getSavingsProgress } from '../utils';
 import { addMonths, format, parseISO } from 'date-fns';
 import type { AppState, SavingsGoal, SavingsTransaction } from '../types';
@@ -20,6 +27,7 @@ const emptyGoal: Omit<SavingsGoal, 'id' | 'createdAt'> = {
   monthlyContribution: 0,
   startDate: '',
   notes: '',
+  tags: [],
 };
 
 const emptyTransaction: Omit<SavingsTransaction, 'id'> = {
@@ -31,12 +39,19 @@ const emptyTransaction: Omit<SavingsTransaction, 'id'> = {
 };
 
 export default function Savings({ state, setState }: Props) {
+  const { t } = useI18n();
+  const extraFieldDefs = useExtraFields();
+  const { fmtDistance } = useUnits();
   const [goalModalOpen, setGoalModalOpen] = useState(false);
   const [txnModalOpen, setTxnModalOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
   const [goalForm, setGoalForm] = useState(emptyGoal);
+  const [extraFieldValues, setExtraFieldValues] = useState<Record<string, string>>({});
   const [txnForm, setTxnForm] = useState(emptyTransaction);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const allTags = useMemo(() => [...new Set(state.savingsGoals.flatMap(g => g.tags || []))], [state.savingsGoals]);
 
   const totalSaved = useMemo(
     () => state.savingsGoals.reduce((sum, g) => sum + Math.max(0, getSavingsBalance(g, state.savingsTransactions)), 0),
@@ -52,6 +67,7 @@ export default function Savings({ state, setState }: Props) {
   const openAddGoal = () => {
     setEditingGoal(null);
     setGoalForm({ ...emptyGoal, vehicleId: state.vehicles[0]?.id || '' });
+    setExtraFieldValues({});
     setGoalModalOpen(true);
   };
 
@@ -64,35 +80,69 @@ export default function Savings({ state, setState }: Props) {
       monthlyContribution: goal.monthlyContribution,
       startDate: goal.startDate,
       notes: goal.notes,
+      tags: goal.tags || [],
     });
+    setExtraFieldValues((goal as any).extraFields || {});
     setGoalModalOpen(true);
   };
 
-  const handleSaveGoal = () => {
+  const handleSaveGoal = async () => {
     if (!goalForm.name.trim()) return;
-    if (editingGoal) {
-      setState({
-        ...state,
-        savingsGoals: state.savingsGoals.map(g =>
-          g.id === editingGoal.id ? { ...g, ...goalForm } : g
-        ),
-      });
-    } else {
-      const newGoal: SavingsGoal = {
-        ...goalForm,
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString(),
-      };
-      setState({ ...state, savingsGoals: [...state.savingsGoals, newGoal] });
+    const payload = { ...goalForm, extraFields: extraFieldValues };
+    try {
+      if (editingGoal) {
+        const updated = await api.updateSavingsGoal(editingGoal.id, payload);
+        setState({
+          ...state,
+          savingsGoals: state.savingsGoals.map(g =>
+            g.id === editingGoal.id ? updated : g
+          ),
+        });
+      } else {
+        const newGoal = await api.createSavingsGoal(payload);
+        setState({ ...state, savingsGoals: [...state.savingsGoals, newGoal] });
+      }
+      setGoalModalOpen(false);
+    } catch {
+      // ignore
     }
-    setGoalModalOpen(false);
   };
 
-  const handleDeleteGoal = (id: string) => {
-    setState({
-      ...state,
-      savingsGoals: state.savingsGoals.filter(g => g.id !== id),
-      savingsTransactions: state.savingsTransactions.filter(t => t.savingsGoalId !== id),
+  const handleDeleteGoal = async (id: string) => {
+    try {
+      await api.deleteSavingsGoal(id);
+      setState({
+        ...state,
+        savingsGoals: state.savingsGoals.filter(g => g.id !== id),
+        savingsTransactions: state.savingsTransactions.filter(t => t.savingsGoalId !== id),
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    try {
+      for (const id of selectedIds) {
+        await api.deleteSavingsGoal(id);
+      }
+      setState({
+        ...state,
+        savingsGoals: state.savingsGoals.filter(g => !selectedIds.has(g.id)),
+        savingsTransactions: state.savingsTransactions.filter(t => !selectedIds.has(t.savingsGoalId)),
+      });
+      setSelectedIds(new Set());
+    } catch {
+      // ignore
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
   };
 
@@ -107,18 +157,24 @@ export default function Savings({ state, setState }: Props) {
     setTxnModalOpen(true);
   };
 
-  const handleSaveTxn = () => {
+  const handleSaveTxn = async () => {
     if (txnForm.amount <= 0) return;
-    const newTxn: SavingsTransaction = {
-      ...txnForm,
-      id: crypto.randomUUID(),
-    };
-    setState({ ...state, savingsTransactions: [...state.savingsTransactions, newTxn] });
-    setTxnModalOpen(false);
+    try {
+      const newTxn = await api.createSavingsTransaction(txnForm.savingsGoalId, txnForm);
+      setState({ ...state, savingsTransactions: [...state.savingsTransactions, newTxn] });
+      setTxnModalOpen(false);
+    } catch {
+      // ignore
+    }
   };
 
-  const handleDeleteTxn = (id: string) => {
-    setState({ ...state, savingsTransactions: state.savingsTransactions.filter(t => t.id !== id) });
+  const handleDeleteTxn = async (id: string) => {
+    try {
+      await api.deleteSavingsTransaction(id);
+      setState({ ...state, savingsTransactions: state.savingsTransactions.filter(t => t.id !== id) });
+    } catch {
+      // ignore
+    }
   };
 
   // Projection chart data
@@ -148,9 +204,9 @@ export default function Savings({ state, setState }: Props) {
       <div className="flex items-start justify-between">
         <div className="grid grid-cols-3 gap-6">
           {[
-            { label: 'Total Saved', value: formatCurrency(totalSaved), color: 'text-emerald-400' },
-            { label: 'Total Target', value: formatCurrency(totalTarget), color: 'text-violet-400' },
-            { label: 'Goals', value: String(state.savingsGoals.length), color: 'text-sky-400' },
+            { label: t('savings.total_saved'), value: formatCurrency(totalSaved), color: 'text-emerald-400' },
+            { label: t('savings.total_target'), value: formatCurrency(totalTarget), color: 'text-violet-400' },
+            { label: t('savings.goals'), value: String(state.savingsGoals.length), color: 'text-sky-400' },
           ].map(s => (
             <div key={s.label}>
               <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{s.label}</p>
@@ -160,14 +216,28 @@ export default function Savings({ state, setState }: Props) {
         </div>
         <button onClick={openAddGoal} className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2">
           <Plus size={16} />
-          Add Goal
+          {t('savings.add_goal')}
         </button>
       </div>
+
+      {/* Bulk Actions */}
+      <BulkActions
+        selectedCount={selectedIds.size}
+        selectedIds={Array.from(selectedIds)}
+        onDelete={handleBulkDelete}
+        onDeselect={() => setSelectedIds(new Set())}
+        vehicles={state.vehicles}
+        onComplete={async () => {
+          const savingsGoals = await api.getSavingsGoals();
+          setState({ ...state, savingsGoals });
+          setSelectedIds(new Set());
+        }}
+      />
 
       {/* Goals grid */}
       {state.savingsGoals.length === 0 ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
-          <p className="text-sm text-zinc-500">No savings goals yet. Create one to start tracking your progress.</p>
+          <p className="text-sm text-zinc-500">{t('savings.no_goals')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -184,23 +254,43 @@ export default function Savings({ state, setState }: Props) {
               <motion.div
                 key={goal.id}
                 layout
-                className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden"
+                className={cn(
+                  "bg-zinc-900 border rounded-xl overflow-hidden",
+                  selectedIds.has(goal.id) ? 'border-violet-500' : 'border-zinc-800'
+                )}
               >
                 <div className="p-6">
                   {/* Header */}
                   <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <div className="flex items-center gap-3 mb-1">
-                        <h3 className="text-base font-semibold text-zinc-50">{goal.name}</h3>
-                        {goal.vehicleId && (
-                          <span className="px-2.5 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-400 border border-zinc-700">
-                            {vehicleName}
-                          </span>
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(goal.id)}
+                        onChange={() => toggleSelect(goal.id)}
+                        className="mt-1.5 h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-violet-500 focus:ring-violet-500/50 cursor-pointer"
+                      />
+                      <div>
+                        <div className="flex items-center gap-3 mb-1">
+                          <h3 className="text-base font-semibold text-zinc-50">{goal.name}</h3>
+                          {goal.vehicleId && (
+                            <span className="px-2.5 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-400 border border-zinc-700">
+                              {vehicleName}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-zinc-500">
+                          {formatCurrency(goal.monthlyContribution)}{t('unit.per_month')} &middot; {t('loans.started')} {formatDate(goal.startDate)}
+                        </p>
+                        {(goal.tags || []).length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {(goal.tags || []).map(tag => (
+                              <span key={tag} className="inline-flex items-center bg-violet-500/15 text-violet-300 text-xs px-2 py-0.5 rounded-md">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
                         )}
                       </div>
-                      <p className="text-sm text-zinc-500">
-                        {formatCurrency(goal.monthlyContribution)}/mo &middot; Started {formatDate(goal.startDate)}
-                      </p>
                     </div>
                     <div className="flex items-center gap-1">
                       <button onClick={() => openEditGoal(goal)} className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center">
@@ -216,7 +306,7 @@ export default function Savings({ state, setState }: Props) {
                   <div className="mb-4">
                     <div className="flex items-end justify-between mb-2">
                       <span className="text-lg font-semibold text-emerald-400">{formatCurrency(balance)}</span>
-                      <span className="text-sm text-zinc-500">of {formatCurrency(goal.targetAmount)}</span>
+                      <span className="text-sm text-zinc-500">{t('common.of')} {formatCurrency(goal.targetAmount)}</span>
                     </div>
                     <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
                       <motion.div
@@ -239,14 +329,14 @@ export default function Savings({ state, setState }: Props) {
                       className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-1.5 flex-1 justify-center"
                     >
                       <ArrowDownLeft size={14} className="text-emerald-400" />
-                      Deposit
+                      {t('savings.deposit')}
                     </button>
                     <button
                       onClick={() => openTxnModal(goal.id, 'withdrawal')}
                       className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-1.5 flex-1 justify-center"
                     >
                       <ArrowUpRight size={14} className="text-red-400" />
-                      Withdraw
+                      {t('savings.withdraw')}
                     </button>
                   </div>
 
@@ -257,7 +347,7 @@ export default function Savings({ state, setState }: Props) {
                       className="mt-3 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center gap-1.5 transition-colors"
                     >
                       <ChevronDown size={14} className={cn('transition-transform', isExpanded && 'rotate-180')} />
-                      {goalTxns.length} Transaction{goalTxns.length !== 1 ? 's' : ''}
+                      {goalTxns.length} {goalTxns.length !== 1 ? t('savings.transactions') : t('savings.transaction')}
                     </button>
                   )}
                 </div>
@@ -290,7 +380,7 @@ export default function Savings({ state, setState }: Props) {
                                 )}
                               </div>
                               <div>
-                                <p className="text-sm text-zinc-50">{txn.description || (txn.type === 'deposit' ? 'Deposit' : 'Withdrawal')}</p>
+                                <p className="text-sm text-zinc-50">{txn.description || (txn.type === 'deposit' ? t('savings.deposit') : t('savings.withdrawal'))}</p>
                                 <p className="text-xs text-zinc-500">{formatDate(txn.date)}</p>
                               </div>
                             </div>
@@ -323,7 +413,7 @@ export default function Savings({ state, setState }: Props) {
       {/* Projection chart */}
       {projectionData.length > 0 && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <h3 className="text-sm font-medium text-zinc-50 mb-5">24-Month Projection</h3>
+          <h3 className="text-sm font-medium text-zinc-50 mb-5">{t('savings.projection')}</h3>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={projectionData}>
@@ -352,7 +442,7 @@ export default function Savings({ state, setState }: Props) {
                     <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <Area type="monotone" dataKey="total" name="Total Savings" stroke="#8b5cf6" fill="url(#savingsGrad)" strokeWidth={2} />
+                <Area type="monotone" dataKey="total" name={t('savings.total_savings')} stroke="#8b5cf6" fill="url(#savingsGrad)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -363,15 +453,15 @@ export default function Savings({ state, setState }: Props) {
       <Modal
         isOpen={goalModalOpen}
         onClose={() => setGoalModalOpen(false)}
-        title={editingGoal ? 'Edit Savings Goal' : 'New Savings Goal'}
+        title={editingGoal ? t('savings.edit_goal') : t('savings.new_goal')}
         size="lg"
         footer={
           <>
             <button onClick={() => setGoalModalOpen(false)} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm">
-              Cancel
+              {t('common.cancel')}
             </button>
             <button onClick={handleSaveGoal} className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium">
-              {editingGoal ? 'Save Changes' : 'Create Goal'}
+              {editingGoal ? t('common.save_changes') : t('savings.create_goal')}
             </button>
           </>
         }
@@ -379,7 +469,7 @@ export default function Savings({ state, setState }: Props) {
         <div className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Name</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.name')}</label>
               <input
                 type="text"
                 value={goalForm.name}
@@ -389,14 +479,14 @@ export default function Savings({ state, setState }: Props) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Vehicle</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.vehicle')}</label>
               <select
                 value={goalForm.vehicleId}
                 onChange={e => setGoalForm({ ...goalForm, vehicleId: e.target.value })}
                 className={selectClasses}
                 style={{ background: chevronBg }}
               >
-                <option value="">No vehicle</option>
+                <option value="">{t('common.no_vehicle')}</option>
                 {state.vehicles.map(v => (
                   <option key={v.id} value={v.id}>{v.name}</option>
                 ))}
@@ -406,7 +496,7 @@ export default function Savings({ state, setState }: Props) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Target Amount</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('savings.target_amount')}</label>
               <input
                 type="number"
                 value={goalForm.targetAmount || ''}
@@ -416,7 +506,7 @@ export default function Savings({ state, setState }: Props) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">Monthly Contribution</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">{t('savings.monthly_contribution')}</label>
               <input
                 type="number"
                 value={goalForm.monthlyContribution || ''}
@@ -428,7 +518,7 @@ export default function Savings({ state, setState }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Start Date</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.start_date')}</label>
             <input
               type="date"
               value={goalForm.startDate}
@@ -438,14 +528,30 @@ export default function Savings({ state, setState }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Notes</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.tags')}</label>
+            <TagInput
+              tags={goalForm.tags || []}
+              onChange={tags => setGoalForm({ ...goalForm, tags })}
+              suggestions={allTags}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.notes')}</label>
             <textarea
               value={goalForm.notes}
               onChange={e => setGoalForm({ ...goalForm, notes: e.target.value })}
-              placeholder="Optional notes..."
+              placeholder={t('common.optional_notes')}
               className="w-full min-h-[100px] h-auto bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 resize-none"
             />
           </div>
+
+          <ExtraFields
+            recordType="savings"
+            values={extraFieldValues}
+            onChange={setExtraFieldValues}
+            definitions={extraFieldDefs}
+          />
         </div>
       </Modal>
 
@@ -453,22 +559,22 @@ export default function Savings({ state, setState }: Props) {
       <Modal
         isOpen={txnModalOpen}
         onClose={() => setTxnModalOpen(false)}
-        title={txnForm.type === 'deposit' ? 'Add Deposit' : 'Add Withdrawal'}
+        title={txnForm.type === 'deposit' ? t('savings.add_deposit') : t('savings.add_withdrawal')}
         size="sm"
         footer={
           <>
             <button onClick={() => setTxnModalOpen(false)} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm">
-              Cancel
+              {t('common.cancel')}
             </button>
             <button onClick={handleSaveTxn} className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium">
-              {txnForm.type === 'deposit' ? 'Deposit' : 'Withdraw'}
+              {txnForm.type === 'deposit' ? t('savings.deposit') : t('savings.withdraw')}
             </button>
           </>
         }
       >
         <div className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Amount</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.amount')}</label>
             <input
               type="number"
               value={txnForm.amount || ''}
@@ -478,7 +584,7 @@ export default function Savings({ state, setState }: Props) {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Date</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.date')}</label>
             <input
               type="date"
               value={txnForm.date}
@@ -487,12 +593,12 @@ export default function Savings({ state, setState }: Props) {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Description</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.description')}</label>
             <input
               type="text"
               value={txnForm.description}
               onChange={e => setTxnForm({ ...txnForm, description: e.target.value })}
-              placeholder="Optional description"
+              placeholder={t('common.optional_description')}
               className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
             />
           </div>

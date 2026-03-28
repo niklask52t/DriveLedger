@@ -4,6 +4,7 @@ import Modal from '../../components/Modal';
 import { cn } from '../../lib/utils';
 import { formatCurrency, getFrequencyLabel, getCategoryLabel, toMonthly, formatDate } from '../../utils';
 import { costCategoryOptions, costFrequencyOptions, emptyCost } from './constants';
+import { useI18n } from '../../contexts/I18nContext';
 import type { Cost, Vehicle, Person } from '../../types';
 
 const selectChevron = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`;
@@ -47,6 +48,7 @@ export default function VehicleCostsTab({
   vehicles,
   persons,
 }: VehicleCostsTabProps) {
+  const { t } = useI18n();
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const totalMonthly = vehicleCosts.reduce((sum, c) => sum + toMonthly(c.amount, c.frequency), 0);
@@ -57,7 +59,7 @@ export default function VehicleCostsTab({
       <div className="flex items-center justify-between mb-6">
         <div>
           <p className="text-sm text-zinc-400">
-            {vehicleCosts.length} cost{vehicleCosts.length !== 1 ? 's' : ''} &middot; {formatCurrency(totalMonthly)}/mo
+            {t('vehicle_tab.costs.count', { count: vehicleCosts.length })} &middot; {formatCurrency(totalMonthly)}{t('unit.per_month')}
           </p>
         </div>
         <button
@@ -65,14 +67,14 @@ export default function VehicleCostsTab({
           className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2 transition-colors"
         >
           <Plus size={16} />
-          Add Cost
+          {t('costs.add')}
         </button>
       </div>
 
       {/* Table */}
       {vehicleCosts.length === 0 ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
-          <p className="text-zinc-500 text-sm">No costs recorded yet.</p>
+          <p className="text-zinc-500 text-sm">{t('vehicle_tab.costs.no_costs')}</p>
         </div>
       ) : (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
@@ -80,13 +82,13 @@ export default function VehicleCostsTab({
             <table className="w-full">
               <thead>
                 <tr className="border-b border-zinc-800">
-                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">Name</th>
-                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">Category</th>
-                  <th className="px-4 py-3.5 text-right text-xs text-zinc-500 uppercase tracking-wider font-medium">Amount</th>
-                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">Frequency</th>
-                  <th className="px-4 py-3.5 text-right text-xs text-zinc-500 uppercase tracking-wider font-medium">Monthly</th>
-                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">Paid By</th>
-                  <th className="px-4 py-3.5 text-right text-xs text-zinc-500 uppercase tracking-wider font-medium">Actions</th>
+                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">{t('common.name')}</th>
+                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">{t('common.category')}</th>
+                  <th className="px-4 py-3.5 text-right text-xs text-zinc-500 uppercase tracking-wider font-medium">{t('common.amount')}</th>
+                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">{t('common.frequency')}</th>
+                  <th className="px-4 py-3.5 text-right text-xs text-zinc-500 uppercase tracking-wider font-medium">{t('common.monthly')}</th>
+                  <th className="px-4 py-3.5 text-left text-xs text-zinc-500 uppercase tracking-wider font-medium">{t('vehicle_tab.costs.paid_by')}</th>
+                  <th className="px-4 py-3.5 text-right text-xs text-zinc-500 uppercase tracking-wider font-medium">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -117,13 +119,13 @@ export default function VehicleCostsTab({
                                 }}
                                 className="bg-red-400/10 text-red-400 hover:bg-red-400/20 rounded-lg h-9 px-3 text-xs transition-colors"
                               >
-                                Confirm
+                                {t('common.confirm')}
                               </button>
                               <button
                                 onClick={() => setDeleteConfirm(null)}
                                 className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-xs transition-colors"
                               >
-                                Cancel
+                                {t('common.cancel')}
                               </button>
                             </div>
                           ) : (
@@ -152,7 +154,7 @@ export default function VehicleCostsTab({
           setShowCostModal(false);
           setEditingCostId(null);
         }}
-        title={editingCostId ? 'Edit Cost' : 'Add Cost'}
+        title={editingCostId ? t('costs.edit') : t('costs.add')}
         footer={
           <>
             <button
@@ -162,20 +164,20 @@ export default function VehicleCostsTab({
               }}
               className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm transition-colors"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               onClick={onSaveCost}
               className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium transition-colors"
             >
-              {editingCostId ? 'Update' : 'Add'}
+              {editingCostId ? t('common.update') : t('common.add')}
             </button>
           </>
         }
       >
         <div className="space-y-5">
           <div>
-            <label className={labelClass}>Name</label>
+            <label className={labelClass}>{t('common.name')}</label>
             <input
               type="text"
               className={inputClass}
@@ -186,7 +188,7 @@ export default function VehicleCostsTab({
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Category</label>
+              <label className={labelClass}>{t('common.category')}</label>
               <select
                 className={selectClass}
                 style={{ backgroundImage: selectChevron, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center' }}
@@ -201,7 +203,7 @@ export default function VehicleCostsTab({
               </select>
             </div>
             <div>
-              <label className={labelClass}>Frequency</label>
+              <label className={labelClass}>{t('common.frequency')}</label>
               <select
                 className={selectClass}
                 style={{ backgroundImage: selectChevron, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center' }}
@@ -218,7 +220,7 @@ export default function VehicleCostsTab({
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Amount (EUR)</label>
+              <label className={labelClass}>{t('vehicle_tab.costs.amount_eur')}</label>
               <input
                 type="number"
                 step="0.01"
@@ -229,14 +231,14 @@ export default function VehicleCostsTab({
               />
             </div>
             <div>
-              <label className={labelClass}>Paid By</label>
+              <label className={labelClass}>{t('vehicle_tab.costs.paid_by')}</label>
               <select
                 className={selectClass}
                 style={{ backgroundImage: selectChevron, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center' }}
                 value={costForm.paidBy}
                 onChange={(e) => setCostForm({ ...costForm, paidBy: e.target.value })}
               >
-                <option value="">Select person...</option>
+                <option value="">{t('vehicle_tab.costs.select_person')}</option>
                 {persons.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -247,7 +249,7 @@ export default function VehicleCostsTab({
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Start Date</label>
+              <label className={labelClass}>{t('common.start_date')}</label>
               <input
                 type="date"
                 className={inputClass}
@@ -256,7 +258,7 @@ export default function VehicleCostsTab({
               />
             </div>
             <div>
-              <label className={labelClass}>End Date</label>
+              <label className={labelClass}>{t('common.end_date')}</label>
               <input
                 type="date"
                 className={inputClass}
@@ -266,14 +268,14 @@ export default function VehicleCostsTab({
             </div>
           </div>
           <div>
-            <label className={labelClass}>Vehicle</label>
+            <label className={labelClass}>{t('common.vehicle')}</label>
             <select
               className={selectClass}
               style={{ backgroundImage: selectChevron, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center' }}
               value={costForm.vehicleId}
               onChange={(e) => setCostForm({ ...costForm, vehicleId: e.target.value })}
             >
-              <option value="">Select vehicle...</option>
+              <option value="">{t('vehicle_tab.costs.select_vehicle')}</option>
               {vehicles.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.name || `${v.brand} ${v.model}`}
@@ -282,10 +284,10 @@ export default function VehicleCostsTab({
             </select>
           </div>
           <div>
-            <label className={labelClass}>Notes</label>
+            <label className={labelClass}>{t('common.notes')}</label>
             <textarea
               className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 min-h-[100px] resize-none"
-              placeholder="Optional notes..."
+              placeholder={t('common.optional_notes')}
               value={costForm.notes}
               onChange={(e) => setCostForm({ ...costForm, notes: e.target.value })}
             />

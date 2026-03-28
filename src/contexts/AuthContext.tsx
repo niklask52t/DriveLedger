@@ -17,15 +17,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Try to restore session on mount
+  // Try to restore session on mount, or handle OIDC callback token
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const refreshed = await api.refresh();
-        if (refreshed && !cancelled) {
-          const me = await api.getMe();
-          setUser(me);
+        // Check for OIDC token in URL hash (e.g. /#login?oidc_token=xxx)
+        const hash = window.location.hash;
+        const oidcMatch = hash.match(/[?&]oidc_token=([^&]+)/);
+        if (oidcMatch) {
+          const token = decodeURIComponent(oidcMatch[1]);
+          // Clean up the URL
+          window.location.hash = hash.replace(/[?&]oidc_token=[^&]+/, '').replace(/\?$/, '');
+          api.setToken(token);
+          if (!cancelled) {
+            const me = await api.getMe();
+            setUser(me);
+          }
+        } else {
+          const refreshed = await api.refresh();
+          if (refreshed && !cancelled) {
+            const me = await api.getMe();
+            setUser(me);
+          }
         }
       } catch {
         // Not logged in

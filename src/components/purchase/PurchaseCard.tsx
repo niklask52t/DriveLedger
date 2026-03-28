@@ -1,6 +1,7 @@
 import { Pencil, Trash2, ArrowRightLeft, Star, ExternalLink, Fuel, Gauge, Calendar } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { formatCurrency, formatNumber, getFuelTypeLabel } from '../../utils';
+import { useUnits } from '../../hooks/useUnits';
 import type { PlannedPurchase } from '../../types';
 import { useState } from 'react';
 
@@ -12,6 +13,7 @@ interface PurchaseCardProps {
 }
 
 export default function PurchaseCard({ purchase, onEdit, onDelete, onConvert }: PurchaseCardProps) {
+  const { fmtDistance } = useUnits();
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   const totalMonthlyCost =
@@ -72,7 +74,7 @@ export default function PurchaseCard({ purchase, onEdit, onDelete, onConvert }: 
           {purchase.mileage > 0 && (
             <div className="flex items-center gap-1.5 text-xs text-zinc-400">
               <Gauge size={12} />
-              <span>{formatNumber(purchase.mileage)} km</span>
+              <span>{fmtDistance(purchase.mileage)}</span>
             </div>
           )}
           {purchase.fuelType && (

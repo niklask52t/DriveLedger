@@ -3,6 +3,7 @@ import { v4 as uuid } from 'uuid';
 import { getPool } from '../db';
 import { combinedAuthMiddleware } from '../middleware';
 import { toCamelCase, toSnakeCase, rowsToCamelCase } from '../utils';
+import { fireWebhooks } from '../webhookTrigger.js';
 
 const router = Router();
 router.use(combinedAuthMiddleware);
@@ -85,8 +86,8 @@ router.post('/', async (req: Request, res: Response) => {
     const tagsStr = data.tags ? JSON.stringify(data.tags) : null;
 
     await pool.execute(`
-      INSERT INTO taxes (id, user_id, vehicle_id, date, description, cost, is_recurring, recurring_interval, due_date, notes, tags)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO taxes (id, user_id, vehicle_id, date, description, cost, is_recurring, recurring_interval, recurring_interval_unit, due_date, notes, tags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id,
       userId,
@@ -96,6 +97,7 @@ router.post('/', async (req: Request, res: Response) => {
       data.cost || 0,
       data.is_recurring ? 1 : 0,
       data.recurring_interval || '',
+      data.recurring_interval_unit || 'months',
       data.due_date || '',
       data.notes || '',
       tagsStr
@@ -103,7 +105,9 @@ router.post('/', async (req: Request, res: Response) => {
 
     const [createdRows] = await pool.execute('SELECT * FROM taxes WHERE id = ?', [id]);
     const created = (createdRows as any[])[0];
-    return res.status(201).json(parseTaxRow(created));
+    const result = parseTaxRow(created);
+    fireWebhooks(userId, 'record.created', { type: 'tax', ...result });
+    return res.status(201).json(result);
   } catch (err: any) {
     console.error('[TAXES] Create error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -133,6 +137,7 @@ router.put('/:id', async (req: Request, res: Response) => {
         cost = COALESCE(?, cost),
         is_recurring = COALESCE(?, is_recurring),
         recurring_interval = COALESCE(?, recurring_interval),
+        recurring_interval_unit = COALESCE(?, recurring_interval_unit),
         due_date = COALESCE(?, due_date),
         notes = COALESCE(?, notes),
         tags = COALESCE(?, tags)
@@ -143,6 +148,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       data.cost ?? null,
       data.is_recurring !== undefined ? (data.is_recurring ? 1 : 0) : null,
       data.recurring_interval ?? null,
+      data.recurring_interval_unit ?? null,
       data.due_date ?? null,
       data.notes ?? null,
       tagsStr,
@@ -152,9 +158,85 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     const [updatedRows] = await pool.execute('SELECT * FROM taxes WHERE id = ?', [id]);
     const updated = (updatedRows as any[])[0];
-    return res.status(200).json(parseTaxRow(updated));
+    const result = parseTaxRow(updated);
+    fireWebhooks(userId, 'record.updated', { type: 'tax', ...result });
+    return res.status(200).json(result);
   } catch (err: any) {
     console.error('[TAXES] Update error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /:id/advance - advance a recurring tax to create the next occurrence
+router.post('/:id/advance', async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    const userId = (req as any).user.id;
+    const { id } = req.params;
+
+    const [rows] = await pool.execute('SELECT * FROM taxes WHERE id = ? AND user_id = ?', [id, userId]);
+    const row = (rows as any[])[0];
+    if (!row) {
+      return res.status(404).json({ error: 'Tax record not found' });
+    }
+    if (!row.is_recurring) {
+      return res.status(400).json({ error: 'Tax record is not recurring' });
+    }
+
+    // Parse the interval
+    const intervalValue = parseInt(row.recurring_interval) || 1;
+    const intervalUnit = row.recurring_interval_unit || 'months';
+
+    // Calculate new date
+    const baseDate = new Date(row.date);
+    let newDate: Date;
+    if (intervalUnit === 'days') {
+      newDate = new Date(baseDate);
+      newDate.setDate(newDate.getDate() + intervalValue);
+    } else {
+      // months (default)
+      newDate = new Date(baseDate);
+      newDate.setMonth(newDate.getMonth() + intervalValue);
+    }
+
+    // Calculate new due_date if one exists
+    let newDueDate = '';
+    if (row.due_date) {
+      const baseDue = new Date(row.due_date);
+      if (intervalUnit === 'days') {
+        baseDue.setDate(baseDue.getDate() + intervalValue);
+      } else {
+        baseDue.setMonth(baseDue.getMonth() + intervalValue);
+      }
+      newDueDate = baseDue.toISOString().split('T')[0];
+    }
+
+    const newId = uuid();
+    const newDateStr = newDate.toISOString().split('T')[0];
+
+    await pool.execute(`
+      INSERT INTO taxes (id, user_id, vehicle_id, date, description, cost, is_recurring, recurring_interval, recurring_interval_unit, due_date, notes, tags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      newId,
+      userId,
+      row.vehicle_id,
+      newDateStr,
+      row.description,
+      row.cost,
+      row.is_recurring,
+      row.recurring_interval,
+      row.recurring_interval_unit || 'months',
+      newDueDate,
+      row.notes,
+      row.tags
+    ]);
+
+    const [createdRows] = await pool.execute('SELECT * FROM taxes WHERE id = ?', [newId]);
+    const created = (createdRows as any[])[0];
+    return res.status(201).json(parseTaxRow(created));
+  } catch (err: any) {
+    console.error('[TAXES] Advance error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -174,6 +256,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
     await pool.execute('DELETE FROM taxes WHERE id = ? AND user_id = ?', [id, userId]);
 
+    fireWebhooks(userId, 'record.deleted', { type: 'tax', id });
     return res.status(200).json({ message: 'Tax record deleted' });
   } catch (err: any) {
     console.error('[TAXES] Delete error:', err);

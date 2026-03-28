@@ -1,9 +1,17 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Download, ArrowUpDown, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Download, ArrowUpDown, Pencil, Trash2, Printer } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { api } from '../api';
 import Modal from '../components/Modal';
+import TagInput from '../components/TagInput';
+import TagFilter from '../components/TagFilter';
+import BulkActions from '../components/BulkActions';
+import ExtraFields from '../components/ExtraFields';
+import { useExtraFields } from '../hooks/useExtraFields';
+import ColumnSettings, { useColumnPreferences } from '../components/ColumnSettings';
 import { cn } from '../lib/utils';
+import { useI18n } from '../contexts/I18nContext';
 import {
   formatCurrency,
   toMonthly,
@@ -27,13 +35,7 @@ const categories: CostCategory[] = [
   'steuer', 'versicherung', 'sprit', 'pflege', 'reparatur', 'tuev', 'finanzierung', 'sparen', 'sonstiges',
 ];
 
-const frequencies: { value: CostFrequency; label: string }[] = [
-  { value: 'monatlich', label: 'Monthly' },
-  { value: 'quartal', label: 'Quarterly' },
-  { value: 'halbjaehrlich', label: 'Semi-annual' },
-  { value: 'jaehrlich', label: 'Yearly' },
-  { value: 'einmalig', label: 'One-time' },
-];
+const frequencyKeys: CostFrequency[] = ['monatlich', 'quartal', 'halbjaehrlich', 'jaehrlich', 'einmalig'];
 
 const emptyCost: Omit<Cost, 'id' | 'createdAt'> = {
   vehicleId: '',
@@ -45,27 +47,63 @@ const emptyCost: Omit<Cost, 'id' | 'createdAt'> = {
   startDate: '',
   endDate: '',
   notes: '',
+  tags: [],
 };
 
 type SortKey = 'name' | 'category' | 'amount' | 'frequency' | 'monthly' | 'paidBy';
 
+const costsColumns = [
+  { key: 'vehicle', label: 'Vehicle' },
+  { key: 'name', label: 'Name' },
+  { key: 'category', label: 'Category' },
+  { key: 'amount', label: 'Amount' },
+  { key: 'frequency', label: 'Frequency' },
+  { key: 'monthly', label: 'Monthly' },
+  { key: 'paidBy', label: 'Paid By' },
+];
+
 export default function Costs({ state, setState }: Props) {
+  const { t } = useI18n();
+  const extraFieldDefs = useExtraFields();
+  const costExtraFieldDefs = useMemo(() =>
+    extraFieldDefs.filter(d => d.recordType === 'cost').sort((a, b) => a.sortOrder - b.sortOrder),
+    [extraFieldDefs]
+  );
+  const allCostsColumns = useMemo(() => [
+    ...costsColumns,
+    ...costExtraFieldDefs.map(d => ({ key: `extra_${d.fieldName}`, label: d.fieldName })),
+  ], [costExtraFieldDefs]);
+  const { visibleColumns } = useColumnPreferences('costs', allCostsColumns);
+  const isVisible = (col: string) => visibleColumns.some(c => c.key === col);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Cost | null>(null);
   const [form, setForm] = useState(emptyCost);
+  const [extraFieldValues, setExtraFieldValues] = useState<Record<string, string>>({});
   const [filterVehicle, setFilterVehicle] = useState('');
   const [filterPerson, setFilterPerson] = useState('');
   const [filterCategories, setFilterCategories] = useState<CostCategory[]>([]);
+  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [tagFilterMode, setTagFilterMode] = useState<'include' | 'exclude'>('include');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortAsc, setSortAsc] = useState(true);
+
+  const allTags = useMemo(() => [...new Set(state.costs.flatMap(r => r.tags || []))], [state.costs]);
 
   const filtered = useMemo(() => {
     let items = [...state.costs];
     if (filterVehicle) items = items.filter(c => c.vehicleId === filterVehicle);
     if (filterPerson) items = items.filter(c => c.paidBy === filterPerson);
     if (filterCategories.length > 0) items = items.filter(c => filterCategories.includes(c.category));
+    if (filterTags.length > 0) {
+      if (tagFilterMode === 'include') {
+        items = items.filter(c => (c.tags || []).some(t => filterTags.includes(t)));
+      } else {
+        items = items.filter(c => !(c.tags || []).some(t => filterTags.includes(t)));
+      }
+    }
     return items;
-  }, [state.costs, filterVehicle, filterPerson, filterCategories]);
+  }, [state.costs, filterVehicle, filterPerson, filterCategories, filterTags, tagFilterMode]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -117,6 +155,7 @@ export default function Costs({ state, setState }: Props) {
   const openAdd = () => {
     setEditing(null);
     setForm({ ...emptyCost, vehicleId: state.vehicles[0]?.id || '', paidBy: state.persons[0]?.name || '' });
+    setExtraFieldValues({});
     setModalOpen(true);
   };
 
@@ -132,32 +171,53 @@ export default function Costs({ state, setState }: Props) {
       startDate: cost.startDate,
       endDate: cost.endDate,
       notes: cost.notes,
+      tags: cost.tags || [],
     });
+    setExtraFieldValues((cost as any).extraFields || {});
     setModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim() || !form.vehicleId) return;
-    if (editing) {
-      setState({
-        ...state,
-        costs: state.costs.map(c =>
-          c.id === editing.id ? { ...c, ...form } : c
-        ),
-      });
-    } else {
-      const newCost: Cost = {
-        ...form,
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString(),
-      };
-      setState({ ...state, costs: [...state.costs, newCost] });
+    const payload = { ...form, extraFields: extraFieldValues };
+    try {
+      if (editing) {
+        const updated = await api.updateCost(editing.id, payload);
+        setState({
+          ...state,
+          costs: state.costs.map(c =>
+            c.id === editing.id ? updated : c
+          ),
+        });
+      } else {
+        const newCost = await api.createCost(payload);
+        setState({ ...state, costs: [...state.costs, newCost] });
+      }
+      setModalOpen(false);
+    } catch {
+      // ignore
     }
-    setModalOpen(false);
   };
 
-  const handleDelete = (id: string) => {
-    setState({ ...state, costs: state.costs.filter(c => c.id !== id) });
+  const handleBulkDelete = async () => {
+    try {
+      for (const id of selectedIds) {
+        await api.deleteCost(id);
+      }
+      setState({ ...state, costs: state.costs.filter(c => !selectedIds.has(c.id)) });
+      setSelectedIds(new Set());
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await api.deleteCost(id);
+      setState({ ...state, costs: state.costs.filter(c => c.id !== id) });
+    } catch {
+      // ignore
+    }
   };
 
   const handleExport = () => {
@@ -199,15 +259,20 @@ export default function Costs({ state, setState }: Props) {
     <div className="space-y-8">
       {/* Header row */}
       <div className="flex items-center justify-between">
-        <p className="text-sm text-zinc-400">Manage recurring and one-time vehicle expenses across all your vehicles.</p>
+        <p className="text-sm text-zinc-400">{t('costs.subtitle')}</p>
         <div className="flex items-center gap-3">
+          <ColumnSettings tableKey="costs" allColumns={allCostsColumns} />
+          <button onClick={() => window.print()} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-2 no-print">
+            <Printer size={16} />
+            {t('common.print')}
+          </button>
           <button onClick={handleExport} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-2">
             <Download size={16} />
-            Export
+            {t('common.export')}
           </button>
           <button onClick={openAdd} className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2">
             <Plus size={16} />
-            Add Cost
+            {t('costs.add')}
           </button>
         </div>
       </div>
@@ -215,10 +280,10 @@ export default function Costs({ state, setState }: Props) {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'Monthly Total', value: formatCurrency(monthlyTotal), color: 'text-violet-400' },
-          { label: 'Yearly Total', value: formatCurrency(yearlyTotal), color: 'text-sky-400' },
-          { label: 'Recurring', value: String(recurringCount), color: 'text-emerald-400' },
-          { label: 'One-time', value: String(oneTimeCount), color: 'text-amber-400' },
+          { label: t('costs.monthly_total'), value: formatCurrency(monthlyTotal), color: 'text-violet-400' },
+          { label: t('costs.yearly_total'), value: formatCurrency(yearlyTotal), color: 'text-sky-400' },
+          { label: t('costs.recurring'), value: String(recurringCount), color: 'text-emerald-400' },
+          { label: t('costs.one_time'), value: String(oneTimeCount), color: 'text-amber-400' },
         ].map(s => (
           <div key={s.label}>
             <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{s.label}</p>
@@ -293,13 +358,16 @@ export default function Costs({ state, setState }: Props) {
                 <SortHeader label="Frequency" col="frequency" />
                 <SortHeader label="Monthly" col="monthly" />
                 <SortHeader label="Paid By" col="paidBy" />
+                {costExtraFieldDefs.map(d => (
+                  <th key={d.id} className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider">{d.fieldName}</th>
+                ))}
                 <th className="px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {sorted.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-zinc-500">
+                  <td colSpan={8 + costExtraFieldDefs.length} className="px-4 py-12 text-center text-sm text-zinc-500">
                     No costs found. Add your first cost to get started.
                   </td>
                 </tr>
@@ -323,6 +391,11 @@ export default function Costs({ state, setState }: Props) {
                     <td className="px-4 py-3.5 text-sm text-zinc-400">{getFrequencyLabel(cost.frequency)}</td>
                     <td className="px-4 py-3.5 text-sm text-violet-400 font-medium">{formatCurrency(toMonthly(cost.amount, cost.frequency))}</td>
                     <td className="px-4 py-3.5 text-sm text-zinc-400">{cost.paidBy || '-'}</td>
+                    {costExtraFieldDefs.map(d => (
+                      <td key={d.id} className="px-4 py-3.5 text-sm text-zinc-400">
+                        {((cost as any).extraFields || {})[d.fieldName] || '-'}
+                      </td>
+                    ))}
                     <td className="px-4 py-3.5 text-sm text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => openEdit(cost)} className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center">

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getPool } from '../db';
-import { combinedAuthMiddleware } from '../middleware';
+import { combinedAuthMiddleware, adminMiddleware } from '../middleware';
 import { rowsToCamelCase } from '../utils';
 
 const router = Router();
@@ -267,6 +267,83 @@ router.post('/import', async (req: Request, res: Response) => {
     return res.status(200).json({ message: 'Data imported successfully' });
   } catch (err: any) {
     console.error('[DATA] Import error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /backup - Full database dump (admin only)
+router.get('/backup', adminMiddleware, async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    const tables = [
+      'users', 'vehicles', 'costs', 'loans', 'repairs', 'savings_goals', 'savings_transactions',
+      'planned_purchases', 'persons', 'reminders', 'service_records', 'upgrade_records', 'fuel_records',
+      'odometer_records', 'supplies', 'equipment', 'inspections', 'vehicle_notes', 'taxes', 'planner_tasks',
+      'api_tokens', 'webhooks', 'vehicle_shares', 'user_config', 'extra_field_definitions', 'supply_requisitions',
+      'inspection_templates', 'plan_templates', 'households', 'household_members', 'dashboard_widgets',
+      'custom_translations', 'attachments',
+    ];
+
+    const backup: Record<string, any[]> = {};
+    for (const table of tables) {
+      try {
+        const [rows] = await pool.execute(`SELECT * FROM \`${table}\``);
+        backup[table] = rows as any[];
+      } catch {
+        backup[table] = [];
+      }
+    }
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="driveledger-backup-${new Date().toISOString().split('T')[0]}.json"`);
+    res.json({ version: '2.0.0', timestamp: new Date().toISOString(), data: backup });
+  } catch (err: any) {
+    console.error('[DATA] Backup error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /restore - Restore from backup (admin only)
+router.post('/restore', adminMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { data } = req.body;
+    if (!data) return res.status(400).json({ error: 'No backup data provided' });
+
+    const pool = getPool();
+    const conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    try {
+      // Disable FK checks temporarily
+      await conn.execute('SET FOREIGN_KEY_CHECKS = 0');
+
+      for (const [table, rows] of Object.entries(data)) {
+        if (!Array.isArray(rows) || rows.length === 0) continue;
+        // Clear existing data
+        await conn.execute(`DELETE FROM \`${table}\``);
+        // Insert rows
+        for (const row of rows) {
+          const cols = Object.keys(row);
+          const placeholders = cols.map(() => '?').join(',');
+          await conn.execute(
+            `INSERT INTO \`${table}\` (${cols.map(c => '`' + c + '`').join(',')}) VALUES (${placeholders})`,
+            cols.map(c => row[c])
+          );
+        }
+      }
+
+      await conn.execute('SET FOREIGN_KEY_CHECKS = 1');
+      await conn.commit();
+      res.json({ restored: Object.keys(data).length });
+    } catch (err) {
+      await conn.rollback();
+      await conn.execute('SET FOREIGN_KEY_CHECKS = 1');
+      throw err;
+    } finally {
+      conn.release();
+    }
+  } catch (err: any) {
+    console.error('[DATA] Restore error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
