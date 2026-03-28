@@ -42,6 +42,11 @@ router.post('/', async (req: Request, res: Response) => {
       odometer: 0,
       notes: 0,
       taxes: 0,
+      supplies: 0,
+      equipment: 0,
+      plans: 0,
+      reminders: 0,
+      inspections: 0,
     };
 
     // Map LubeLogger vehicle IDs to new DriveLedger UUIDs
@@ -269,6 +274,88 @@ router.post('/', async (req: Request, res: Response) => {
         }
       }
 
+      // Import supply records
+      if (Array.isArray(data.supplyRecords)) {
+        for (const r of data.supplyRecords) {
+          const vehicleId = resolveVehicleId(r);
+          await conn.execute(
+            `INSERT INTO supplies (id, user_id, vehicle_id, date, description, part_number, supplier, quantity, cost, notes, tags)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [uuid(), userId, vehicleId, r.date || r.Date || '', r.description || r.Description || '',
+             r.partNumber || r.PartNumber || '', r.partSupplier || r.PartSupplier || '',
+             r.quantity || r.Quantity || 0, r.cost || r.Cost || 0,
+             r.notes || r.Notes || '', r.tags ? JSON.stringify(r.tags) : null]
+          );
+          summary.supplies++;
+        }
+      }
+
+      // Import equipment records
+      if (Array.isArray(data.equipmentRecords)) {
+        for (const r of data.equipmentRecords) {
+          const vehicleId = resolveVehicleId(r);
+          if (!vehicleId) continue;
+          await conn.execute(
+            `INSERT INTO equipment (id, user_id, vehicle_id, name, description, is_equipped, notes, tags)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [uuid(), userId, vehicleId, r.description || r.Description || r.name || '',
+             r.description || r.Description || '', r.isEquipped ? 1 : 0,
+             r.notes || r.Notes || '', r.tags ? JSON.stringify(r.tags) : null]
+          );
+          summary.equipment++;
+        }
+      }
+
+      // Import plan records
+      if (Array.isArray(data.planRecords)) {
+        for (const r of data.planRecords) {
+          const vehicleId = resolveVehicleId(r);
+          await conn.execute(
+            `INSERT INTO planner_tasks (id, user_id, vehicle_id, title, description, stage, priority, target_type, estimated_cost, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            [uuid(), userId, vehicleId || null,
+             r.description || r.Description || '', r.notes || r.Notes || '',
+             mapPlanProgress(r.progress || r.Progress), mapPlanPriority(r.priority || r.Priority),
+             mapImportMode(r.importMode || r.ImportMode), r.cost || r.Cost || 0]
+          );
+          summary.plans++;
+        }
+      }
+
+      // Import reminder records
+      if (Array.isArray(data.reminderRecords)) {
+        for (const r of data.reminderRecords) {
+          const vehicleId = resolveVehicleId(r);
+          await conn.execute(
+            `INSERT INTO reminders (id, user_id, vehicle_id, title, description, type, remind_at, recurring, metric, target_mileage, mileage_interval, active, email_notify)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`,
+            [uuid(), userId, vehicleId || null,
+             r.description || r.Description || '', r.notes || r.Notes || '', 'custom',
+             r.date || r.Date || null, mapRecurring(r), mapMetric(r.metric || r.Metric),
+             r.mileage || r.Mileage || null, r.customMileageInterval || r.reminderMileageInterval || null]
+          );
+          summary.reminders++;
+        }
+      }
+
+      // Import inspection records
+      if (Array.isArray(data.inspectionRecords)) {
+        for (const r of data.inspectionRecords) {
+          const vehicleId = resolveVehicleId(r);
+          if (!vehicleId) continue;
+          await conn.execute(
+            `INSERT INTO inspections (id, user_id, vehicle_id, date, description, cost, mileage, results, failed, notes, tags)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [uuid(), userId, vehicleId,
+             r.date || r.Date || '', r.description || r.Description || '',
+             r.cost || r.Cost || 0, r.mileage || r.Mileage || r.odometer || 0,
+             r.results ? JSON.stringify(r.results) : null, r.failed ? 1 : 0,
+             r.notes || r.Notes || '', r.tags ? JSON.stringify(r.tags) : null]
+          );
+          summary.inspections++;
+        }
+      }
+
       await conn.commit();
     } catch (err) {
       await conn.rollback();
@@ -286,6 +373,33 @@ router.post('/', async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+function mapPlanProgress(progress: any): string {
+  const map: Record<string, string> = { '0': 'planned', '1': 'doing', '2': 'testing', '3': 'done' };
+  return map[String(progress)] || 'planned';
+}
+
+function mapPlanPriority(priority: any): string {
+  const map: Record<string, string> = { '0': 'critical', '1': 'normal', '2': 'low' };
+  return map[String(priority)] || 'normal';
+}
+
+function mapImportMode(mode: any): string {
+  const map: Record<string, string> = { '0': 'service', '1': 'repair', '4': 'upgrade' };
+  return map[String(mode)] || 'service';
+}
+
+function mapMetric(metric: any): string {
+  const map: Record<string, string> = { '0': 'date', '1': 'odometer', '2': 'both' };
+  return map[String(metric)] || 'date';
+}
+
+function mapRecurring(r: any): string {
+  const interval = r.reminderMonthInterval || r.ReminderMonthInterval;
+  if (!interval || interval === '0') return '';
+  const map: Record<string, string> = { '1': 'monthly', '3': 'quarterly', '6': 'semi-annually', '12': 'yearly' };
+  return map[String(interval)] || 'yearly';
+}
 
 /**
  * Maps common fuel type names to DriveLedger fuel types.

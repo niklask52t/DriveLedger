@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
-import { Download, Upload, Trash2, Loader2, AlertTriangle, Check, DatabaseBackup, RotateCcw } from 'lucide-react';
+import { Download, Upload, Trash2, Loader2, AlertTriangle, Check, DatabaseBackup, RotateCcw, FileJson } from 'lucide-react';
 import { api } from '../../api';
 import { useAuth } from '../../contexts/AuthContext';
+import LubeLoggerImportModal from '../LubeLoggerImportModal';
 
 export default function DataTab() {
   const { user, logout } = useAuth();
@@ -16,6 +17,7 @@ export default function DataTab() {
   const [deleteText, setDeleteText] = useState('');
   const [restoreText, setRestoreText] = useState('');
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [showLubeLoggerImport, setShowLubeLoggerImport] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const restoreInputRef = useRef<HTMLInputElement>(null);
@@ -184,6 +186,26 @@ export default function DataTab() {
           Import JSON
         </button>
       </div>
+
+      {/* Import from LubeLogger */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+        <h3 className="text-sm font-semibold text-zinc-300 mb-2">Import from LubeLogger</h3>
+        <p className="text-xs text-zinc-500 mb-4">
+          Import your data from a LubeLogger JSON export. Supports vehicles, services, repairs, upgrades, fuel, odometer, notes, taxes, supplies, equipment, plans, reminders, and inspections.
+        </p>
+        <button
+          onClick={() => setShowLubeLoggerImport(true)}
+          className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-2 transition-colors"
+        >
+          <FileJson size={16} />
+          Import from LubeLogger
+        </button>
+      </div>
+
+      <LubeLoggerImportModal
+        isOpen={showLubeLoggerImport}
+        onClose={() => setShowLubeLoggerImport(false)}
+      />
 
       {/* Full Backup (Admin Only) */}
       {isAdmin && (

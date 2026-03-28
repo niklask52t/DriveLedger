@@ -1011,6 +1011,14 @@ const de: Record<string, string> = {
   // Format preview
   'settings.format_preview': 'Format-Vorschau',
   'settings.format_preview_desc': 'Sehen Sie, wie Daten, Zahlen und Währungen mit Ihren aktuellen Einstellungen aussehen.',
+
+  // LubeLogger import
+  'import.lubelogger': 'Aus LubeLogger importieren',
+  'import.lubelogger_desc': 'Importiere deine Daten aus einem LubeLogger JSON-Export',
+  'import.preview': 'Vorschau',
+  'import.importing': 'Importiere...',
+  'import.success': 'Import abgeschlossen!',
+  'import.records_imported': '{count} Einträge importiert',
 };
 
 export default de;

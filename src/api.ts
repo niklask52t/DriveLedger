@@ -413,6 +413,10 @@ class ApiClient {
     return this.request<void>('POST', '/data/import', data);
   }
 
+  async importFromLubeLogger(data: any): Promise<{ message: string; imported: Record<string, number> }> {
+    return this.request('POST', '/import/lubelogger', data);
+  }
+
   async deleteAccount(): Promise<void> {
     return this.request<void>('DELETE', '/auth/account');
   }
