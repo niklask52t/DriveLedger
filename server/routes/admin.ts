@@ -7,8 +7,100 @@ import { toCamelCase, rowsToCamelCase } from '../utils';
 
 const router = Router();
 
-// All admin routes require auth + admin
+// Auth required for all admin routes
 router.use(combinedAuthMiddleware);
+
+// GET /defaults - Get admin defaults (any authenticated user can read)
+router.get('/defaults', async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    const [rows] = await pool.execute('SELECT * FROM admin_defaults WHERE id = 1');
+    const row = (rows as any[])[0];
+    if (!row) {
+      return res.status(200).json({
+        language: 'en',
+        theme: 'dark',
+        unitSystem: 'metric',
+        fuelEconomyUnit: 'l_per_100km',
+        currency: 'EUR',
+        dateFormat: 'DD.MM.YYYY',
+        visibleTabs: ['dashboard','vehicles','costs','fuel','repairs','inspections','taxes','loans','savings','supplies','equipment','reminders','planner','purchase-planner','services'],
+      });
+    }
+
+    let visibleTabs = row.visible_tabs;
+    if (typeof visibleTabs === 'string') {
+      try { visibleTabs = JSON.parse(visibleTabs); } catch { visibleTabs = []; }
+    }
+
+    return res.status(200).json({
+      language: row.language,
+      theme: row.theme,
+      unitSystem: row.unit_system,
+      fuelEconomyUnit: row.fuel_economy_unit,
+      currency: row.currency,
+      dateFormat: row.date_format,
+      visibleTabs,
+      updatedAt: row.updated_at,
+    });
+  } catch (err: any) {
+    console.error('[ADMIN] Get defaults error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /defaults - Update admin defaults (admin only)
+router.put('/defaults', adminMiddleware, async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    const { language, theme, unitSystem, fuelEconomyUnit, currency, dateFormat, visibleTabs } = req.body;
+
+    const setClauses: string[] = [];
+    const values: any[] = [];
+
+    if (language !== undefined) { setClauses.push('language = ?'); values.push(language); }
+    if (theme !== undefined) { setClauses.push('theme = ?'); values.push(theme); }
+    if (unitSystem !== undefined) { setClauses.push('unit_system = ?'); values.push(unitSystem); }
+    if (fuelEconomyUnit !== undefined) { setClauses.push('fuel_economy_unit = ?'); values.push(fuelEconomyUnit); }
+    if (currency !== undefined) { setClauses.push('currency = ?'); values.push(currency); }
+    if (dateFormat !== undefined) { setClauses.push('date_format = ?'); values.push(dateFormat); }
+    if (visibleTabs !== undefined) { setClauses.push('visible_tabs = ?'); values.push(JSON.stringify(visibleTabs)); }
+
+    if (setClauses.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    await pool.execute(
+      `UPDATE admin_defaults SET ${setClauses.join(', ')} WHERE id = 1`,
+      values
+    );
+
+    // Return updated defaults
+    const [rows] = await pool.execute('SELECT * FROM admin_defaults WHERE id = 1');
+    const row = (rows as any[])[0];
+
+    let parsedTabs = row.visible_tabs;
+    if (typeof parsedTabs === 'string') {
+      try { parsedTabs = JSON.parse(parsedTabs); } catch { parsedTabs = []; }
+    }
+
+    return res.status(200).json({
+      language: row.language,
+      theme: row.theme,
+      unitSystem: row.unit_system,
+      fuelEconomyUnit: row.fuel_economy_unit,
+      currency: row.currency,
+      dateFormat: row.date_format,
+      visibleTabs: parsedTabs,
+      updatedAt: row.updated_at,
+    });
+  } catch (err: any) {
+    console.error('[ADMIN] Update defaults error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// All remaining routes require admin
 router.use(adminMiddleware);
 
 // GET /users - list all users

@@ -21,12 +21,14 @@ import {
   Cog,
   Columns3,
   ChevronRight,
+  UserCog,
 } from 'lucide-react';
 import type { Page, User } from '../types';
 import { cn } from '../lib/utils';
 import SearchBar from './SearchBar';
 import { useI18n } from '../contexts/I18nContext';
 import { useUserConfig } from '../contexts/UserConfigContext';
+import UserSettingsPanel from './UserSettingsPanel';
 
 interface LayoutProps {
   currentPage: Page;
@@ -62,6 +64,7 @@ export default function Layout({
   const { config } = useUserConfig();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [customLogoUrl, setCustomLogoUrl] = useState('');
+  const [userSettingsOpen, setUserSettingsOpen] = useState(false);
 
   useEffect(() => {
     fetch('/api/config')
@@ -318,6 +321,13 @@ export default function Layout({
             <p className="text-sm font-medium text-zinc-50 truncate">{user.username}</p>
           </div>
           <button
+            onClick={() => setUserSettingsOpen(true)}
+            className="text-zinc-500 hover:text-zinc-300 transition-colors p-1.5 rounded-lg hover:bg-zinc-800"
+            title={t('settings.user_settings')}
+          >
+            <UserCog size={16} />
+          </button>
+          <button
             onClick={onLogout}
             className="text-zinc-500 hover:text-zinc-300 transition-colors p-1.5 rounded-lg hover:bg-zinc-800"
             title={t('auth.logout')}
@@ -400,6 +410,9 @@ export default function Layout({
           {children}
         </motion.div>
       </main>
+
+      {/* User Settings Panel */}
+      <UserSettingsPanel open={userSettingsOpen} onClose={() => setUserSettingsOpen(false)} />
     </div>
   );
 }

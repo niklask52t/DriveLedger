@@ -963,6 +963,24 @@ export async function initDb(): Promise<void> {
     if (!e.message?.includes('Duplicate column')) { /* column already exists, ignore */ }
   }
 
+  // ==================== Admin defaults table ====================
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS admin_defaults (
+      id INT PRIMARY KEY DEFAULT 1,
+      language VARCHAR(10) NOT NULL DEFAULT 'en',
+      theme VARCHAR(20) NOT NULL DEFAULT 'dark',
+      unit_system VARCHAR(10) NOT NULL DEFAULT 'metric',
+      fuel_economy_unit VARCHAR(20) NOT NULL DEFAULT 'l_per_100km',
+      currency VARCHAR(10) NOT NULL DEFAULT 'EUR',
+      date_format VARCHAR(20) NOT NULL DEFAULT 'DD.MM.YYYY',
+      visible_tabs TEXT NOT NULL DEFAULT '["dashboard","vehicles","costs","fuel","repairs","inspections","taxes","loans","savings","supplies","equipment","reminders","planner","purchase-planner","services"]',
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Ensure a default row exists
+  await db.execute(`INSERT IGNORE INTO admin_defaults (id) VALUES (1)`);
+
   console.log('[DB] Database initialized successfully');
 }
 

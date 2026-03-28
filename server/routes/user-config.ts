@@ -38,17 +38,37 @@ function parseRow(row: Record<string, any>): Record<string, any> {
   return obj;
 }
 
-// GET / - Get current user's config (create default if not exists)
+// GET / - Get current user's config (create default if not exists, using admin defaults)
 router.get('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
     const userId = (req as any).user.id;
 
-    // Upsert: insert default if not exists
-    await pool.execute(
-      'INSERT IGNORE INTO user_config (user_id) VALUES (?)',
-      [userId]
-    );
+    // Check if user config exists already
+    const [existingRows] = await pool.execute('SELECT user_id FROM user_config WHERE user_id = ?', [userId]);
+    if ((existingRows as any[]).length === 0) {
+      // Fetch admin defaults to use for new user config
+      const [defaultRows] = await pool.execute('SELECT * FROM admin_defaults WHERE id = 1');
+      const defaults = (defaultRows as any[])[0];
+
+      if (defaults) {
+        await pool.execute(
+          `INSERT IGNORE INTO user_config (user_id, language, theme, unit_system, fuel_economy_unit, currency, date_format, visible_tabs) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            defaults.language || 'en',
+            defaults.theme || 'dark',
+            defaults.unit_system || 'metric',
+            defaults.fuel_economy_unit || 'l_per_100km',
+            defaults.currency || 'EUR',
+            defaults.date_format || 'DD.MM.YYYY',
+            defaults.visible_tabs || '["dashboard","vehicles","costs","fuel","repairs","inspections","taxes","loans","savings","supplies","equipment","reminders","planner","purchase-planner","services"]',
+          ]
+        );
+      } else {
+        await pool.execute('INSERT IGNORE INTO user_config (user_id) VALUES (?)', [userId]);
+      }
+    }
 
     const [rows] = await pool.execute(
       'SELECT * FROM user_config WHERE user_id = ?',

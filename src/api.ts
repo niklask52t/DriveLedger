@@ -905,6 +905,15 @@ class ApiClient {
   async removeHouseholdMember(householdId: string, memberId: string): Promise<void> {
     return this.request<void>('DELETE', `/households/${householdId}/members/${memberId}`);
   }
+
+  // ─── Admin Defaults ─────────────────────────────────────
+  async getAdminDefaults(): Promise<any> {
+    return this.request('GET', '/admin/defaults');
+  }
+
+  async updateAdminDefaults(data: any): Promise<any> {
+    return this.request('PUT', '/admin/defaults', data);
+  }
 }
 
 export const api = new ApiClient();

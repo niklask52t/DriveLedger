@@ -526,6 +526,10 @@ const en: Record<string, string> = {
   // Settings
   'settings.title': 'Settings',
   'settings.subtitle': 'Manage your account and application settings',
+  'settings.user_settings': 'User Settings',
+  'settings.admin_settings': 'Admin Settings',
+  'settings.admin_defaults': 'Defaults for New Users',
+  'settings.admin_defaults_desc': 'These settings apply when new users are created',
   'settings.profile': 'Profile',
   'settings.api_tokens': 'API Tokens',
   'settings.admin': 'Admin',

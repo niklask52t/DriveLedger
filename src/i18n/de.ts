@@ -526,6 +526,10 @@ const de: Record<string, string> = {
   // Settings
   'settings.title': 'Einstellungen',
   'settings.subtitle': 'Verwalten Sie Ihr Konto und die Anwendungseinstellungen',
+  'settings.user_settings': 'Benutzereinstellungen',
+  'settings.admin_settings': 'Admin-Einstellungen',
+  'settings.admin_defaults': 'Standards f\u00fcr neue Benutzer',
+  'settings.admin_defaults_desc': 'Diese Einstellungen gelten wenn neue Benutzer erstellt werden',
   'settings.profile': 'Profil',
   'settings.api_tokens': 'API-Tokens',
   'settings.admin': 'Admin',
