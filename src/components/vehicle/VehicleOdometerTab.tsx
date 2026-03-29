@@ -190,13 +190,13 @@ export default function VehicleOdometerTab({ vehicleId, state, setState }: Props
                                 onClick={() => { handleDelete(r.id); setDeleteConfirm(null); }}
                                 className="bg-red-400/10 text-red-400 hover:bg-red-400/20 rounded-lg h-9 px-3 text-xs transition-colors"
                               >
-                                Confirm
+                                {t("common.confirm")}
                               </button>
                               <button
                                 onClick={() => setDeleteConfirm(null)}
                                 className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-xs transition-colors"
                               >
-                                Cancel
+                                {t("common.cancel")}
                               </button>
                             </div>
                           ) : (
@@ -221,14 +221,14 @@ export default function VehicleOdometerTab({ vehicleId, state, setState }: Props
       <Modal
         isOpen={showModal}
         onClose={() => { setShowModal(false); setEditingId(null); }}
-        title={editingId ? 'Edit Reading' : '{t("vehicle_tab.odometer.add")}'}
+        title={editingId ? t("vehicle_tab.odometer.edit_reading") : t("vehicle_tab.odometer.add")}
         footer={
           <>
             <button
               onClick={() => { setShowModal(false); setEditingId(null); }}
               className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm transition-colors"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               onClick={handleSave}
@@ -294,7 +294,7 @@ export default function VehicleOdometerTab({ vehicleId, state, setState }: Props
           </div>
           {vehicleEquipment.length > 0 && (
             <div>
-              <label className={labelClass}>Linked Equipment</label>
+              <label className={labelClass}>{t("vehicle_tab.odometer.linked_equipment")}</label>
               <div className="space-y-2 max-h-40 overflow-y-auto">
                 {vehicleEquipment.map((eq) => (
                   <label key={eq.id} className="flex items-center gap-2 cursor-pointer">
@@ -313,7 +313,7 @@ export default function VehicleOdometerTab({ vehicleId, state, setState }: Props
                   </label>
                 ))}
               </div>
-              <p className="text-xs text-zinc-600 mt-1">Distance will be attributed to selected equipment items.</p>
+              <p className="text-xs text-zinc-600 mt-1">{t("vehicle_tab.odometer.equipment_hint")}</p>
             </div>
           )}
         </div>

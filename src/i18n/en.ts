@@ -201,6 +201,11 @@ const en: Record<string, string> = {
   'vehicles.sold': 'Sold',
   'vehicles.is_electric': 'Electric Vehicle',
   'vehicles.your_vehicles': 'Your Vehicles',
+  'vehicles.sort_date_added': 'Date Added',
+  'vehicles.sort_name': 'Name',
+  'vehicles.sort_year': 'Year',
+  'vehicles.sort_mileage': 'Mileage',
+  'vehicles.sort_monthly_cost': 'Monthly Cost',
 
   // Fuel types
   'fuel_type.benzin': 'Gasoline',
@@ -1023,6 +1028,25 @@ const en: Record<string, string> = {
   'import.importing': 'Importing...',
   'import.success': 'Import complete!',
   'import.records_imported': '{count} records imported',
+
+  // Missing keys
+  'common.unknown': 'Unknown',
+  'reminders.fixed_interval': 'Fixed Interval',
+  'reminders.fixed_interval_hint': 'Prevents schedule drift when completing early. Next due date advances from the original due date + interval, not from today.',
+  'vehicle_tab.edit.odometer_adjustment': 'Odometer Adjustment',
+  'vehicle_tab.edit.hours_fuel': 'Hours & Fuel',
+  'vehicle_tab.history.all_years': 'All Years',
+  'vehicle_tab.history.no_records': 'No records found',
+  'vehicle_tab.history.records': 'records',
+  'vehicle_tab.odometer.distance': 'Distance',
+  'vehicle_tab.odometer.final_mileage': 'Final Mileage',
+  'vehicle_tab.odometer.initial_mileage': 'Initial Mileage',
+  'vehicle_tab.odometer.recalculate': 'Recalculate Distances',
+  'vehicle_tab.odometer.linked_equipment': 'Linked Equipment',
+  'vehicle_tab.odometer.equipment_hint': 'Distance will be attributed to selected equipment items.',
+  'vehicle_tab.odometer.edit_reading': 'Edit Reading',
+  'vehicles.odometer_difference': 'Odometer Difference',
+  'vehicles.odometer_multiplier': 'Odometer Multiplier',
 };
 
 export default en;

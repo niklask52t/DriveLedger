@@ -201,6 +201,11 @@ const de: Record<string, string> = {
   'vehicles.sold': 'Verkauft',
   'vehicles.is_electric': 'Elektrofahrzeug',
   'vehicles.your_vehicles': 'Ihre Fahrzeuge',
+  'vehicles.sort_date_added': 'Hinzugefügt am',
+  'vehicles.sort_name': 'Name',
+  'vehicles.sort_year': 'Baujahr',
+  'vehicles.sort_mileage': 'Kilometerstand',
+  'vehicles.sort_monthly_cost': 'Monatliche Kosten',
 
   // Fuel types
   'fuel_type.benzin': 'Benzin',
@@ -1023,6 +1028,25 @@ const de: Record<string, string> = {
   'import.importing': 'Importiere...',
   'import.success': 'Import abgeschlossen!',
   'import.records_imported': '{count} Einträge importiert',
+
+  // Fehlende Schlüssel
+  'common.unknown': 'Unbekannt',
+  'reminders.fixed_interval': 'Festes Intervall',
+  'reminders.fixed_interval_hint': 'Verhindert Verschiebung des Zeitplans bei frühzeitiger Erledigung. Nächstes Fälligkeitsdatum wird vom ursprünglichen Fälligkeitsdatum + Intervall berechnet, nicht ab heute.',
+  'vehicle_tab.edit.odometer_adjustment': 'Kilometerstand-Korrektur',
+  'vehicle_tab.edit.hours_fuel': 'Stunden & Kraftstoff',
+  'vehicle_tab.history.all_years': 'Alle Jahre',
+  'vehicle_tab.history.no_records': 'Keine Einträge gefunden',
+  'vehicle_tab.history.records': 'Einträge',
+  'vehicle_tab.odometer.distance': 'Distanz',
+  'vehicle_tab.odometer.final_mileage': 'Endkilometerstand',
+  'vehicle_tab.odometer.initial_mileage': 'Anfangskilometerstand',
+  'vehicle_tab.odometer.recalculate': 'Distanzen neu berechnen',
+  'vehicle_tab.odometer.linked_equipment': 'Verknüpfte Ausrüstung',
+  'vehicle_tab.odometer.equipment_hint': 'Distanz wird den ausgewählten Ausrüstungsgegenständen zugeordnet.',
+  'vehicle_tab.odometer.edit_reading': 'Eintrag bearbeiten',
+  'vehicles.odometer_difference': 'Kilometerstand-Differenz',
+  'vehicles.odometer_multiplier': 'Kilometerstand-Multiplikator',
 };
 
 export default de;

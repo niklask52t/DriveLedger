@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, SlidersHorizontal, Key } from 'lucide-react';
+import { X, User, SlidersHorizontal, Key, ListPlus, Home } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import ProfileTab from './settings/ProfileTab';
 import AppearanceTab from './settings/AppearanceTab';
 import ApiTokensTab from './settings/ApiTokensTab';
+import ExtraFieldsTab from './settings/ExtraFieldsTab';
+import HouseholdTab from './settings/HouseholdTab';
 
-type UserTabId = 'profile' | 'preferences' | 'api-tokens';
+type UserTabId = 'profile' | 'preferences' | 'extra-fields' | 'household' | 'api-tokens';
 
 interface UserSettingsPanelProps {
   open: boolean;
@@ -18,6 +20,8 @@ interface UserSettingsPanelProps {
 const USER_TABS: { id: UserTabId; i18nKey: string; icon: typeof User }[] = [
   { id: 'profile', i18nKey: 'settings.profile', icon: User },
   { id: 'preferences', i18nKey: 'settings.preferences', icon: SlidersHorizontal },
+  { id: 'extra-fields', i18nKey: 'settings.extra_fields', icon: ListPlus },
+  { id: 'household', i18nKey: 'settings.household', icon: Home },
   { id: 'api-tokens', i18nKey: 'settings.api_tokens', icon: Key },
 ];
 
@@ -43,12 +47,13 @@ export default function UserSettingsPanel({ open, onClose }: UserSettingsPanelPr
 
           {/* Panel */}
           <motion.div
-            className="fixed inset-y-0 left-0 lg:left-60 w-full max-w-2xl bg-zinc-950 border-r border-zinc-800 z-50 flex flex-col shadow-2xl"
-            initial={{ x: -40, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -40, opacity: 0 }}
-            transition={{ type: 'tween', duration: 0.25 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8"
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            transition={{ type: 'tween', duration: 0.2 }}
           >
+          <div className="w-full max-w-4xl h-full max-h-[90vh] bg-zinc-950 border border-zinc-800 rounded-2xl flex flex-col shadow-2xl overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 shrink-0">
               <h2 className="text-lg font-semibold text-zinc-50">{t('settings.user_settings')}</h2>
@@ -90,10 +95,17 @@ export default function UserSettingsPanel({ open, onClose }: UserSettingsPanelPr
               {activeTab === 'preferences' && (
                 <AppearanceTab />
               )}
+              {activeTab === 'extra-fields' && (
+                <ExtraFieldsTab />
+              )}
+              {activeTab === 'household' && (
+                <HouseholdTab />
+              )}
               {activeTab === 'api-tokens' && (
                 <ApiTokensTab />
               )}
             </div>
+          </div>
           </motion.div>
         </>
       )}

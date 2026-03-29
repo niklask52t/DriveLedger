@@ -176,7 +176,7 @@ export default function VehicleEditForm({ form, updateForm }: VehicleEditFormPro
       </Section>
 
       {/* Mileage & Fuel */}
-      <Section title={form.useHours ? 'Hours & Fuel' : t("vehicle_tab.edit.mileage_fuel")}>
+      <Section title={form.useHours ? t("vehicle_tab.edit.hours_fuel") : t("vehicle_tab.edit.mileage_fuel")}>
         <div>
           <label className={labelClass}>{form.useHours ? 'Current Hours' : 'Current Mileage'} ({distanceUnit})</label>
           <input

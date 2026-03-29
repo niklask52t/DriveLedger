@@ -137,11 +137,11 @@ export default function Vehicles({ state, setState, onNavigate }: VehiclesProps)
               onChange={(e) => setSortBy(e.target.value as VehicleSortKey)}
               className="h-10 bg-zinc-900 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 outline-none focus:border-violet-500/50 appearance-none"
             >
-              <option value="date_added">{t('vehicles.sort_date_added') || 'Date Added'}</option>
-              <option value="name">{t('vehicles.sort_name') || 'Name'}</option>
-              <option value="year">{t('vehicles.sort_year') || 'Year'}</option>
-              <option value="mileage">{t('vehicles.sort_mileage') || 'Mileage'}</option>
-              <option value="monthly_cost">{t('vehicles.sort_monthly_cost') || 'Monthly Cost'}</option>
+              <option value="date_added">{t('vehicles.sort_date_added')}</option>
+              <option value="name">{t('vehicles.sort_name')}</option>
+              <option value="year">{t('vehicles.sort_year')}</option>
+              <option value="mileage">{t('vehicles.sort_mileage')}</option>
+              <option value="monthly_cost">{t('vehicles.sort_monthly_cost')}</option>
             </select>
           </div>
           <button

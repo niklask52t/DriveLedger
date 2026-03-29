@@ -1,17 +1,15 @@
 import { useState } from 'react';
-import { Shield, Database, ListPlus, Home, Languages, Code, SlidersHorizontal } from 'lucide-react';
+import { Shield, Database, Languages, Code, SlidersHorizontal } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import AdminTab from '../components/settings/AdminTab';
 import DataTab from '../components/settings/DataTab';
-import ExtraFieldsTab from '../components/settings/ExtraFieldsTab';
-import HouseholdTab from '../components/settings/HouseholdTab';
 import TranslationEditorTab from '../components/settings/TranslationEditorTab';
 import CustomWidgetEditorTab from '../components/settings/CustomWidgetEditorTab';
 import AdminDefaultsTab from '../components/settings/AdminDefaultsTab';
 
-type TabId = 'admin-defaults' | 'extra-fields' | 'household' | 'translations' | 'custom-widgets' | 'admin' | 'data';
+type TabId = 'admin-defaults' | 'translations' | 'custom-widgets' | 'admin' | 'data';
 
 interface Tab {
   id: TabId;
@@ -23,8 +21,6 @@ interface Tab {
 const TABS: (Tab & { i18nKey: string })[] = [
   { id: 'admin-defaults', label: 'Defaults', icon: SlidersHorizontal, adminOnly: true, i18nKey: 'settings.admin_defaults' },
   { id: 'admin', label: 'Admin', icon: Shield, adminOnly: true, i18nKey: 'settings.admin' },
-  { id: 'extra-fields', label: 'Extra Fields', icon: ListPlus, i18nKey: 'settings.extra_fields' },
-  { id: 'household', label: 'Household', icon: Home, i18nKey: 'settings.household' },
   { id: 'translations', label: 'Translations', icon: Languages, adminOnly: true, i18nKey: 'settings.translations' },
   { id: 'custom-widgets', label: 'Custom Widgets', icon: Code, adminOnly: true, i18nKey: 'settings.custom_widgets' },
   { id: 'data', label: 'Data', icon: Database, i18nKey: 'settings.data' },
@@ -82,12 +78,6 @@ export default function Settings() {
       <div>
         {activeTab === 'admin-defaults' && isAdmin && (
           <AdminDefaultsTab />
-        )}
-        {activeTab === 'extra-fields' && (
-          <ExtraFieldsTab />
-        )}
-        {activeTab === 'household' && (
-          <HouseholdTab />
         )}
         {activeTab === 'translations' && isAdmin && (
           <TranslationEditorTab />
