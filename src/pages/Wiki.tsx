@@ -7,6 +7,7 @@ import {
   KanbanSquare, Share2, Search, FileText, Tag, Webhook,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { APP_VERSION } from '../lib/version';
 
 interface Section {
   id: string;
@@ -632,28 +633,26 @@ Where:
     content: (
       <div className="space-y-4 text-sm text-zinc-400 leading-relaxed">
         <p>
-          Manage your account settings, API tokens, and data.
+          Settings are split into <strong className="text-zinc-300">User Settings</strong> (accessible via the user icon in the sidebar)
+          and <strong className="text-zinc-300">Admin Settings</strong> (visible only to admins in the navigation).
         </p>
-        <h4 className="text-zinc-50 font-medium">Profile</h4>
-        <p>
-          Change your password and view account details. Email verification status is shown here
-          if email is enabled on the server.
-        </p>
-        <h4 className="text-zinc-50 font-medium">API Tokens</h4>
-        <p>
-          Generate API tokens for external integrations. Each token can have specific permissions
-          and can be toggled active/inactive. The token secret is only shown once upon creation.
-        </p>
-        <h4 className="text-zinc-50 font-medium">Data Management</h4>
-        <p>
-          Export all your data as JSON for backup or migration. Import data from a previous export
-          to restore or transfer your information.
-        </p>
-        <h4 className="text-zinc-50 font-medium">Admin Panel</h4>
-        <p>
-          Admin users can manage all users, generate registration invite tokens, and perform
-          system-level operations.
-        </p>
+        <h4 className="text-zinc-50 font-medium">User Settings</h4>
+        <ul className="list-disc list-inside space-y-1">
+          <li><strong className="text-zinc-300">Profile</strong> — Change your password, view account details and email verification status.</li>
+          <li><strong className="text-zinc-300">Preferences</strong> — Theme, language, currency, date format, fuel economy unit, and visible tabs.</li>
+          <li><strong className="text-zinc-300">Extra Fields</strong> — Define custom fields per record type (e.g. add a "Tire brand" field to services).</li>
+          <li><strong className="text-zinc-300">Household</strong> — Create households to share vehicles with family or team members. The head user manages members and permissions.</li>
+          <li><strong className="text-zinc-300">Data</strong> — Export/import your data as JSON, import from LubeLogger, or delete your account.</li>
+          <li><strong className="text-zinc-300">API Tokens</strong> — Generate tokens for programmatic access. Tokens can be toggled active/inactive.</li>
+        </ul>
+        <h4 className="text-zinc-50 font-medium">Admin Settings</h4>
+        <ul className="list-disc list-inside space-y-1">
+          <li><strong className="text-zinc-300">Defaults</strong> — Set default preferences for newly created users.</li>
+          <li><strong className="text-zinc-300">Admin</strong> — Manage users, generate registration invite tokens, reset passwords.</li>
+          <li><strong className="text-zinc-300">Translations</strong> — Edit and customize translations for any language.</li>
+          <li><strong className="text-zinc-300">Custom Widgets</strong> — Create custom dashboard widgets with HTML/JavaScript.</li>
+          <li><strong className="text-zinc-300">Data</strong> — Full database backup and restore (all users).</li>
+        </ul>
       </div>
     ),
   },
@@ -747,18 +746,16 @@ POST   /api/admin/users/:id/reset-password - Reset password`}</CodeBlock>
         </p>
         <h4 className="text-zinc-50 font-medium">Account Deletion</h4>
         <p>
-          You can delete your account and all associated data from the Settings page. This action
+          You can delete your account and all associated data from User Settings → Data. This action
           is irreversible and removes all vehicles, costs, loans, repairs, services, upgrades,
           fuel logs, inspections, taxes, supplies, equipment, savings, reminders, and API tokens.
         </p>
       </div>
     ),
   },
-  {
-    id: 'changelog',
-    icon: History,
-    title: 'Changelog',
-    content: (() => {
+];
+
+const CHANGELOG_CONTENT = (() => {
       const T = ({ type }: { type: 'new' | 'fix' | 'change' | 'remove' }) => {
         const styles = {
           new: 'bg-emerald-400/15 text-emerald-400',
@@ -772,7 +769,28 @@ POST   /api/admin/users/:id/reset-password - Reset password`}</CodeBlock>
         <div className="space-y-6 text-sm text-zinc-400 leading-relaxed">
           <div>
             <div className="flex items-center gap-3 mb-3">
-              <span className="text-xs font-mono bg-violet-500/15 text-violet-400 px-2 py-0.5 rounded-md">v2.0.0</span>
+              <span className="text-xs font-mono bg-violet-500/15 text-violet-400 px-2 py-0.5 rounded-md">v3.0.0</span>
+              <span className="text-xs text-zinc-600">2026-03-29</span>
+            </div>
+            <h4 className="text-zinc-50 font-medium mb-3">Settings Overhaul & i18n Completeness</h4>
+            <ul className="space-y-2">
+              <li><T type="new" />Full-screen centered User Settings overlay (Profile, Preferences, Extra Fields, Household, Data, API Tokens)</li>
+              <li><T type="new" />User Data tab with Export, Import, LubeLogger import, and account deletion</li>
+              <li><T type="new" />Complete i18n coverage — all missing translation keys added across 11 languages</li>
+              <li><T type="change" />Extra Fields and Household moved from Admin Settings to User Settings</li>
+              <li><T type="change" />Data export/import/LubeLogger moved from Admin Settings to User Settings</li>
+              <li><T type="change" />Admin Settings page now admin-only (Defaults, Admin, Translations, Custom Widgets, Backup/Restore)</li>
+              <li><T type="change" />Settings nav link hidden for non-admin users</li>
+              <li><T type="change" />Page content uses full window width (removed max-w-6xl constraint)</li>
+              <li><T type="fix" />Sort dropdown labels showing raw i18n keys instead of translated text</li>
+              <li><T type="fix" />Hardcoded English strings in Odometer and Vehicle Edit forms replaced with i18n calls</li>
+              <li><T type="fix" />Modal title bug in Odometer tab (string literal instead of function call)</li>
+            </ul>
+          </div>
+
+          <div className="border-t border-zinc-800 pt-5">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-mono bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">v2.0.0</span>
               <span className="text-xs text-zinc-600">2026-03-27</span>
             </div>
             <h4 className="text-zinc-50 font-medium mb-3">Major Feature Release</h4>
@@ -900,12 +918,11 @@ POST   /api/admin/users/:id/reset-password - Reset password`}</CodeBlock>
           </div>
         </div>
       );
-    })(),
-  },
-];
+})();
 
 export default function Wiki() {
   const [expanded, setExpanded] = useState<string | null>('getting-started');
+  const [changelogOpen, setChangelogOpen] = useState(false);
 
   const toggle = (id: string) => {
     setExpanded((prev) => (prev === id ? null : id));
@@ -914,12 +931,44 @@ export default function Wiki() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-50">Wiki</h1>
-        <p className="text-sm text-zinc-500 mt-1">
-          Documentation and guides for using DriveLedger
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-50">Wiki</h1>
+          <p className="text-sm text-zinc-500 mt-1">
+            Documentation and guides for using DriveLedger
+          </p>
+        </div>
+        <button
+          onClick={() => setChangelogOpen(!changelogOpen)}
+          className={cn(
+            'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors shrink-0',
+            changelogOpen
+              ? 'bg-violet-500/15 text-violet-400'
+              : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+          )}
+        >
+          <History size={16} />
+          Changelog
+          <span className="text-xs font-mono bg-violet-500/15 text-violet-400 px-1.5 py-0.5 rounded">v{APP_VERSION}</span>
+        </button>
       </div>
+
+      {/* Changelog panel */}
+      <AnimatePresence>
+        {changelogOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            className="overflow-hidden"
+          >
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 max-h-[60vh] overflow-y-auto">
+              {CHANGELOG_CONTENT}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Accordion Sections */}
       <div className="space-y-3">

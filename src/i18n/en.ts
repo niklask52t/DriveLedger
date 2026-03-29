@@ -538,6 +538,7 @@ const en: Record<string, string> = {
   'settings.profile': 'Profile',
   'settings.api_tokens': 'API Tokens',
   'settings.admin': 'Admin',
+  'settings.users': 'Users',
   'settings.data': 'Data',
   'settings.preferences': 'Preferences',
   'settings.language': 'Language',
@@ -719,10 +720,6 @@ const en: Record<string, string> = {
 
   // Wiki
   'wiki.title': 'Documentation',
-
-  // App
-  'app.name': 'DriveLedger',
-  'app.version': 'DriveLedger v2.0.0',
 
   // Dashboard extras
   'dashboard.customize': 'Customize',

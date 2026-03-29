@@ -161,7 +161,7 @@ export default function Layout({
     'purchase-planner': t('page.purchase_planner'),
     supplies: t('page.supplies'),
     equipment: t('page.equipment'),
-    settings: t('page.settings'),
+    settings: t('settings.admin_settings'),
     wiki: t('page.wiki'),
   }), [t]);
 
@@ -308,7 +308,7 @@ export default function Layout({
       {/* Bottom nav */}
       <div className="border-t border-zinc-800 px-3 py-3 space-y-1">
         {renderNavItem({ page: 'wiki', label: t('nav.docs'), icon: BookOpen }, currentPage === 'wiki')}
-        {renderNavItem({ page: 'settings', label: t('nav.settings'), icon: Settings }, currentPage === 'settings')}
+        {user.isAdmin && renderNavItem({ page: 'settings', label: t('settings.admin_settings'), icon: Settings }, currentPage === 'settings')}
       </div>
 
       {/* User */}

@@ -534,6 +534,7 @@ const pt: Record<string, string> = {
   'settings.profile': 'Perfil',
   'settings.api_tokens': 'Tokens API',
   'settings.admin': 'Administração',
+  'settings.users': 'Utilizadores',
   'settings.data': 'Dados',
   'settings.preferences': 'Preferências',
   'settings.language': 'Idioma',
@@ -684,9 +685,6 @@ const pt: Record<string, string> = {
   'reminder.vehicle_inspection_due': 'Inspeção pendente',
   'reminder.schedule_tuev': 'Agendar inspeção',
   'wiki.title': 'Documentação',
-  'app.name': 'DriveLedger',
-  'app.version': 'DriveLedger v2.0.0',
-
   // Dashboard extras
   'dashboard.customize': 'Personalizar',
   'dashboard.customize_dashboard': 'Personalizar painel',

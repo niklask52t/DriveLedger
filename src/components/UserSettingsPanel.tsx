@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, SlidersHorizontal, Key, ListPlus, Home } from 'lucide-react';
+import { X, User, SlidersHorizontal, Key, ListPlus, Home, Database } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
@@ -9,8 +9,9 @@ import AppearanceTab from './settings/AppearanceTab';
 import ApiTokensTab from './settings/ApiTokensTab';
 import ExtraFieldsTab from './settings/ExtraFieldsTab';
 import HouseholdTab from './settings/HouseholdTab';
+import UserDataTab from './settings/UserDataTab';
 
-type UserTabId = 'profile' | 'preferences' | 'extra-fields' | 'household' | 'api-tokens';
+type UserTabId = 'profile' | 'preferences' | 'extra-fields' | 'household' | 'data' | 'api-tokens';
 
 interface UserSettingsPanelProps {
   open: boolean;
@@ -22,6 +23,7 @@ const USER_TABS: { id: UserTabId; i18nKey: string; icon: typeof User }[] = [
   { id: 'preferences', i18nKey: 'settings.preferences', icon: SlidersHorizontal },
   { id: 'extra-fields', i18nKey: 'settings.extra_fields', icon: ListPlus },
   { id: 'household', i18nKey: 'settings.household', icon: Home },
+  { id: 'data', i18nKey: 'settings.data', icon: Database },
   { id: 'api-tokens', i18nKey: 'settings.api_tokens', icon: Key },
 ];
 
@@ -100,6 +102,9 @@ export default function UserSettingsPanel({ open, onClose }: UserSettingsPanelPr
               )}
               {activeTab === 'household' && (
                 <HouseholdTab />
+              )}
+              {activeTab === 'data' && (
+                <UserDataTab />
               )}
               {activeTab === 'api-tokens' && (
                 <ApiTokensTab />

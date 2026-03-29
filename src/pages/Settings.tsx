@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Shield, Database, Languages, Code, SlidersHorizontal } from 'lucide-react';
+import { Users, Database, Languages, Code, SlidersHorizontal } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { APP_VERSION_STRING } from '../lib/version';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import AdminTab from '../components/settings/AdminTab';
@@ -20,10 +21,10 @@ interface Tab {
 
 const TABS: (Tab & { i18nKey: string })[] = [
   { id: 'admin-defaults', label: 'Defaults', icon: SlidersHorizontal, adminOnly: true, i18nKey: 'settings.admin_defaults' },
-  { id: 'admin', label: 'Admin', icon: Shield, adminOnly: true, i18nKey: 'settings.admin' },
+  { id: 'admin', label: 'Users', icon: Users, adminOnly: true, i18nKey: 'settings.users' },
   { id: 'translations', label: 'Translations', icon: Languages, adminOnly: true, i18nKey: 'settings.translations' },
   { id: 'custom-widgets', label: 'Custom Widgets', icon: Code, adminOnly: true, i18nKey: 'settings.custom_widgets' },
-  { id: 'data', label: 'Data', icon: Database, i18nKey: 'settings.data' },
+  { id: 'data', label: 'Data', icon: Database, adminOnly: true, i18nKey: 'settings.data' },
 ];
 
 export default function Settings() {
@@ -47,7 +48,7 @@ export default function Settings() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-zinc-50">
-          {isAdmin ? t('settings.admin_settings') : t('settings.title')}
+          {t('settings.admin_settings')}
         </h1>
         <p className="text-sm text-zinc-500 mt-1">{t('settings.subtitle')}</p>
       </div>
@@ -88,14 +89,14 @@ export default function Settings() {
         {activeTab === 'admin' && isAdmin && (
           <AdminTab />
         )}
-        {activeTab === 'data' && (
+        {activeTab === 'data' && isAdmin && (
           <DataTab />
         )}
       </div>
 
       {/* Version footer */}
       <div className="pt-4 border-t border-zinc-800">
-        <p className="text-xs text-zinc-600">{t('app.version')}</p>
+        <p className="text-xs text-zinc-600">{APP_VERSION_STRING}</p>
       </div>
     </div>
   );
