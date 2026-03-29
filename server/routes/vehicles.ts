@@ -65,7 +65,8 @@ router.post('/', async (req: Request, res: Response) => {
         image_url, status, mobile_de_link, notes, color,
         sold_price, sold_date, is_electric, map_data,
         use_hours, odometer_optional, dashboard_metrics,
-        odometer_multiplier, odometer_difference, tags, exclude_from_kiosk
+        odometer_multiplier, odometer_difference, tags, exclude_from_kiosk,
+        estimated_insurance, estimated_tax, estimated_maintenance, estimated_financing
       ) VALUES (
         ?, ?, ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?,
@@ -73,6 +74,7 @@ router.post('/', async (req: Request, res: Response) => {
         ?, ?, ?, ?, ?,
         ?, ?, ?, ?,
         ?, ?, ?,
+        ?, ?, ?, ?,
         ?, ?, ?, ?
       )
     `, [
@@ -109,7 +111,11 @@ router.post('/', async (req: Request, res: Response) => {
       data.odometer_multiplier ?? 1.0,
       data.odometer_difference ?? 0,
       data.tags ? JSON.stringify(data.tags) : null,
-      data.exclude_from_kiosk ? 1 : 0
+      data.exclude_from_kiosk ? 1 : 0,
+      data.estimated_insurance || 0,
+      data.estimated_tax || 0,
+      data.estimated_maintenance || 0,
+      data.estimated_financing || 0
     ]);
 
     const [createdRows] = await pool.execute('SELECT * FROM vehicles WHERE id = ?', [id]);
@@ -177,7 +183,11 @@ router.put('/:id', async (req: Request, res: Response) => {
         odometer_multiplier = COALESCE(?, odometer_multiplier),
         odometer_difference = COALESCE(?, odometer_difference),
         tags = COALESCE(?, tags),
-        exclude_from_kiosk = COALESCE(?, exclude_from_kiosk)
+        exclude_from_kiosk = COALESCE(?, exclude_from_kiosk),
+        estimated_insurance = COALESCE(?, estimated_insurance),
+        estimated_tax = COALESCE(?, estimated_tax),
+        estimated_maintenance = COALESCE(?, estimated_maintenance),
+        estimated_financing = COALESCE(?, estimated_financing)
       WHERE id = ? AND user_id = ?
     `, [
       data.name ?? null,
@@ -212,6 +222,10 @@ router.put('/:id', async (req: Request, res: Response) => {
       data.odometer_difference ?? null,
       data.tags !== undefined ? JSON.stringify(data.tags) : null,
       data.exclude_from_kiosk !== undefined ? (data.exclude_from_kiosk ? 1 : 0) : null,
+      data.estimated_insurance ?? null,
+      data.estimated_tax ?? null,
+      data.estimated_maintenance ?? null,
+      data.estimated_financing ?? null,
       id,
       userId
     ]);

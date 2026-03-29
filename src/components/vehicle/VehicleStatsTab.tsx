@@ -122,9 +122,18 @@ export default function VehicleStatsTab(props: VehicleStatsTabProps) {
   const totalMonthly = getTotalMonthlyCosts(vehicleCosts);
   const totalYearly = getTotalYearlyCosts(vehicleCosts);
 
-  // Fuel cost estimate
+  // Fuel cost estimate (planned vehicles)
   const estimatedFuelMonthly = vehicle.annualMileage > 0 && vehicle.avgConsumption > 0 && vehicle.fuelPrice > 0
     ? (vehicle.annualMileage / 12 / 100) * vehicle.avgConsumption * vehicle.fuelPrice
+    : 0;
+
+  // Total estimated monthly cost (planned vehicles)
+  const estimatedTotalMonthly = vehicle.status !== 'owned'
+    ? (vehicle.estimatedFinancing || 0)
+      + (vehicle.estimatedInsurance || 0)
+      + ((vehicle.estimatedTax || 0) / 12)
+      + estimatedFuelMonthly
+      + (vehicle.estimatedMaintenance || 0)
     : 0;
 
   // Collect all months from monthly data
@@ -221,26 +230,58 @@ export default function VehicleStatsTab(props: VehicleStatsTabProps) {
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">{t('vehicle_tab.stats.monthly_total')}</p>
-          <p className="text-lg font-semibold text-zinc-50">{formatCurrency(totalMonthly)}</p>
+      {vehicle.status === 'owned' ? (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">{t('vehicle_tab.stats.monthly_total')}</p>
+            <p className="text-lg font-semibold text-zinc-50">{formatCurrency(totalMonthly)}</p>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">{t('vehicle_tab.stats.yearly_total')}</p>
+            <p className="text-lg font-semibold text-zinc-50">{formatCurrency(totalYearly)}</p>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">{t('vehicle_tab.stats.cost_entries')}</p>
+            <p className="text-lg font-semibold text-zinc-50">{vehicleCosts.length}</p>
+          </div>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">{t('vehicle_tab.stats.yearly_total')}</p>
-          <p className="text-lg font-semibold text-zinc-50">{formatCurrency(totalYearly)}</p>
+      ) : (
+        <div className="space-y-4">
+          {/* Estimated Total */}
+          <div className="bg-zinc-900 border border-violet-500/20 rounded-xl p-6">
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">{t('vehicles.est_monthly_total')}</p>
+            <p className="text-2xl font-bold text-violet-400">
+              {estimatedTotalMonthly > 0 ? formatCurrency(estimatedTotalMonthly) : '-'}
+            </p>
+            <p className="text-xs text-zinc-600 mt-1">
+              {estimatedTotalMonthly > 0 ? `${formatCurrency(estimatedTotalMonthly * 12)} / ${t('vehicle_tab.stats.yearly_total').toLowerCase()}` : ''}
+            </p>
+          </div>
+          {/* Cost Breakdown */}
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+              <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{t('vehicles.est_financing')}</p>
+              <p className="text-sm font-semibold text-zinc-50">{formatCurrency(vehicle.estimatedFinancing || 0)}</p>
+            </div>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+              <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{t('vehicles.est_insurance')}</p>
+              <p className="text-sm font-semibold text-zinc-50">{formatCurrency(vehicle.estimatedInsurance || 0)}</p>
+            </div>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+              <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{t('vehicles.est_tax')}</p>
+              <p className="text-sm font-semibold text-zinc-50">{formatCurrency((vehicle.estimatedTax || 0) / 12)}</p>
+            </div>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+              <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{t('vehicle_tab.stats.est_fuel_month')}</p>
+              <p className="text-sm font-semibold text-zinc-50">{estimatedFuelMonthly > 0 ? formatCurrency(estimatedFuelMonthly) : '-'}</p>
+            </div>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+              <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{t('vehicles.est_maintenance')}</p>
+              <p className="text-sm font-semibold text-zinc-50">{formatCurrency(vehicle.estimatedMaintenance || 0)}</p>
+            </div>
+          </div>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">{t('vehicle_tab.stats.est_fuel_month')}</p>
-          <p className="text-lg font-semibold text-zinc-50">
-            {estimatedFuelMonthly > 0 ? formatCurrency(estimatedFuelMonthly) : '-'}
-          </p>
-        </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">{t('vehicle_tab.stats.cost_entries')}</p>
-          <p className="text-lg font-semibold text-zinc-50">{vehicleCosts.length}</p>
-        </div>
-      </div>
+      )}
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

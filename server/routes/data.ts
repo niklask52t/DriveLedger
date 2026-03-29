@@ -97,8 +97,8 @@ router.post('/import', async (req: Request, res: Response) => {
       // Import vehicles
       if (Array.isArray(data.vehicles)) {
         for (const v of data.vehicles) {
-          await conn.execute(`INSERT INTO vehicles (id, user_id, name, brand, model, variant, license_plate, hsn, tsn, first_registration, purchase_price, purchase_date, current_mileage, annual_mileage, fuel_type, avg_consumption, fuel_price, horse_power, image_url, status, mobile_de_link, notes, color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-            v.id, userId, v.name || '', v.brand || '', v.model || '', v.variant || '', v.licensePlate || '', v.hsn || '', v.tsn || '', v.firstRegistration || '', v.purchasePrice || 0, v.purchaseDate || '', v.currentMileage || 0, v.annualMileage || 0, v.fuelType || 'benzin', v.avgConsumption || 0, v.fuelPrice || 0, v.horsePower || 0, v.imageUrl || '', v.status || 'owned', v.mobileDeLink || '', v.notes || '', v.color || '#3b82f6', v.createdAt || new Date().toISOString()
+          await conn.execute(`INSERT INTO vehicles (id, user_id, name, brand, model, variant, license_plate, hsn, tsn, first_registration, purchase_price, purchase_date, current_mileage, annual_mileage, fuel_type, avg_consumption, fuel_price, horse_power, image_url, status, mobile_de_link, notes, color, estimated_insurance, estimated_tax, estimated_maintenance, estimated_financing, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+            v.id, userId, v.name || '', v.brand || '', v.model || '', v.variant || '', v.licensePlate || '', v.hsn || '', v.tsn || '', v.firstRegistration || '', v.purchasePrice || 0, v.purchaseDate || '', v.currentMileage || 0, v.annualMileage || 0, v.fuelType || 'benzin', v.avgConsumption || 0, v.fuelPrice || 0, v.horsePower || 0, v.imageUrl || '', v.status || 'owned', v.mobileDeLink || '', v.notes || '', v.color || '#3b82f6', v.estimatedInsurance || 0, v.estimatedTax || 0, v.estimatedMaintenance || 0, v.estimatedFinancing || 0, v.createdAt || new Date().toISOString()
           ]);
         }
       }

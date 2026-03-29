@@ -188,16 +188,6 @@ export default function VehicleEditForm({ form, updateForm }: VehicleEditFormPro
           />
         </div>
         <div>
-          <label className={labelClass}>{form.useHours ? 'Annual Hours' : 'Annual Mileage'} ({distanceUnit})</label>
-          <input
-            type="number"
-            className={inputClass}
-            placeholder="0"
-            value={form.annualMileage || ''}
-            onChange={(e) => updateForm({ annualMileage: parseFloat(e.target.value) || 0 })}
-          />
-        </div>
-        <div>
           <label className={labelClass}>{t("vehicles.fuel_type")}</label>
           <select
             className={selectClass}
@@ -212,28 +202,42 @@ export default function VehicleEditForm({ form, updateForm }: VehicleEditFormPro
             ))}
           </select>
         </div>
-        <div>
-          <label className={labelClass}>Avg. Consumption ({fuelEconomyUnitLabel})</label>
-          <input
-            type="number"
-            step="0.1"
-            className={inputClass}
-            placeholder="0.0"
-            value={form.avgConsumption || ''}
-            onChange={(e) => updateForm({ avgConsumption: parseFloat(e.target.value) || 0 })}
-          />
-        </div>
-        <div>
-          <label className={labelClass}>{t("vehicle_tab.edit.fuel_price")}</label>
-          <input
-            type="number"
-            step="0.01"
-            className={inputClass}
-            placeholder="0.00"
-            value={form.fuelPrice || ''}
-            onChange={(e) => updateForm({ fuelPrice: parseFloat(e.target.value) || 0 })}
-          />
-        </div>
+        {form.status !== 'owned' && (
+          <>
+            <div>
+              <label className={labelClass}>{form.useHours ? 'Annual Hours' : 'Annual Mileage'} ({distanceUnit})</label>
+              <input
+                type="number"
+                className={inputClass}
+                placeholder="0"
+                value={form.annualMileage || ''}
+                onChange={(e) => updateForm({ annualMileage: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Avg. Consumption ({fuelEconomyUnitLabel})</label>
+              <input
+                type="number"
+                step="0.1"
+                className={inputClass}
+                placeholder="0.0"
+                value={form.avgConsumption || ''}
+                onChange={(e) => updateForm({ avgConsumption: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>{t("vehicle_tab.edit.fuel_price")}</label>
+              <input
+                type="number"
+                step="0.01"
+                className={inputClass}
+                placeholder="0.00"
+                value={form.fuelPrice || ''}
+                onChange={(e) => updateForm({ fuelPrice: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+          </>
+        )}
         <div>
           <label className={labelClass}>{t("vehicle_tab.edit.horsepower")}</label>
           <input
@@ -245,6 +249,56 @@ export default function VehicleEditForm({ form, updateForm }: VehicleEditFormPro
           />
         </div>
       </Section>
+
+      {/* Estimated Costs (planned only) */}
+      {form.status !== 'owned' && (
+        <Section title={t("vehicles.estimated_costs")}>
+          <div>
+            <label className={labelClass}>{t("vehicles.est_insurance")}</label>
+            <input
+              type="number"
+              step="0.01"
+              className={inputClass}
+              placeholder="0.00"
+              value={form.estimatedInsurance || ''}
+              onChange={(e) => updateForm({ estimatedInsurance: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>{t("vehicles.est_tax")}</label>
+            <input
+              type="number"
+              step="0.01"
+              className={inputClass}
+              placeholder="0.00"
+              value={form.estimatedTax || ''}
+              onChange={(e) => updateForm({ estimatedTax: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>{t("vehicles.est_maintenance")}</label>
+            <input
+              type="number"
+              step="0.01"
+              className={inputClass}
+              placeholder="0.00"
+              value={form.estimatedMaintenance || ''}
+              onChange={(e) => updateForm({ estimatedMaintenance: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>{t("vehicles.est_financing")}</label>
+            <input
+              type="number"
+              step="0.01"
+              className={inputClass}
+              placeholder="0.00"
+              value={form.estimatedFinancing || ''}
+              onChange={(e) => updateForm({ estimatedFinancing: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+        </Section>
+      )}
 
       {/* Odometer Adjustment */}
       <Section title={t("vehicle_tab.edit.odometer_adjustment") || "Odometer Adjustment"}>
@@ -388,16 +442,18 @@ export default function VehicleEditForm({ form, updateForm }: VehicleEditFormPro
             onChange={(e) => updateForm({ color: e.target.value })}
           />
         </div>
-        <div>
-          <label className={labelClass}>{t("vehicles.mobile_de_link")}</label>
-          <input
-            type="url"
-            className={inputClass}
-            placeholder="https://..."
-            value={form.mobileDeLink || ''}
-            onChange={(e) => updateForm({ mobileDeLink: e.target.value })}
-          />
-        </div>
+        {form.status !== 'owned' && (
+          <div>
+            <label className={labelClass}>{t("vehicles.listing_link")}</label>
+            <input
+              type="url"
+              className={inputClass}
+              placeholder="https://..."
+              value={form.mobileDeLink || ''}
+              onChange={(e) => updateForm({ mobileDeLink: e.target.value })}
+            />
+          </div>
+        )}
         <div>
           <label className={labelClass}>{t("vehicles.image_url")}</label>
           <input

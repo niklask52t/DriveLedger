@@ -264,14 +264,18 @@ export default function VehicleDetail({ state, setState, vehicleId, onNavigate }
             <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{t('common.mileage')}</p>
             <p className="text-sm text-zinc-50">{vehicle.currentMileage ? fmtDistance(vehicle.currentMileage) : '-'}</p>
           </div>
-          <div>
-            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{t('vehicles.annual_mileage')}</p>
-            <p className="text-sm text-zinc-50">{vehicle.annualMileage ? fmtDistance(vehicle.annualMileage) : '-'}</p>
-          </div>
-          <div>
-            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{t('vehicle_detail.consumption')}</p>
-            <p className="text-sm text-zinc-50">{vehicle.avgConsumption ? fmtFuelEconomy(vehicle.avgConsumption) : '-'}</p>
-          </div>
+          {vehicle.status !== 'owned' && (
+            <>
+              <div>
+                <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{t('vehicles.annual_mileage')}</p>
+                <p className="text-sm text-zinc-50">{vehicle.annualMileage ? fmtDistance(vehicle.annualMileage) : '-'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{t('vehicle_detail.consumption')}</p>
+                <p className="text-sm text-zinc-50">{vehicle.avgConsumption ? fmtFuelEconomy(vehicle.avgConsumption) : '-'}</p>
+              </div>
+            </>
+          )}
         </div>
       </motion.div>
 
@@ -601,50 +605,105 @@ export default function VehicleDetail({ state, setState, vehicleId, onNavigate }
             <div>
               <h3 className="text-sm font-semibold text-zinc-50 mb-4">{t('vehicles.mileage_consumption')}</h3>
               <div className="space-y-5">
-                <div className="grid grid-cols-2 gap-5">
-                  <div>
-                    <label className={labelCls}>{t('vehicles.current_mileage')}</label>
-                    <input
-                      type="number"
-                      className={inputCls}
-                      value={editForm.currentMileage || ''}
-                      onChange={e => handleEditChange('currentMileage', Number(e.target.value))}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelCls}>{t('vehicles.annual_mileage')}</label>
-                    <input
-                      type="number"
-                      className={inputCls}
-                      value={editForm.annualMileage || ''}
-                      onChange={e => handleEditChange('annualMileage', Number(e.target.value))}
-                    />
-                  </div>
+                <div>
+                  <label className={labelCls}>{t('vehicles.current_mileage')}</label>
+                  <input
+                    type="number"
+                    className={inputCls}
+                    value={editForm.currentMileage || ''}
+                    onChange={e => handleEditChange('currentMileage', Number(e.target.value))}
+                  />
                 </div>
-                <div className="grid grid-cols-2 gap-5">
-                  <div>
-                    <label className={labelCls}>{t('vehicles.avg_consumption')}</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      className={inputCls}
-                      value={editForm.avgConsumption || ''}
-                      onChange={e => handleEditChange('avgConsumption', Number(e.target.value))}
-                    />
+                {editForm.status !== 'owned' && (
+                  <>
+                    <div className="grid grid-cols-3 gap-5">
+                      <div>
+                        <label className={labelCls}>{t('vehicles.annual_mileage')}</label>
+                        <input
+                          type="number"
+                          className={inputCls}
+                          value={editForm.annualMileage || ''}
+                          onChange={e => handleEditChange('annualMileage', Number(e.target.value))}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>{t('vehicles.avg_consumption')}</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          className={inputCls}
+                          value={editForm.avgConsumption || ''}
+                          onChange={e => handleEditChange('avgConsumption', Number(e.target.value))}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>{t('vehicles.fuel_price')}</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className={inputCls}
+                          value={editForm.fuelPrice || ''}
+                          onChange={e => handleEditChange('fuelPrice', Number(e.target.value))}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Estimated Costs (planned only) */}
+            {editForm.status !== 'owned' && (
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-50 mb-4">{t('vehicles.estimated_costs')}</h3>
+                <div className="space-y-5">
+                  <div className="grid grid-cols-2 gap-5">
+                    <div>
+                      <label className={labelCls}>{t('vehicles.est_insurance')}</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className={inputCls}
+                        value={editForm.estimatedInsurance || ''}
+                        onChange={e => handleEditChange('estimatedInsurance', Number(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>{t('vehicles.est_tax')}</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className={inputCls}
+                        value={editForm.estimatedTax || ''}
+                        onChange={e => handleEditChange('estimatedTax', Number(e.target.value))}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className={labelCls}>{t('vehicles.fuel_price')}</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className={inputCls}
-                      value={editForm.fuelPrice || ''}
-                      onChange={e => handleEditChange('fuelPrice', Number(e.target.value))}
-                    />
+                  <div className="grid grid-cols-2 gap-5">
+                    <div>
+                      <label className={labelCls}>{t('vehicles.est_maintenance')}</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className={inputCls}
+                        value={editForm.estimatedMaintenance || ''}
+                        onChange={e => handleEditChange('estimatedMaintenance', Number(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>{t('vehicles.est_financing')}</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className={inputCls}
+                        value={editForm.estimatedFinancing || ''}
+                        onChange={e => handleEditChange('estimatedFinancing', Number(e.target.value))}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Sale / Depreciation */}
             <div>
@@ -710,14 +769,16 @@ export default function VehicleDetail({ state, setState, vehicleId, onNavigate }
                     />
                   </div>
                 </div>
-                <div>
-                  <label className={labelCls}>{t('vehicles.mobile_de_link')}</label>
-                  <input
-                    className={inputCls}
-                    value={editForm.mobileDeLink}
-                    onChange={e => handleEditChange('mobileDeLink', e.target.value)}
-                  />
-                </div>
+                {editForm.status !== 'owned' && (
+                  <div>
+                    <label className={labelCls}>{t('vehicles.listing_link')}</label>
+                    <input
+                      className={inputCls}
+                      value={editForm.mobileDeLink}
+                      onChange={e => handleEditChange('mobileDeLink', e.target.value)}
+                    />
+                  </div>
+                )}
                 <div>
                   <label className={labelCls}>{t('common.notes')}</label>
                   <textarea

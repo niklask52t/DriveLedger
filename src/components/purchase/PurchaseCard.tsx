@@ -2,6 +2,7 @@ import { Pencil, Trash2, ArrowRightLeft, Star, ExternalLink, Fuel, Gauge, Calend
 import { motion } from 'framer-motion';
 import { formatCurrency, formatNumber, getFuelTypeLabel } from '../../utils';
 import { useUnits } from '../../hooks/useUnits';
+import { useI18n } from '../../contexts/I18nContext';
 import type { PlannedPurchase } from '../../types';
 import { useState } from 'react';
 
@@ -13,6 +14,7 @@ interface PurchaseCardProps {
 }
 
 export default function PurchaseCard({ purchase, onEdit, onDelete, onConvert }: PurchaseCardProps) {
+  const { t } = useI18n();
   const { fmtDistance } = useUnits();
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
@@ -187,7 +189,7 @@ export default function PurchaseCard({ purchase, onEdit, onDelete, onConvert }: 
           <p className="text-xs text-zinc-500 mb-4 line-clamp-2">{purchase.notes}</p>
         )}
 
-        {/* mobile.de link */}
+        {/* Listing link */}
         {purchase.mobileDeLink && (
           <a
             href={purchase.mobileDeLink}
@@ -195,7 +197,7 @@ export default function PurchaseCard({ purchase, onEdit, onDelete, onConvert }: 
             rel="noopener noreferrer"
             className="text-xs text-violet-400 hover:text-violet-300 inline-flex items-center gap-1 mb-4 transition-colors"
           >
-            View on mobile.de
+            {t('vehicles.view_listing')}
             <ExternalLink size={10} />
           </a>
         )}

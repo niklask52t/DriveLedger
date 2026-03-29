@@ -779,9 +779,15 @@ const CHANGELOG_CONTENT = (() => {
               <li><T type="new" />Complete i18n coverage — all missing translation keys added across 11 languages</li>
               <li><T type="change" />Extra Fields and Household moved from Admin Settings to User Settings</li>
               <li><T type="change" />Data export/import/LubeLogger moved from Admin Settings to User Settings</li>
-              <li><T type="change" />Admin Settings page now admin-only (Defaults, Admin, Translations, Custom Widgets, Backup/Restore)</li>
+              <li><T type="change" />Admin Settings page now admin-only (Defaults, Users, Translations, Custom Widgets, Backup/Restore)</li>
+              <li><T type="change" />Admin tab renamed to Users tab in Admin Settings</li>
               <li><T type="change" />Settings nav link hidden for non-admin users</li>
               <li><T type="change" />Page content uses full window width (removed max-w-6xl constraint)</li>
+              <li><T type="change" />Centralized app version constant (no longer duplicated in i18n files)</li>
+              <li><T type="change" />Changelog moved to prominent header button in Docs page</li>
+              <li><T type="change" />Listing link (formerly mobile.de Link) now generic and hidden when vehicle status is owned</li>
+              <li><T type="change" />Add Vehicle form simplified — removed annual mileage, consumption, and fuel price fields (available in edit form)</li>
+              <li><T type="change" />Current Mileage renamed to Mileage at Purchase in Add Vehicle form</li>
               <li><T type="fix" />Sort dropdown labels showing raw i18n keys instead of translated text</li>
               <li><T type="fix" />Hardcoded English strings in Odometer and Vehicle Edit forms replaced with i18n calls</li>
               <li><T type="fix" />Modal title bug in Odometer tab (string literal instead of function call)</li>

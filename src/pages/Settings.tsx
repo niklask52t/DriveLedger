@@ -15,7 +15,7 @@ type TabId = 'admin-defaults' | 'translations' | 'custom-widgets' | 'admin' | 'd
 interface Tab {
   id: TabId;
   label: string;
-  icon: typeof Shield;
+  icon: typeof Users;
   adminOnly?: boolean;
 }
 

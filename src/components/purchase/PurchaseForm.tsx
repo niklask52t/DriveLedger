@@ -1,5 +1,6 @@
 import { Star } from 'lucide-react';
 import { useUnits } from '../../hooks/useUnits';
+import { useI18n } from '../../contexts/I18nContext';
 import type { FuelType } from '../../types';
 
 const selectChevron = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`;
@@ -63,6 +64,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default function PurchaseForm({ formData, setFormData, onSubmit, onCancel, isEdit }: PurchaseFormProps) {
+  const { t } = useI18n();
   const { distanceUnit } = useUnits();
   const update = (updates: Partial<PurchaseFormData>) => setFormData({ ...formData, ...updates });
 
@@ -160,7 +162,7 @@ export default function PurchaseForm({ formData, setFormData, onSubmit, onCancel
       {/* Links */}
       <Section title="Links & Media">
         <div>
-          <label className={labelClass}>mobile.de Link</label>
+          <label className={labelClass}>{t('vehicles.listing_link')}</label>
           <input
             type="url"
             className={inputClass}

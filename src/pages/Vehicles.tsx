@@ -400,60 +400,7 @@ export default function Vehicles({ state, setState, onNavigate }: VehiclesProps)
             </div>
           </div>
 
-          {/* Mileage */}
-          <div>
-            <h3 className="text-sm font-semibold text-zinc-50 mb-4">{t('vehicles.mileage_consumption')}</h3>
-            <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-5">
-                <div>
-                  <label className={labelCls}>{t('vehicles.current_mileage')}</label>
-                  <input
-                    type="number"
-                    className={inputCls}
-                    placeholder="0"
-                    value={form.currentMileage || ''}
-                    onChange={e => handleChange('currentMileage', Number(e.target.value))}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>{t('vehicles.annual_mileage')}</label>
-                  <input
-                    type="number"
-                    className={inputCls}
-                    placeholder="0"
-                    value={form.annualMileage || ''}
-                    onChange={e => handleChange('annualMileage', Number(e.target.value))}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-5">
-                <div>
-                  <label className={labelCls}>{t('vehicles.avg_consumption')}</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    className={inputCls}
-                    placeholder="0.0"
-                    value={form.avgConsumption || ''}
-                    onChange={e => handleChange('avgConsumption', Number(e.target.value))}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>{t('vehicles.fuel_price')}</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className={inputCls}
-                    placeholder="0.00"
-                    value={form.fuelPrice || ''}
-                    onChange={e => handleChange('fuelPrice', Number(e.target.value))}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Status & Notes */}
+          {/* Status */}
           <div>
             <h3 className="text-sm font-semibold text-zinc-50 mb-4">{t('vehicles.status_links')}</h3>
             <div className="space-y-5">
@@ -479,15 +426,140 @@ export default function Vehicles({ state, setState, onNavigate }: VehiclesProps)
                   />
                 </div>
               </div>
+              {form.status !== 'owned' && (
+                <div>
+                  <label className={labelCls}>{t('vehicles.listing_link')}</label>
+                  <input
+                    className={inputCls}
+                    placeholder="https://..."
+                    value={form.mobileDeLink}
+                    onChange={e => handleChange('mobileDeLink', e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Mileage & Estimation */}
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-50 mb-4">
+              {form.status === 'owned' ? t('vehicles.mileage_at_purchase') : t('vehicles.mileage_consumption')}
+            </h3>
+            <div className="space-y-5">
               <div>
-                <label className={labelCls}>{t('vehicles.mobile_de_link')}</label>
+                <label className={labelCls}>
+                  {form.status === 'owned' ? t('vehicles.mileage_at_purchase') : t('vehicles.current_mileage')}
+                </label>
                 <input
+                  type="number"
                   className={inputCls}
-                  placeholder="https://www.mobile.de/..."
-                  value={form.mobileDeLink}
-                  onChange={e => handleChange('mobileDeLink', e.target.value)}
+                  placeholder="0"
+                  value={form.currentMileage || ''}
+                  onChange={e => handleChange('currentMileage', Number(e.target.value))}
                 />
               </div>
+              {form.status !== 'owned' && (
+                <>
+                  <div className="grid grid-cols-3 gap-5">
+                    <div>
+                      <label className={labelCls}>{t('vehicles.annual_mileage')}</label>
+                      <input
+                        type="number"
+                        className={inputCls}
+                        placeholder="0"
+                        value={form.annualMileage || ''}
+                        onChange={e => handleChange('annualMileage', Number(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>{t('vehicles.avg_consumption')}</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        className={inputCls}
+                        placeholder="0.0"
+                        value={form.avgConsumption || ''}
+                        onChange={e => handleChange('avgConsumption', Number(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>{t('vehicles.fuel_price')}</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className={inputCls}
+                        placeholder="0.00"
+                        value={form.fuelPrice || ''}
+                        onChange={e => handleChange('fuelPrice', Number(e.target.value))}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Estimated Costs (planned only) */}
+          {form.status !== 'owned' && (
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-50 mb-4">{t('vehicles.estimated_costs')}</h3>
+              <div className="space-y-5">
+                <div className="grid grid-cols-2 gap-5">
+                  <div>
+                    <label className={labelCls}>{t('vehicles.est_insurance')}</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className={inputCls}
+                      placeholder="0.00"
+                      value={form.estimatedInsurance || ''}
+                      onChange={e => handleChange('estimatedInsurance', Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>{t('vehicles.est_tax')}</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className={inputCls}
+                      placeholder="0.00"
+                      value={form.estimatedTax || ''}
+                      onChange={e => handleChange('estimatedTax', Number(e.target.value))}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-5">
+                  <div>
+                    <label className={labelCls}>{t('vehicles.est_maintenance')}</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className={inputCls}
+                      placeholder="0.00"
+                      value={form.estimatedMaintenance || ''}
+                      onChange={e => handleChange('estimatedMaintenance', Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>{t('vehicles.est_financing')}</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className={inputCls}
+                      placeholder="0.00"
+                      value={form.estimatedFinancing || ''}
+                      onChange={e => handleChange('estimatedFinancing', Number(e.target.value))}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tags & Notes */}
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-50 mb-4">{t('common.notes')}</h3>
+            <div className="space-y-5">
               <div>
                 <label className={labelCls}>{t('common.tags')}</label>
                 <TagInput

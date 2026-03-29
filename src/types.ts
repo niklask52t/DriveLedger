@@ -47,6 +47,10 @@ export interface Vehicle {
   odometerMultiplier?: number;
   odometerDifference?: number;
   excludeFromKiosk?: boolean;
+  estimatedInsurance?: number;
+  estimatedTax?: number;
+  estimatedMaintenance?: number;
+  estimatedFinancing?: number;
   tags?: string[];
   createdAt: string;
 }

@@ -963,6 +963,28 @@ export async function initDb(): Promise<void> {
     if (!e.message?.includes('Duplicate column')) { /* column already exists, ignore */ }
   }
 
+  // Vehicle estimation fields for planned vehicles
+  try {
+    await db.execute(`ALTER TABLE vehicles ADD COLUMN estimated_insurance DOUBLE DEFAULT 0`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) { /* column already exists, ignore */ }
+  }
+  try {
+    await db.execute(`ALTER TABLE vehicles ADD COLUMN estimated_tax DOUBLE DEFAULT 0`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) { /* column already exists, ignore */ }
+  }
+  try {
+    await db.execute(`ALTER TABLE vehicles ADD COLUMN estimated_maintenance DOUBLE DEFAULT 0`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) { /* column already exists, ignore */ }
+  }
+  try {
+    await db.execute(`ALTER TABLE vehicles ADD COLUMN estimated_financing DOUBLE DEFAULT 0`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) { /* column already exists, ignore */ }
+  }
+
   // ==================== Admin defaults table ====================
   await db.execute(`
     CREATE TABLE IF NOT EXISTS admin_defaults (
