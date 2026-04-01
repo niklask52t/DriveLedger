@@ -59,7 +59,7 @@ export default function VehicleSavingsTab({ vehicleSavings, savingsTransactions,
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4 mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
               <div>
                 <p className="text-xs text-zinc-500 mb-1">{t('vehicle_tab.savings.target')}</p>
                 <p className="text-sm font-medium text-zinc-50">{formatCurrency(goal.targetAmount)}</p>

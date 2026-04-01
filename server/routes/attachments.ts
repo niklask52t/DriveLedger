@@ -46,7 +46,7 @@ const upload = multer({
 router.get('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const recordType = req.query.recordType as string | undefined;
     const recordId = req.query.recordId as string | undefined;
 
@@ -77,7 +77,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const [rows] = await pool.execute('SELECT * FROM attachments WHERE id = ? AND user_id = ?', [req.params.id, userId]);
     const row = (rows as any[])[0];
 
@@ -96,7 +96,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.get('/:id/download', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const [rows] = await pool.execute('SELECT * FROM attachments WHERE id = ? AND user_id = ?', [req.params.id, userId]);
     const row = (rows as any[])[0];
 
@@ -120,7 +120,7 @@ router.get('/:id/download', async (req: Request, res: Response) => {
 router.post('/', upload.single('file'), async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const file = req.file;
 
     if (!file) {
@@ -174,7 +174,7 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
 router.get('/:recordType/:recordId', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { recordType, recordId } = req.params;
 
     const [rows] = await pool.execute(
@@ -192,7 +192,7 @@ router.get('/:recordType/:recordId', async (req: Request, res: Response) => {
 router.post('/link', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { recordType, recordId, url, name } = req.body;
 
     if (!recordType || !recordId || !url) {
@@ -229,7 +229,7 @@ router.post('/link', async (req: Request, res: Response) => {
 router.post('/reference', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { recordType, recordId, refRecordType, refRecordId } = req.body;
 
     if (!recordType || !recordId || !refRecordType || !refRecordId) {
@@ -267,7 +267,7 @@ router.post('/reference', async (req: Request, res: Response) => {
 router.put('/:id/rename', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
     const { name } = req.body;
 
@@ -296,7 +296,7 @@ router.put('/:id/rename', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT * FROM attachments WHERE id = ? AND user_id = ?', [id, userId]);
@@ -325,7 +325,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 router.get('/export/:vehicleId', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { vehicleId } = req.params;
 
     // Verify vehicle ownership

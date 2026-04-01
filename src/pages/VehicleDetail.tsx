@@ -459,7 +459,7 @@ export default function VehicleDetail({ state, setState, vehicleId, onNavigate }
             <div>
               <h3 className="text-sm font-semibold text-zinc-50 mb-4">{t('vehicles.basic_info')}</h3>
               <div className="space-y-5">
-                <div className="grid grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                   <div>
                     <label className={labelCls}>{t('common.name')} *</label>
                     <input
@@ -485,7 +485,7 @@ export default function VehicleDetail({ state, setState, vehicleId, onNavigate }
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
                   <div>
                     <label className={labelCls}>{t('vehicles.brand')}</label>
                     <input
@@ -511,7 +511,7 @@ export default function VehicleDetail({ state, setState, vehicleId, onNavigate }
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
                   <div>
                     <label className={labelCls}>{t('vehicles.fuel_type')}</label>
                     <select
@@ -552,7 +552,7 @@ export default function VehicleDetail({ state, setState, vehicleId, onNavigate }
             <div>
               <h3 className="text-sm font-semibold text-zinc-50 mb-4">{t('vehicles.registration')}</h3>
               <div className="space-y-5">
-                <div className="grid grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
                   <div>
                     <label className={labelCls}>{t('vehicles.license_plate')}</label>
                     <input
@@ -578,7 +578,7 @@ export default function VehicleDetail({ state, setState, vehicleId, onNavigate }
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                   <div>
                     <label className={labelCls}>{t('vehicles.first_registration')}</label>
                     <input
@@ -616,7 +616,7 @@ export default function VehicleDetail({ state, setState, vehicleId, onNavigate }
                 </div>
                 {editForm.status !== 'owned' && (
                   <>
-                    <div className="grid grid-cols-3 gap-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
                       <div>
                         <label className={labelCls}>{t('vehicles.annual_mileage')}</label>
                         <input
@@ -657,7 +657,7 @@ export default function VehicleDetail({ state, setState, vehicleId, onNavigate }
               <div>
                 <h3 className="text-sm font-semibold text-zinc-50 mb-4">{t('vehicles.estimated_costs')}</h3>
                 <div className="space-y-5">
-                  <div className="grid grid-cols-2 gap-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                     <div>
                       <label className={labelCls}>{t('vehicles.est_insurance')}</label>
                       <input
@@ -679,7 +679,7 @@ export default function VehicleDetail({ state, setState, vehicleId, onNavigate }
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                     <div>
                       <label className={labelCls}>{t('vehicles.est_maintenance')}</label>
                       <input
@@ -709,7 +709,7 @@ export default function VehicleDetail({ state, setState, vehicleId, onNavigate }
             <div>
               <h3 className="text-sm font-semibold text-zinc-50 mb-4">{t('vehicle_detail.sale_depreciation')}</h3>
               <div className="space-y-5">
-                <div className="grid grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                   <div>
                     <label className={labelCls}>{t('vehicles.sold_price')}</label>
                     <input
@@ -748,7 +748,7 @@ export default function VehicleDetail({ state, setState, vehicleId, onNavigate }
             <div>
               <h3 className="text-sm font-semibold text-zinc-50 mb-4">{t('vehicles.status_links')}</h3>
               <div className="space-y-5">
-                <div className="grid grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                   <div>
                     <label className={labelCls}>{t('vehicles.status')}</label>
                     <select

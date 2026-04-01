@@ -216,6 +216,8 @@ export interface Reminder {
 export interface AppConfig {
   emailEnabled: boolean;
   oidcEnabled?: boolean;
+  oidcOnly?: boolean;
+  oidcAutoRegister?: boolean;
   oidcProviderName?: string;
   customLogoUrl?: string;
   customMotd?: string;

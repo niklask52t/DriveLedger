@@ -49,7 +49,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <div>
       <h3 className="text-sm font-semibold text-zinc-300 mb-4">{title}</h3>
-      <div className="grid grid-cols-2 gap-4">{children}</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{children}</div>
     </div>
   );
 }

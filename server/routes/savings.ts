@@ -13,7 +13,7 @@ router.use(combinedAuthMiddleware);
 router.get('/goals', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const [rows] = await pool.execute(
       'SELECT * FROM savings_goals WHERE user_id = ? ORDER BY created_at DESC',
       [userId]
@@ -34,7 +34,7 @@ router.get('/goals', async (req: Request, res: Response) => {
 router.get('/goals/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const [rows] = await pool.execute(
       'SELECT * FROM savings_goals WHERE id = ? AND user_id = ?',
       [req.params.id, userId]
@@ -58,7 +58,7 @@ router.get('/goals/:id', async (req: Request, res: Response) => {
 router.post('/goals', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { vehicleId, name } = req.body;
 
     if (!vehicleId || !name) {
@@ -106,7 +106,7 @@ router.post('/goals', async (req: Request, res: Response) => {
 router.put('/goals/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute(
@@ -156,7 +156,7 @@ router.put('/goals/:id', async (req: Request, res: Response) => {
 router.delete('/goals/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute(
@@ -194,7 +194,7 @@ router.delete('/goals/:id', async (req: Request, res: Response) => {
 router.get('/goals/:goalId/transactions', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { goalId } = req.params;
 
     // Verify goal ownership
@@ -223,7 +223,7 @@ router.get('/goals/:goalId/transactions', async (req: Request, res: Response) =>
 router.post('/goals/:goalId/transactions', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { goalId } = req.params;
     const { amount, type } = req.body;
 
@@ -274,7 +274,7 @@ router.post('/goals/:goalId/transactions', async (req: Request, res: Response) =
 router.delete('/transactions/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute(

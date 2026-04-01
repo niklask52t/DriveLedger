@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import DOMPurify from 'dompurify';
 
 export default function MarkdownRenderer({ content, className = '' }: { content: string; className?: string }) {
   const html = useMemo(() => {
@@ -39,7 +40,10 @@ export default function MarkdownRenderer({ content, className = '' }: { content:
       return `<ul class="list-disc my-2">${items}</ul>`;
     });
 
-    return result;
+    return DOMPurify.sanitize(result, {
+      ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'p', 'br', 'hr', 'strong', 'em', 'del', 'code', 'pre', 'a', 'ul', 'ol', 'li', 'blockquote', 'div', 'span'],
+      ALLOWED_ATTR: ['class', 'href', 'target', 'rel'],
+    });
   }, [content]);
 
   return (

@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DriveLedger – Test-Checkliste</title>
+<style>
+  :root { --bg: #09090b; --surface: #18181b; --border: #27272a; --text: #fafafa; --muted: #a1a1aa; --accent: #8b5cf6; --green: #34d399; --red: #f87171; --amber: #fbbf24; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; padding: 2rem; max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.75rem; margin-bottom: .25rem; }
+  .subtitle { color: var(--muted); font-size: .875rem; margin-bottom: 1.5rem; }
+  .progress-bar { background: var(--surface); border: 1px solid var(--border); border-radius: .5rem; height: 2rem; margin-bottom: 2rem; overflow: hidden; position: sticky; top: 0; z-index: 100; }
+  .progress-fill { background: var(--accent); height: 100%; transition: width .3s; display: flex; align-items: center; justify-content: center; font-size: .75rem; font-weight: 600; min-width: 3rem; }
+  .controls { display: flex; gap: .5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .controls button { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: .4rem .75rem; border-radius: .375rem; cursor: pointer; font-size: .75rem; transition: .15s; }
+  .controls button:hover { border-color: var(--accent); color: var(--accent); }
+  .controls button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  section { margin-bottom: 1.5rem; }
+  .section-header { background: var(--surface); border: 1px solid var(--border); border-radius: .5rem .5rem 0 0; padding: .75rem 1rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; }
+  .section-header:hover { border-color: #3f3f46; }
+  .section-header h2 { font-size: .95rem; font-weight: 600; }
+  .section-header .badge { font-size: .7rem; background: var(--border); padding: .15rem .5rem; border-radius: 9999px; color: var(--muted); }
+  .section-header .badge.done { background: #064e3b; color: var(--green); }
+  .section-body { border: 1px solid var(--border); border-top: 0; border-radius: 0 0 .5rem .5rem; padding: .5rem 0; display: none; }
+  .section-body.open { display: block; }
+  .group-label { font-size: .8rem; font-weight: 600; color: var(--accent); padding: .5rem 1rem .25rem; }
+  .item { display: flex; align-items: flex-start; gap: .5rem; padding: .3rem 1rem; font-size: .8rem; }
+  .item:hover { background: #1a1a1e; }
+  .item input[type=checkbox] { margin-top: .2rem; accent-color: var(--accent); cursor: pointer; width: 15px; height: 15px; flex-shrink: 0; }
+  .item label { cursor: pointer; color: #d4d4d8; flex: 1; }
+  .item.checked label { color: var(--muted); text-decoration: line-through; }
+  .item .tag { font-size: .65rem; padding: .1rem .35rem; border-radius: .2rem; margin-left: .35rem; vertical-align: middle; font-weight: 500; }
+  .tag-critical { background: #451a1a; color: var(--red); }
+  .tag-scenario { background: #1a1a3e; color: #818cf8; }
+  .tag-edge { background: #2a1a00; color: var(--amber); }
+  .tag-security { background: #1a0a2e; color: #c084fc; }
+  .tag-mobile { background: #0a2a2a; color: #5eead4; }
+  .search { width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: .5rem .75rem; border-radius: .375rem; font-size: .8rem; margin-bottom: 1rem; outline: none; }
+  .search:focus { border-color: var(--accent); }
+  .hidden { display: none !important; }
+  @media print { .controls, .search, .progress-bar { display: none; } .section-body { display: block !important; } .item.checked label { text-decoration: none; color: var(--green); } .item.checked label::before { content: "✓ "; } }
+</style>
+</head>
+<body>
+
+<h1>DriveLedger – Test-Checkliste</h1>
+<p class="subtitle">Generiert am 02.04.2026 &nbsp;·&nbsp; <span id="stats"></span></p>
+
+<div class="progress-bar"><div class="progress-fill" id="progressFill">0%</div></div>
+
+<input class="search" type="text" placeholder="Suche Tests…" id="search">
+
+<div class="controls">
+  <button onclick="toggleAll(true)">Alle öffnen</button>
+  <button onclick="toggleAll(false)">Alle schließen</button>
+  <button onclick="resetAll()">Zurücksetzen</button>
+  <button onclick="filterUnchecked()" id="btnFilter">Nur offene</button>
+</div>
+
+<div id="app"></div>
+
+<script>
+const DATA = [
+  { title: "1. Auth – Login", items: [
+    { g: "Happy Path", items: [
+      "Login mit gültiger Email + Passwort",
+      "Login mit gültigem Username + Passwort",
+      "Passwort anzeigen/verbergen Toggle",
+      "Passwort vergessen Link funktioniert",
+      "Link zu Registrierung funktioniert",
+      "Sprachwechsler auf Login-Seite",
+      "OIDC-Button erscheint wenn aktiviert",
+      "Custom Logo wird angezeigt",
+      "Custom MOTD wird angezeigt",
+    ]},
+    { g: "OIDC-Only Modus", items: [
+      "Login-Formular ist ausgeblendet|tag:critical",
+      "Nur SSO-Button sichtbar|tag:critical",
+      "Register-Link ist ausgeblendet|tag:critical",
+      "POST /api/auth/login gibt 403|tag:security",
+      "POST /api/auth/register gibt 403|tag:security",
+      "Register-Seite leitet zu Login weiter",
+    ]},
+    { g: "Edge Cases", items: [
+      "Falsche Credentials → Fehlermeldung",
+      "Leere Felder → Submit blockiert",
+      "Rate Limiting nach 5 Versuchen|tag:security",
+      "SQL Injection in Credentials|tag:security",
+      "XSS in Input-Feldern|tag:security",
+      "Sehr langer Username/Email",
+    ]},
+  ]},
+  { title: "2. Auth – Registrierung", items: [
+    { g: "Happy Path", items: [
+      "Registrierung mit gültigen Daten",
+      "Passwort-Stärke-Indikator zeigt Progression",
+      "Passwort-Anforderungen Checks grün",
+      "Passwort-Bestätigung Match-Validierung",
+      "Registration Token akzeptiert (wenn erforderlich)",
+      "Open Registration Modus (kein Token nötig)",
+      "Weiterleitung nach Erfolg",
+    ]},
+    { g: "Edge Cases", items: [
+      "Passwort zu schwach (< 8 Zeichen)",
+      "Passwörter stimmen nicht überein",
+      "Email bereits vergeben → Fehler",
+      "Username bereits vergeben → Fehler",
+      "Ungültiges Email-Format",
+      "Ungültiger/abgelaufener Registration Token",
+      "OIDC-Only: Register-Seite blockiert|tag:critical",
+    ]},
+  ]},
+  { title: "3. Auth – OIDC Flow", items: [
+    { g: "Happy Path", items: [
+      "Redirect zum OIDC-Provider funktioniert",
+      "Auto-Registration bei erstem Login (wenn aktiviert)",
+      "Session nach Provider-Callback aktiv",
+      "User-Daten vom Provider korrekt übernommen",
+    ]},
+    { g: "OIDC_AUTO_REGISTER=false", items: [
+      "Neuer User → Redirect mit error=oidc_no_account|tag:critical",
+      "Bestehender User → Login funktioniert normal",
+      "Fehlermeldung auf Login-Seite angezeigt",
+    ]},
+    { g: "Edge Cases", items: [
+      "Provider nicht erreichbar",
+      "User bricht OIDC ab → Fehler-Redirect",
+      "Ungültiger State-Parameter|tag:security",
+      "Email ohne Account + Auto-Register aus",
+    ]},
+  ]},
+  { title: "4. Auth – Passwort vergessen & Reset", items: [
+    { g: "Happy Path", items: [
+      "Email eingeben → Erfolgsmeldung",
+      "Reset-Email erhalten",
+      "Reset-Token gültig → neues Passwort setzen",
+      "Neues Passwort erfüllt Anforderungen",
+      "Weiterleitung zum Login nach Reset",
+    ]},
+    { g: "Edge Cases", items: [
+      "Nicht registrierte Email → trotzdem Erfolgsmeldung (Security)",
+      "Abgelaufener Reset-Token",
+      "Reset-Token doppelt verwenden",
+      "Email-Versand deaktiviert → Hinweis",
+    ]},
+  ]},
+  { title: "5. Dashboard", items: [
+    { g: "Widgets & Anzeige", items: [
+      "Dashboard lädt mit allen Standard-Widgets",
+      "Kosten-Zusammenfassung: monatlich + jährlich korrekt",
+      "Kraftstoffverbrauch-Chart zeigt pro Fahrzeug getrennt|tag:critical",
+      "Anstehende Erinnerungen mit Anzahl",
+      "Letzte Einträge-Liste",
+      "Fahrzeug-Status-Karten",
+      "Custom Widgets rendern (wenn erstellt)",
+      "Klick auf Fahrzeug → Detail-Seite",
+    ]},
+    { g: "Filter & Interaktion", items: [
+      "Jahres-Filter wechselt Daten",
+      "Leerer Zustand ohne Fahrzeuge",
+      "Sehr große Zahlen korrekt formatiert",
+      "Widgets responsiv auf Mobile|tag:mobile",
+    ]},
+  ]},
+  { title: "6. Fahrzeuge – Liste & Anlegen", items: [
+    { g: "Fahrzeugliste", items: [
+      "Fahrzeug-Grid zeigt alle Fahrzeuge",
+      "Karten: Name, Marke, Modell, Kraftstoff, Tags, Kosten/Monat",
+      "Farb-Balken auf Karten",
+      "Klick → Detail-Ansicht",
+      "Sortierung: Datum, Name, Jahr, Km, Kosten",
+      "Leerer Zustand ohne Fahrzeuge",
+      "Verkaufte Fahrzeuge ein-/ausblenden",
+    ]},
+    { g: "Fahrzeug anlegen", items: [
+      "Alle Pflichtfelder validiert (Name)",
+      "Alle optionalen Felder befüllbar",
+      "Kraftstofftyp-Auswahl (5 Typen)",
+      "Farbwähler + Hex-Input",
+      "Status: Besitz / Geplant",
+      "Geplant: Geschätzte Kosten-Felder sichtbar",
+      "Geplant: mobile.de Link-Feld sichtbar",
+      "Geplant: Jahreskilometer, Verbrauch, Spritpreis",
+      "Tags hinzufügen/entfernen",
+      "Bild-URL eingeben",
+      "Notizen-Feld",
+      "Modal schließen ohne Speichern",
+    ]},
+    { g: "Edge Cases", items: [
+      "Kein Name → Button deaktiviert",
+      "Negative Zahlen für Kosten",
+      "Sehr lange Werte in Feldern",
+      "Sonderzeichen in allen Feldern",
+      "Doppelte Fahrzeugnamen erlaubt",
+    ]},
+  ]},
+  { title: "7. Fahrzeug-Detail – Stats Tab", items: [
+    { g: "Anzeige", items: [
+      "Monatliche/Jährliche Gesamtkosten korrekt",
+      "Kosten-Aufschlüsselung nach Kategorie (Pie-Chart)",
+      "Kosten pro km berechnet",
+      "Monatliche Kosten-Charts rendern",
+      "Kraftstoff-Charts rendern",
+      "Distanz-Charts rendern",
+      "Kein Crash wenn vehicle undefined|tag:critical",
+    ]},
+    { g: "Geplantes Fahrzeug", items: [
+      "Geschätzte monatliche Gesamtkosten angezeigt",
+      "Geschätzte Spritkosten berechnet (km × Verbrauch × Preis)",
+      "Geschätzte Versicherung/Steuer/Wartung/Finanzierung",
+    ]},
+  ]},
+  { title: "8. Fahrzeug-Detail – Kosten Tab", items: [
+    { g: "CRUD", items: [
+      "Kosten hinzufügen (alle 9 Kategorien)",
+      "Kosten bearbeiten",
+      "Kosten löschen mit Bestätigung",
+      "Alle Frequenzen: einmalig, monatlich, quartal, halbjährlich, jährlich",
+    ]},
+    { g: "Filter & Anzeige", items: [
+      "Kategorie-Filter (9 Kategorien)",
+      "Person-Filter (Bezahlt von)",
+      "Fahrzeug-Filter",
+      "Tag-Filter (Include/Exclude)",
+      "Sortierung funktioniert",
+      "Spalten ein-/ausblenden",
+      "Monatliche/Jährliche Berechnung korrekt",
+      "Einmalige Kosten = 0 in Monats-Projektion (by design)",
+    ]},
+    { g: "Aktionen", items: [
+      "Bulk-Auswahl + Bulk-Löschen",
+      "CSV Export mit korrektem Quote-Escaping|tag:critical",
+      "Drucken-Button",
+    ]},
+  ]},
+  { title: "9. Fahrzeug-Detail – Reparaturen Tab", items: [
+    { g: "CRUD", items: [
+      "Reparatur hinzufügen",
+      "Reparatur bearbeiten",
+      "Reparatur löschen",
+      "Kategorie-Auswahl (11 Kategorien)",
+      "Werkstatt-Feld",
+      "Kilometerstand",
+    ]},
+    { g: "Ansichten", items: [
+      "Tabellen-Ansicht",
+      "Timeline-Ansicht (gruppiert nach Monat)",
+      "Kategorie-Pie-Chart",
+      "Tag-Filter",
+      "Bulk-Aktionen",
+      "Spalten-Einstellungen",
+    ]},
+  ]},
+  { title: "10. Fahrzeug-Detail – Service Tab", items: [
+    { g: "CRUD & Anzeige", items: [
+      "Service-Eintrag hinzufügen",
+      "Service bearbeiten/löschen",
+      "Kategorie-Filter (8 Kategorien)",
+      "Tag-Filter",
+      "Timeline-Ansicht",
+      "Kosten- und Km-Tracking",
+      "Bulk-Aktionen",
+    ]},
+  ]},
+  { title: "11. Fahrzeug-Detail – Upgrades Tab", items: [
+    { g: "CRUD & Anzeige", items: [
+      "Upgrade hinzufügen",
+      "Upgrade bearbeiten/löschen",
+      "Kosten, Datum, Km erfasst",
+      "Tag-Filter",
+      "Beschreibung mit Tooltip bei Truncation",
+    ]},
+  ]},
+  { title: "12. Fahrzeug-Detail – Kraftstoff Tab", items: [
+    { g: "CRUD", items: [
+      "Tankfüllung hinzufügen",
+      "Tankfüllung bearbeiten/löschen",
+      "L/100km automatisch berechnet|tag:critical",
+      "Teilfüllung markieren",
+      "Fehlender Eintrag markieren",
+      "Tankstelle erfassen",
+    ]},
+    { g: "Verbrauchsberechnung", items: [
+      "Verbrauch nur innerhalb des gleichen Fahrzeugs berechnet|tag:critical",
+      "Statistiken: Durchschnitt, Min, Max",
+      "Chart: L/100km über Zeit",
+      "Kosten pro Liter",
+      "Drei-Dezimal-Option für Kraftstoff",
+      "Elektrofahrzeug: kein Verbrauch|tag:edge",
+    ]},
+  ]},
+  { title: "13. Fahrzeug-Detail – Kilometerstand Tab", items: [
+    { g: "CRUD & Anzeige", items: [
+      "Kilometerstand hinzufügen",
+      "Historie angezeigt",
+      "Gefahrene Distanz berechnet",
+      "Equipment-Distanz-Tracking",
+      "Notizen mit Tooltip bei Truncation",
+      "Km-Chart über Zeit",
+    ]},
+  ]},
+  { title: "14. Fahrzeug-Detail – Kredite Tab", items: [
+    { g: "CRUD", items: [
+      "Kredit hinzufügen",
+      "Kredit bearbeiten/löschen",
+      "Monatliche Rate angezeigt",
+      "Zinssatz korrekt einberechnet|tag:critical",
+    ]},
+    { g: "Berechnungen", items: [
+      "Tilgungsplan mit Zinsen korrekt|tag:critical",
+      "Restschuld-Berechnung berücksichtigt Zinsen|tag:critical",
+      "Fortschrittsbalken zeigt korrekten Prozentsatz",
+      "Kein Crash bei leerem Startdatum|tag:critical",
+      "Kein Crash/NaN bei totalAmount = 0|tag:critical",
+      "Zusätzliche Sparrate pro Monat",
+      "Kredit-Details aufklappbar",
+    ]},
+  ]},
+  { title: "15. Fahrzeug-Detail – Sparziele Tab", items: [
+    { g: "CRUD & Berechnungen", items: [
+      "Sparziel hinzufügen",
+      "Sparziel bearbeiten/löschen",
+      "Transaktion hinzufügen (Einzahlung/Auszahlung)",
+      "Transaktions-Historie pro Ziel",
+      "Aktueller Kontostand berechnet",
+      "Fortschrittsbalken (% erreicht)",
+      "Flächen-Chart über Zeit",
+      "Monatlicher Beitrag",
+      "Ziel aufklappbar",
+    ]},
+  ]},
+  { title: "16. Fahrzeug-Detail – Inspektionen Tab", items: [
+    { g: "CRUD", items: [
+      "Inspektion hinzufügen (manuell)",
+      "Inspektion von Template laden",
+      "Inspektion bearbeiten/löschen",
+      "Pass/Fail/N/A Ergebnisse",
+      "Gesamt-Ergebnis berechnet",
+      "Als Template speichern",
+    ]},
+  ]},
+  { title: "17. Fahrzeug-Detail – Steuern Tab", items: [
+    { g: "CRUD & Features", items: [
+      "Steuer-Eintrag hinzufügen",
+      "Steuer bearbeiten/löschen",
+      "Wiederkehrende Steuer einrichten",
+      "Fälligkeitsdatum angezeigt",
+      "Überfällig-Badge (rot) wenn Datum vorbei",
+      "Intervall und Einheit für Wiederholung",
+      "Tag-Filter",
+      "Nächstes Fälligkeitsdatum aktualisieren",
+    ]},
+  ]},
+  { title: "18. Fahrzeug-Detail – Notizen Tab", items: [
+    { g: "CRUD & Features", items: [
+      "Notiz hinzufügen",
+      "Notiz bearbeiten/löschen",
+      "Notiz anpinnen/lösen",
+      "Gepinnte oben angezeigt",
+      "Markdown-Rendering (sanitized)|tag:security",
+      "Titel-Truncation mit Tooltip",
+      "Expand/Collapse für Inhalt",
+      "Tags auf Notizen",
+    ]},
+  ]},
+  { title: "19. Fahrzeug bearbeiten & löschen", items: [
+    { g: "Bearbeiten", items: [
+      "Modal öffnet mit aktuellen Daten",
+      "Alle Felder editierbar",
+      "Farbe ändern",
+      "Bild ändern",
+      "Status wechseln (Besitz ↔ Geplant)",
+      "Verkauft markieren (Preis, Datum)",
+      "Elektrisch-Toggle",
+      "Stunden statt Km Toggle",
+      "Km-Multiplikator / Differenz",
+      "Von Kiosk ausschließen Toggle",
+      "Speichern + Abbrechen funktioniert",
+    ]},
+    { g: "Löschen", items: [
+      "Bestätigungsdialog zeigt Fahrzeugnamen",
+      "Abbrechen behält Fahrzeug",
+      "Bestätigen löscht Fahrzeug + alle verknüpften Daten",
+      "Erinnerungen werden mitgelöscht (Cascade)|tag:critical",
+      "UI aktualisiert nach Löschung",
+      "Weiterleitung zur Fahrzeugliste",
+    ]},
+  ]},
+  { title: "20. Globale Kosten-Seite", items: [
+    { g: "Features", items: [
+      "Alle Kosten aller Fahrzeuge angezeigt",
+      "Kategorie-Aufschlüsselung",
+      "Person-Aufschlüsselung",
+      "Monatliche/Jährliche Summen",
+      "Kosten hinzufügen/bearbeiten/löschen",
+      "Alle Filter (Kategorie, Person, Fahrzeug, Tags)",
+      "Sortierungen",
+      "Spalten-Einstellungen",
+      "Bulk-Aktionen",
+      "CSV Export",
+      "Druck-Funktion",
+    ]},
+  ]},
+  { title: "21. Globale Reparaturen-Seite", items: [
+    { g: "Features", items: [
+      "Multi-Fahrzeug-Ansicht",
+      "Timeline und Tabellen-Ansicht",
+      "Kategorie-Aufschlüsselung",
+      "Alle CRUD-Operationen",
+      "Bulk-Aktionen",
+      "Filter und Sortierung",
+    ]},
+  ]},
+  { title: "22. Globale Inspektionen-Seite", items: [
+    { g: "Features", items: [
+      "Multi-Fahrzeug-Ansicht",
+      "Template-Verwaltung (erstellen/löschen)",
+      "Inspektion aus Template erstellen",
+      "Statistiken (Pass-Rate, Anzahl)",
+      "Letzte Inspektion pro Fahrzeug",
+    ]},
+  ]},
+  { title: "23. Globale Steuern-Seite", items: [
+    { g: "Features", items: [
+      "Multi-Fahrzeug-Ansicht",
+      "Überfällig-Tracking",
+      "Wiederkehrende Berechnung",
+      "Alle CRUD + Filter",
+    ]},
+  ]},
+  { title: "24. Vorräte & Equipment", items: [
+    { g: "Vorräte", items: [
+      "Vorrat hinzufügen/bearbeiten/löschen",
+      "Teilenummer-Tracking",
+      "Menge und Stückkosten",
+      "Verfügbare Menge",
+      "Tag-Filter",
+      "Bulk-Aktionen",
+    ]},
+    { g: "Equipment", items: [
+      "Equipment hinzufügen/bearbeiten/löschen",
+      "Fahrzeug zuweisen / umzuweisen",
+      "Ausgerüstet/Nicht-ausgerüstet Status",
+      "Gesamt-Distanz-Tracking",
+      "Distanz pro Fahrzeug",
+      "Name-Truncation mit Tooltip",
+    ]},
+  ]},
+  { title: "25. Kredite-Seite (Global)", items: [
+    { g: "Anzeige & Berechnung", items: [
+      "Kredit-Liste angezeigt",
+      "Hinzufügen/Bearbeiten/Löschen",
+      "Gesamt-Schulden angezeigt",
+      "Monatliche Zahlungen Summe",
+      "Aktive Kredite Anzahl",
+      "Tilgungsplan korrekt mit Zinsen|tag:critical",
+      "Fortschrittsbalken korrekt|tag:critical",
+      "Details aufklappbar",
+      "Zusätzliche Sparrate tracking",
+      "Responsiv auf Mobile|tag:mobile",
+    ]},
+  ]},
+  { title: "26. Sparziele-Seite (Global)", items: [
+    { g: "Features", items: [
+      "Sparziel-Liste",
+      "Hinzufügen/Bearbeiten/Löschen",
+      "Transaktionen (Einzahlung/Auszahlung)",
+      "Fortschrittsbalken",
+      "Flächen-Chart",
+      "Monatlicher Beitrag angezeigt",
+      "Responsiv auf Mobile|tag:mobile",
+    ]},
+  ]},
+  { title: "27. Kaufplaner", items: [
+    { g: "Grundfunktionen", items: [
+      "Geplanter Kauf hinzufügen",
+      "Kauf bearbeiten/löschen",
+      "Kauf-Karten-Ansicht",
+      "Pro/Contra-Listen",
+      "Bewertung (1-5 Sterne)",
+      "Notizen-Feld",
+      "mobile.de Link",
+      "Bild-Upload/URL",
+    ]},
+    { g: "Finanzierungsrechner|tag:scenario", items: [
+      "Fahrzeugpreis eingeben",
+      "Anzahlung eingeben",
+      "Finanzierungsmonate eingeben",
+      "Zinssatz eingeben",
+      "Monatliche Rate berechnet|tag:critical",
+      "Kein Crash bei Anzahlung > Preis|tag:critical",
+      "Kein Crash bei 0 Monate|tag:critical",
+      "Kein Crash bei 0% Zinsen|tag:critical",
+      "Gesamtkosten und Gesamt-Zinsen angezeigt",
+    ]},
+    { g: "Szenario: Geplantes Fahrzeug finanzieren|tag:scenario", items: [
+      "1. Fahrzeug mit Status 'Geplant' anlegen",
+      "2. Geschätzte Kosten eingeben (Versicherung, Steuer, Wartung, Finanzierung)",
+      "3. Jährliche Km, Verbrauch, Spritpreis eingeben",
+      "4. → Stats Tab zeigt geschätzte monatliche Gesamtkosten",
+      "5. → Geschätzte Spritkosten korrekt berechnet",
+      "6. Kaufplaner-Eintrag erstellen mit gleichen Daten",
+      "7. Finanzierungsrechner mit Preis/Anzahlung/Zinsen befüllen",
+      "8. Vergleich mehrerer geplanter Fahrzeuge side-by-side",
+      "9. Kauf in 'Besitz' umwandeln nach Anschaffung",
+      "10. Kosteneinträge für das neue Fahrzeug anlegen",
+    ]},
+    { g: "Geschätzte Kosten-Aufschlüsselung", items: [
+      "Versicherung, Steuer, Sprit, Wartung einzeln angezeigt",
+      "Gesamt-Summe berechnet",
+      "Finanzierungsberechnung separat",
+    ]},
+  ]},
+  { title: "28. Aufgabenplaner (Kanban)", items: [
+    { g: "Board", items: [
+      "4 Spalten: Geplant → In Arbeit → Test → Fertig",
+      "Aufgabe hinzufügen",
+      "Aufgabe bearbeiten/löschen",
+      "Prioritäts-Badges (kritisch/normal/niedrig)",
+      "Kategorie-Tags (Service, Reparatur, Upgrade)",
+      "Fahrzeug-Filter",
+      "Geschätzte Kosten angezeigt",
+      "Aufgaben-Anzahl pro Spalte",
+    ]},
+    { g: "Templates", items: [
+      "Template laden und auf Fahrzeug anwenden",
+      "Aufgabe aus Template erstellen",
+      "Aktuelle Aufgaben als Template speichern",
+      "Template löschen",
+    ]},
+  ]},
+  { title: "29. Erinnerungen", items: [
+    { g: "CRUD", items: [
+      "Erinnerung hinzufügen",
+      "Erinnerung bearbeiten/löschen",
+      "7 Typen: Kosten, Kredit, Inspektion, Versicherung, Sparziel, Custom",
+      "Wiederkehrend: täglich, wöchentlich, monatlich, jährlich",
+    ]},
+    { g: "Metriken", items: [
+      "Datumsbasierte Erinnerung",
+      "Kilometerbasierte Erinnerung",
+      "Beides (Datum UND Km)",
+      "Benutzerdefinierte Dringlichkeitsschwellen",
+    ]},
+    { g: "Anzeige", items: [
+      "Fällige Erinnerungen prominent",
+      "Dringlichkeits-Farb-Badges",
+      "Kalender-Ansicht",
+      "Aktiv/Inaktiv-Toggle",
+      "Email-Benachrichtigung Toggle (wenn aktiviert)",
+      "Titel-Truncation mit Tooltip",
+      "Beschreibung-Truncation mit Tooltip",
+    ]},
+  ]},
+  { title: "30. Suche", items: [
+    { g: "Global Search", items: [
+      "Mindestens 2 Zeichen zum Suchen",
+      "Debounced Suche (300ms)",
+      "Echtzeit-Ergebnis-Dropdown",
+      "Ergebnis-Typen mit Badges",
+      "Klick auf Ergebnis navigiert",
+      "Escape zum Schließen",
+      "Leere Ergebnisse Hinweis",
+    ]},
+  ]},
+  { title: "31. Import / Export / Daten", items: [
+    { g: "CSV Import", items: [
+      "11 Record-Typen wählbar",
+      "Datei-Upload",
+      "CSV-Vorschau (Header + erste 5 Zeilen)",
+      "Spalten-Mapping Interface",
+      "Auto-Erkennung der Spalten",
+      "Import-Ausführung mit Zähler",
+      "Fehlerhafte Zeilen übersprungen",
+      "Vehicle-ID gegen eigene Fahrzeuge validiert|tag:security",
+    ]},
+    { g: "CSV Export", items: [
+      "11 Record-Typen",
+      "Fahrzeug-Filter optional",
+      "Datum-Bereich optional",
+      "Download als CSV",
+      "Sonderzeichen korrekt escaped|tag:critical",
+    ]},
+    { g: "LubeLogger Import", items: [
+      "LubeLogger-Daten importieren",
+      "Datei-Upload und Parsing",
+      "Erfolgs-/Fehler-Meldung",
+    ]},
+    { g: "Vollständiges Backup/Restore", items: [
+      "Backup-Download als JSON",
+      "Backup enthält KEINE Passwort-Hashes|tag:security",
+      "Restore aus JSON-Datei",
+      "Bestätigung: 'RESTORE' tippen",
+      "Restore-Endpoint validiert Tabellennamen|tag:security",
+      "Restore-Endpoint validiert Spaltennamen|tag:security",
+      "Erfolgs-/Fehler-Meldung",
+    ]},
+  ]},
+  { title: "32. Kiosk-Modus", items: [
+    { g: "Features", items: [
+      "Token-Authentifizierung via URL-Parameter",
+      "Uhr aktualisiert live jede Sekunde|tag:critical",
+      "Datum aktualisiert live",
+      "Fahrzeuge-Modus",
+      "Erinnerungen-Modus",
+      "Pläne-Modus",
+      "Zyklus-Modus (30s Auto-Rotation)",
+      "Modus-Umschalter Buttons",
+      "Verbindungs-Status angezeigt",
+      "Fullscreen-tauglich",
+    ]},
+  ]},
+  { title: "33. Einstellungen – Benutzer", items: [
+    { g: "Profil", items: [
+      "Email angezeigt",
+      "Username angezeigt",
+      "Email-Verifizierungsstatus",
+      "Passwort ändern",
+    ]},
+    { g: "Darstellung", items: [
+      "Sprache wählen",
+      "Theme wählen (Dark/Light/System)",
+      "Sofortige Vorschau",
+    ]},
+    { g: "Einheiten & Lokalisierung", items: [
+      "Einheitensystem (Metrisch/Imperial)",
+      "Verbrauchseinheit",
+      "Währung wählen → formatCurrency nutzt diese|tag:critical",
+      "Datumsformat",
+      "Dezimalformat",
+      "Drei-Dezimal-Kraftstoff",
+    ]},
+    { g: "API Tokens", items: [
+      "Token generieren",
+      "Token-Liste",
+      "Token widerrufen",
+      "Token-Wert einmalig angezeigt",
+      "Letzter Nutzungszeitpunkt",
+    ]},
+    { g: "Haushalt/Sharing", items: [
+      "Haushalt erstellen",
+      "Mitglied per Email hinzufügen",
+      "Mitglied entfernen",
+      "Haushalt umbenennen",
+      "Haushalt löschen",
+    ]},
+  ]},
+  { title: "34. Einstellungen – Admin", items: [
+    { g: "Benutzerverwaltung", items: [
+      "User-Liste angezeigt",
+      "Registration Tokens erstellen",
+      "Tokens mit Ablaufdatum",
+      "Token-Nutzung tracken",
+      "Admin-Beförderung",
+    ]},
+    { g: "Übersetzungen", items: [
+      "Übersetzungs-Editor",
+      "Keys suchen/bearbeiten",
+      "Neue Keys hinzufügen",
+      "Keys löschen",
+    ]},
+    { g: "Custom Widgets", items: [
+      "Widget-Code-Editor",
+      "Widget erstellen/bearbeiten/löschen",
+      "Widget-Sandbox ohne allow-same-origin|tag:security",
+      "Kein JWT-Token in iframe injiziert|tag:security",
+    ]},
+    { g: "Zugriffskontrolle", items: [
+      "Nicht-Admin kann Admin-Seiten nicht sehen|tag:security",
+      "API-Endpoints prüfen Admin-Rolle|tag:security",
+      "/api/docs nur im Dev-Modus verfügbar|tag:security",
+    ]},
+  ]},
+  { title: "35. Security-Checks", items: [
+    { g: "XSS-Prävention", items: [
+      "MarkdownRenderer: HTML sanitized mit DOMPurify|tag:security",
+      "Custom Widgets: Sandbox ohne allow-same-origin|tag:security",
+      "Keine dangerouslySetInnerHTML ohne Sanitization|tag:security",
+      "User-Input in Notizen/Beschreibungen sicher|tag:security",
+    ]},
+    { g: "SQL Injection", items: [
+      "Restore-Endpoint: Tabellen-Whitelist|tag:security",
+      "Restore-Endpoint: Spalten-Regex-Validierung|tag:security",
+      "Alle Queries parameterisiert|tag:security",
+    ]},
+    { g: "Auth & Tokens", items: [
+      "JWT Secret: kein Hardcoded Fallback in Prod|tag:security",
+      "Refresh Token NICHT im Response Body|tag:security",
+      "Kiosk-Token validiert|tag:security",
+      "API-Tokens korrekt gehasht|tag:security",
+    ]},
+    { g: "Datenintegrität", items: [
+      "Bulk Duplicate: Vehicle-Ownership geprüft|tag:security",
+      "CSV Import: Vehicle-ID gegen eigene validiert|tag:security",
+      "Webhook URLs: Private IPs blockiert (SSRF)|tag:security",
+      "Attachment-Download nur mit Auth|tag:security",
+      "Kein Endpoint ohne Auth (außer Login/Register/Health/OIDC)|tag:security",
+    ]},
+  ]},
+  { title: "36. Mobile & Responsiveness", items: [
+    { g: "Layout", items: [
+      "Header-Padding reduziert auf Mobile|tag:mobile",
+      "Content-Padding reduziert auf Mobile|tag:mobile",
+      "Navigation responsive|tag:mobile",
+    ]},
+    { g: "Grids", items: [
+      "Formular-Felder stacken auf Mobile (grid-cols-1)|tag:mobile",
+      "Stats-Karten stacken auf Mobile|tag:mobile",
+      "Fahrzeug-Edit/Add Formulare responsive|tag:mobile",
+      "VehicleEditForm Section responsive|tag:mobile",
+      "PurchaseForm Section responsive|tag:mobile",
+    ]},
+    { g: "Tabellen", items: [
+      "Alle Tabellen horizontal scrollbar|tag:mobile",
+      "Admin-Tabellen scrollbar|tag:mobile",
+      "VehicleMapTab Tabelle scrollbar|tag:mobile",
+      "FinancingCalculator Tabelle scrollbar|tag:mobile",
+      "VehicleStatsTab Tabelle scrollbar|tag:mobile",
+    ]},
+  ]},
+  { title: "37. Text-Truncation & Tooltips", items: [
+    { g: "Tabellen", items: [
+      "Reparaturen: Beschreibung → Tooltip",
+      "Services: Beschreibung → Tooltip",
+      "Kilometerstand: Notizen → Tooltip",
+      "Steuern: Beschreibung → Tooltip",
+      "Upgrades: Beschreibung → Tooltip",
+      "Inspektionen: Notizen → Tooltip",
+      "History: Beschreibung → Tooltip",
+    ]},
+    { g: "Dashboard & Karten", items: [
+      "Dashboard: Fahrzeug-Label → Tooltip",
+      "Dashboard: Reparatur-Beschreibung → Tooltip",
+      "Dashboard: Anstehende Items → Tooltip",
+      "DashboardWidget: Labels → Tooltip",
+      "Erinnerungen: Titel → Tooltip",
+      "Erinnerungen: Beschreibung → Tooltip",
+      "Notizen: Titel → Tooltip",
+      "Planner: Aufgaben-Titel → Tooltip",
+      "Equipment: Name → Tooltip",
+    ]},
+  ]},
+  { title: "38. End-to-End Szenarien", items: [
+    { g: "Neues Auto kaufen (komplett)|tag:scenario", items: [
+      "1. Fahrzeug als 'Geplant' anlegen mit geschätzten Kosten",
+      "2. Im Kaufplaner Eintrag erstellen",
+      "3. Finanzierung durchrechnen (Preis, Anzahlung, Zinsen, Laufzeit)",
+      "4. Vergleich mit anderem geplanten Fahrzeug",
+      "5. Entscheidung: Status auf 'Besitz' ändern",
+      "6. Kredit anlegen mit gleichen Konditionen",
+      "7. Monatliche Kosten erfassen (Versicherung, Steuer)",
+      "8. Erste Tankfüllung erfassen",
+      "9. Dashboard zeigt neues Fahrzeug korrekt",
+    ]},
+    { g: "Laufender Betrieb|tag:scenario", items: [
+      "Regelmäßig tanken → Verbrauch-Trend korrekt",
+      "Service-Termin erfassen → Timeline aktualisiert",
+      "Reparatur erfassen mit Werkstatt + Kosten",
+      "Steuer-Fälligkeit → Erinnerung erstellt",
+      "Inspektion durchführen (Template laden, ausfüllen)",
+      "Equipment zuweisen/umzuweisen zwischen Fahrzeugen",
+    ]},
+    { g: "Fahrzeug verkaufen|tag:scenario", items: [
+      "1. Fahrzeug bearbeiten → Verkauft markieren",
+      "2. Verkaufspreis + Datum eingeben",
+      "3. Fahrzeug in Liste als 'Verkauft' angezeigt",
+      "4. Optional: Fahrzeug ausblenden",
+      "5. Kosten/Reparaturen bleiben erhalten für Historie",
+    ]},
+    { g: "Multi-User Haushalt|tag:scenario", items: [
+      "1. Haushalt erstellen",
+      "2. Partner per Email einladen",
+      "3. Kosten mit 'Bezahlt von' verschiedenen Personen",
+      "4. Dashboard zeigt Kosten-Aufschlüsselung pro Person",
+    ]},
+    { g: "Daten-Migration|tag:scenario", items: [
+      "1. Backup erstellen",
+      "2. Auf neuem Server wiederherstellen",
+      "3. Alle Daten vorhanden und korrekt",
+      "4. CSV Import von externen Daten",
+      "5. LubeLogger Import",
+    ]},
+  ]},
+];
+
+let showOnlyUnchecked = false;
+const KEY = 'dl-checklist-v1';
+
+function load() { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; } }
+function save(state) { localStorage.setItem(KEY, JSON.stringify(state)); }
+
+function render() {
+  const state = load();
+  const app = document.getElementById('app');
+  let totalItems = 0, checkedItems = 0, html = '';
+
+  DATA.forEach((section, si) => {
+    let sectionTotal = 0, sectionChecked = 0;
+    let groupsHtml = '';
+
+    section.items.forEach(group => {
+      let itemsHtml = '';
+      group.items.forEach((raw, ii) => {
+        const parts = raw.split('|');
+        const text = parts[0];
+        const tags = parts.slice(1).map(t => t.replace('tag:', ''));
+        const id = `s${si}_${group.g}_${ii}`;
+        const checked = !!state[id];
+        totalItems++; sectionTotal++;
+        if (checked) { checkedItems++; sectionChecked++; }
+        if (showOnlyUnchecked && checked) return;
+        const tagHtml = tags.map(t => `<span class="tag tag-${t}">${t}</span>`).join('');
+        itemsHtml += `<div class="item ${checked ? 'checked' : ''}" data-search="${text.toLowerCase()}">
+          <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} onchange="toggle('${id}')">
+          <label for="${id}">${text}${tagHtml}</label>
+        </div>`;
+      });
+      if (itemsHtml || !showOnlyUnchecked) {
+        const groupTags = group.g.split('|');
+        const groupName = groupTags[0];
+        const groupTagHtml = groupTags.slice(1).map(t => `<span class="tag tag-${t.replace('tag:', '')}">${t.replace('tag:', '')}</span>`).join('');
+        groupsHtml += `<div class="group-label">${groupName} ${groupTagHtml}</div>${itemsHtml}`;
+      }
+    });
+
+    const badgeClass = sectionChecked === sectionTotal && sectionTotal > 0 ? 'badge done' : 'badge';
+    html += `<section data-search="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        <h2>${section.title}</h2>
+        <span class="${badgeClass}">${sectionChecked}/${sectionTotal}</span>
+      </div>
+      <div class="section-body">${groupsHtml}</div>
+    </section>`;
+  });
+
+  app.innerHTML = html;
+  const pct = totalItems ? Math.round(checkedItems / totalItems * 100) : 0;
+  document.getElementById('progressFill').style.width = Math.max(pct, 3) + '%';
+  document.getElementById('progressFill').textContent = pct + '%';
+  document.getElementById('stats').textContent = `${checkedItems} von ${totalItems} Tests bestanden (${pct}%)`;
+}
+
+function toggle(id) {
+  const state = load();
+  state[id] = !state[id];
+  if (!state[id]) delete state[id];
+  save(state);
+  render();
+}
+
+function toggleSection(el) {
+  el.nextElementSibling.classList.toggle('open');
+}
+
+function toggleAll(open) {
+  document.querySelectorAll('.section-body').forEach(b => {
+    open ? b.classList.add('open') : b.classList.remove('open');
+  });
+}
+
+function resetAll() {
+  if (confirm('Alle Checks zurücksetzen?')) { localStorage.removeItem(KEY); render(); }
+}
+
+function filterUnchecked() {
+  showOnlyUnchecked = !showOnlyUnchecked;
+  document.getElementById('btnFilter').classList.toggle('active', showOnlyUnchecked);
+  render();
+}
+
+document.getElementById('search').addEventListener('input', (e) => {
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll('.item').forEach(el => {
+    el.classList.toggle('hidden', q && !el.dataset.search.includes(q));
+  });
+  document.querySelectorAll('section').forEach(sec => {
+    const visible = sec.querySelectorAll('.item:not(.hidden)').length;
+    if (q) { sec.querySelector('.section-body').classList.toggle('open', visible > 0); }
+    sec.classList.toggle('hidden', q && visible === 0);
+  });
+});
+
+render();
+</script>
+</body>
+</html>

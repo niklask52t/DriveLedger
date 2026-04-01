@@ -17,7 +17,7 @@ function parseEquipmentRow(row: any): any {
 router.get('/distance-summary', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
 
     // Get all odometer records with equipment_ids
     const [odomRows] = await pool.execute(
@@ -52,7 +52,7 @@ router.get('/distance-summary', async (req: Request, res: Response) => {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const vehicleId = req.query.vehicleId as string | undefined;
 
     let rows: any[];
@@ -81,7 +81,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const [rows] = await pool.execute('SELECT * FROM equipment WHERE id = ? AND user_id = ?', [req.params.id, userId]);
     const row = (rows as any[])[0];
 
@@ -100,7 +100,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { name } = req.body;
 
     if (!name) {
@@ -147,7 +147,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT id FROM equipment WHERE id = ? AND user_id = ?', [id, userId]);
@@ -191,7 +191,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.put('/:id/reassign', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
     const { vehicleId } = req.body;
 
@@ -225,7 +225,7 @@ router.put('/:id/reassign', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT id FROM equipment WHERE id = ? AND user_id = ?', [id, userId]);

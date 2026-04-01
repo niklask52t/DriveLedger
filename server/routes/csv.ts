@@ -201,7 +201,7 @@ function anyToSnake(str: string): string {
 router.get('/export/:recordType', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { recordType } = req.params;
 
     const config = RECORD_TYPES[recordType];
@@ -295,7 +295,7 @@ router.get('/export/:recordType', async (req: Request, res: Response) => {
 router.post('/import/:recordType', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { recordType } = req.params;
 
     const config = RECORD_TYPES[recordType];
@@ -366,7 +366,15 @@ router.post('/import/:recordType', async (req: Request, res: Response) => {
       }
     }
 
+    // Pre-load user's vehicle IDs for validation
+    const [userVehicleRows] = await pool.execute(
+      'SELECT id FROM vehicles WHERE user_id = ?',
+      [userId]
+    );
+    const userVehicleIds = new Set((userVehicleRows as any[]).map((v: any) => v.id));
+
     let importedCount = 0;
+    let skippedCount = 0;
 
     for (const row of rows) {
       const record: Record<string, any> = {};
@@ -424,6 +432,12 @@ router.post('/import/:recordType', async (req: Request, res: Response) => {
         }
       }
 
+      // Validate vehicle_id belongs to current user
+      if (record.vehicle_id && !userVehicleIds.has(record.vehicle_id)) {
+        skippedCount++;
+        continue;
+      }
+
       const id = uuid();
       const allCols = ['id', 'user_id', ...config.columns];
       const placeholders = allCols.map(() => '?').join(', ');
@@ -436,7 +450,7 @@ router.post('/import/:recordType', async (req: Request, res: Response) => {
       importedCount++;
     }
 
-    return res.status(200).json({ count: importedCount });
+    return res.status(200).json({ count: importedCount, skipped: skippedCount });
   } catch (err: any) {
     console.error('[CSV] Import error:', err);
     return res.status(500).json({ error: 'Internal server error' });

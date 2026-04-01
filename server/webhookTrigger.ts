@@ -41,6 +41,22 @@ export async function fireWebhooks(userId: string, event: string, payload: any):
         .update(body)
         .digest('hex');
 
+      // Block internal/private URLs to prevent SSRF
+      try {
+        const parsed = new URL(wh.url.startsWith('discord://') ? wh.url.replace('discord://', 'https://discord.com/api/webhooks/') : wh.url);
+        const hostname = parsed.hostname.toLowerCase();
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' ||
+            hostname === '0.0.0.0' || hostname.endsWith('.local') ||
+            hostname.startsWith('10.') || hostname.startsWith('192.168.') ||
+            hostname.startsWith('169.254.') || /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)) {
+          console.warn(`[WEBHOOK] Blocked internal URL: ${wh.url}`);
+          continue;
+        }
+      } catch {
+        console.warn(`[WEBHOOK] Invalid URL: ${wh.url}`);
+        continue;
+      }
+
       // Check for Discord webhook URL
       if (wh.url.startsWith('discord://')) {
         const discordUrl = wh.url.replace('discord://', 'https://discord.com/api/webhooks/');

@@ -297,6 +297,7 @@ export default function Planner({ state, setState, reminders = [] }: Props) {
                         <button
                           onClick={() => handleFromTemplate(t.id)}
                           className="flex-1 text-left text-sm text-zinc-50 truncate"
+                          title={t.name}
                         >
                           {t.name}
                           <span className="ml-2 text-xs text-zinc-500">{t.targetType}</span>
@@ -355,7 +356,7 @@ export default function Planner({ state, setState, reminders = [] }: Props) {
                       onClick={() => openEdit(task)}
                     >
                       <div className="flex items-start justify-between mb-2">
-                        <h4 className="text-sm font-medium text-zinc-50 flex-1 min-w-0 truncate pr-2">{task.title}</h4>
+                        <h4 className="text-sm font-medium text-zinc-50 flex-1 min-w-0 truncate pr-2" title={task.title}>{task.title}</h4>
                       </div>
 
                       {task.vehicleId && (

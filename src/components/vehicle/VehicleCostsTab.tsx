@@ -186,7 +186,7 @@ export default function VehicleCostsTab({
               onChange={(e) => setCostForm({ ...costForm, name: e.target.value })}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>{t('common.category')}</label>
               <select
@@ -218,7 +218,7 @@ export default function VehicleCostsTab({
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>{t('vehicle_tab.costs.amount_eur')}</label>
               <input
@@ -247,7 +247,7 @@ export default function VehicleCostsTab({
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>{t('common.start_date')}</label>
               <input

@@ -11,7 +11,7 @@ router.use(combinedAuthMiddleware);
 router.get('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const [rows] = await pool.execute(
       'SELECT * FROM planned_purchases WHERE user_id = ? ORDER BY created_at DESC',
       [userId]
@@ -27,7 +27,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const [rows] = await pool.execute(
       'SELECT * FROM planned_purchases WHERE id = ? AND user_id = ?',
       [req.params.id, userId]
@@ -49,7 +49,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { brand, model } = req.body;
 
     if (!brand || !model) {
@@ -111,7 +111,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute(
@@ -190,7 +190,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute(
@@ -215,7 +215,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 router.post('/:id/convert', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [purchaseRows] = await pool.execute(

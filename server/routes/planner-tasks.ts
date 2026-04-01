@@ -13,7 +13,7 @@ router.use(combinedAuthMiddleware);
 router.get('/templates', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const [rows] = await pool.execute('SELECT * FROM plan_templates WHERE user_id = ? ORDER BY created_at DESC', [userId]);
     return res.status(200).json(rowsToCamelCase(rows as any[]));
   } catch (err: any) {
@@ -26,7 +26,7 @@ router.get('/templates', async (req: Request, res: Response) => {
 router.post('/templates', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { name, description, targetType, priority, estimatedCost } = req.body;
 
     if (!name) {
@@ -60,7 +60,7 @@ router.post('/templates', async (req: Request, res: Response) => {
 router.delete('/templates/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT id FROM plan_templates WHERE id = ? AND user_id = ?', [id, userId]);
@@ -81,7 +81,7 @@ router.delete('/templates/:id', async (req: Request, res: Response) => {
 router.post('/from-template/:templateId', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { templateId } = req.params;
     const { vehicleId } = req.body;
 
@@ -129,7 +129,7 @@ router.post('/from-template/:templateId', async (req: Request, res: Response) =>
 router.get('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const vehicleId = req.query.vehicleId as string | undefined;
     const stage = req.query.stage as string | undefined;
 
@@ -160,7 +160,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const [rows] = await pool.execute('SELECT * FROM planner_tasks WHERE id = ? AND user_id = ?', [req.params.id, userId]);
     const row = (rows as any[])[0];
 
@@ -179,7 +179,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { title } = req.body;
 
     if (!title) {
@@ -230,7 +230,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT id FROM planner_tasks WHERE id = ? AND user_id = ?', [id, userId]);
@@ -283,7 +283,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.put('/:id/stage', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
     const { stage } = req.body;
 
@@ -312,7 +312,7 @@ router.put('/:id/stage', async (req: Request, res: Response) => {
 router.post('/:id/convert', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
     const { targetType } = req.body; // 'service', 'repair', or 'upgrade'
 
@@ -375,7 +375,7 @@ router.post('/:id/convert', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT id FROM planner_tasks WHERE id = ? AND user_id = ?', [id, userId]);

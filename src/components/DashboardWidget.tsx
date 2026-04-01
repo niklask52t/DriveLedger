@@ -80,19 +80,25 @@ function CostSummaryWidget({ state }: { state: AppState }) {
 function FuelEconomyWidget({ state }: { state: AppState }) {
   const { fuelEconomyUnitLabel } = useUnits();
   const chartData = useMemo(() => {
-    const sorted = [...state.fuelRecords]
-      .filter(f => !f.isPartialFill && !f.isMissedEntry && f.fuelAmount > 0 && f.mileage > 0)
-      .sort((a, b) => a.mileage - b.mileage);
-
+    const byVehicle = new Map<string, typeof state.fuelRecords>();
+    for (const f of state.fuelRecords) {
+      if (f.isPartialFill || f.isMissedEntry || f.fuelAmount <= 0 || f.mileage <= 0) continue;
+      const arr = byVehicle.get(f.vehicleId) || [];
+      arr.push(f);
+      byVehicle.set(f.vehicleId, arr);
+    }
     const points: { date: string; consumption: number }[] = [];
-    for (let i = 1; i < sorted.length; i++) {
-      const dist = sorted[i].mileage - sorted[i - 1].mileage;
-      if (dist > 0) {
-        const consumption = Math.round((sorted[i].fuelAmount / dist) * 100 * 100) / 100;
-        points.push({ date: sorted[i].date.substring(0, 10), consumption });
+    for (const records of byVehicle.values()) {
+      const sorted = [...records].sort((a, b) => a.mileage - b.mileage);
+      for (let i = 1; i < sorted.length; i++) {
+        const dist = sorted[i].mileage - sorted[i - 1].mileage;
+        if (dist > 0) {
+          const consumption = Math.round((sorted[i].fuelAmount / dist) * 100 * 100) / 100;
+          points.push({ date: sorted[i].date.substring(0, 10), consumption });
+        }
       }
     }
-    return points.slice(-12);
+    return points.sort((a, b) => a.date.localeCompare(b.date)).slice(-12);
   }, [state.fuelRecords]);
 
   if (chartData.length < 2) {
@@ -160,7 +166,7 @@ function UpcomingRemindersWidget({ state }: { state: AppState }) {
     return upcoming.slice(0, 5);
   }, [state]);
 
-  if (upcoming.length === 0) {
+  if (items.length === 0) {
     return <p className="text-sm text-zinc-600 text-center py-4">Nothing upcoming</p>;
   }
 
@@ -170,7 +176,7 @@ function UpcomingRemindersWidget({ state }: { state: AppState }) {
         <div key={i} className="flex items-start gap-2">
           <span className={`shrink-0 mt-1 w-1.5 h-1.5 rounded-full ${item.severity === 'warning' ? 'bg-red-400' : 'bg-amber-400'}`} />
           <div className="min-w-0">
-            <p className="text-sm text-zinc-300 truncate">{item.label}</p>
+            <p className="text-sm text-zinc-300 truncate" title={item.label}>{item.label}</p>
             <p className="text-xs text-zinc-500">{item.detail}</p>
           </div>
         </div>
@@ -202,7 +208,7 @@ function RecentRecordsWidget({ state }: { state: AppState }) {
       {records.map((r, i) => (
         <div key={i} className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-sm text-zinc-300 truncate">{r.label}</p>
+            <p className="text-sm text-zinc-300 truncate" title={r.label}>{r.label}</p>
             <p className="text-xs text-zinc-500">{r.detail}</p>
           </div>
           <span className="text-xs text-zinc-500 shrink-0">{r.date}</span>
@@ -218,7 +224,7 @@ function VehicleStatusWidget({ state }: { state: AppState }) {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
       {state.vehicles.map(v => {
         const vCosts = state.costs.filter(c => c.vehicleId === v.id);
         const monthly = getTotalMonthlyCosts(vCosts);
@@ -226,7 +232,7 @@ function VehicleStatusWidget({ state }: { state: AppState }) {
           <div key={v.id} className="bg-zinc-800/50 rounded-lg p-3">
             <div className="flex items-center gap-2 mb-1">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: v.color || '#8b5cf6' }} />
-              <span className="text-sm text-zinc-300 truncate font-medium">{v.name}</span>
+              <span className="text-sm text-zinc-300 truncate font-medium" title={v.name}>{v.name}</span>
             </div>
             <p className="text-xs text-zinc-500">{v.brand} {v.model}</p>
             <p className="text-xs text-emerald-400 mt-1">{formatCurrency(monthly)}/mo</p>

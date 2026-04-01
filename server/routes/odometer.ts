@@ -24,7 +24,7 @@ function parseOdometerRow(row: any): any {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const vehicleId = req.query.vehicleId as string | undefined;
 
     let rows: any[];
@@ -53,7 +53,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const [rows] = await pool.execute('SELECT * FROM odometer_records WHERE id = ? AND user_id = ?', [req.params.id, userId]);
     const row = (rows as any[])[0];
 
@@ -72,7 +72,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { vehicleId, mileage } = req.body;
 
     if (!vehicleId || mileage === undefined) {
@@ -121,7 +121,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT id FROM odometer_records WHERE id = ? AND user_id = ?', [id, userId]);
@@ -169,7 +169,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.post('/recalculate/:vehicleId', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { vehicleId } = req.params;
 
     // Verify vehicle ownership
@@ -212,7 +212,7 @@ router.post('/recalculate/:vehicleId', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT id FROM odometer_records WHERE id = ? AND user_id = ?', [id, userId]);

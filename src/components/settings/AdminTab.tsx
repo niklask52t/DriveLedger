@@ -139,6 +139,7 @@ export default function AdminTab() {
           </div>
         ) : (
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-zinc-800">
@@ -188,6 +189,7 @@ export default function AdminTab() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </div>
@@ -206,6 +208,7 @@ export default function AdminTab() {
           </div>
         ) : (
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-zinc-800">
@@ -280,6 +283,7 @@ export default function AdminTab() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </div>

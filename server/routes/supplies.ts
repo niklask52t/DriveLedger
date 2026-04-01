@@ -18,7 +18,7 @@ function parseSupplyRow(row: any): any {
 router.get('/shop', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
 
     const [rows] = await pool.execute(
       'SELECT * FROM supplies WHERE user_id = ? AND vehicle_id IS NULL ORDER BY created_at DESC',
@@ -36,7 +36,7 @@ router.get('/shop', async (req: Request, res: Response) => {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const vehicleId = req.query.vehicleId as string | undefined;
     const filter = req.query.filter as string | undefined;
 
@@ -87,7 +87,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const [rows] = await pool.execute('SELECT * FROM supplies WHERE id = ? AND user_id = ?', [req.params.id, userId]);
     const row = (rows as any[])[0];
 
@@ -106,7 +106,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { name } = req.body;
 
     if (!name) {
@@ -160,7 +160,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT id FROM supplies WHERE id = ? AND user_id = ?', [id, userId]);
@@ -211,7 +211,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.post('/:id/requisition', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
     const { quantity, recordType, recordId, description } = req.body;
 
@@ -277,7 +277,7 @@ router.post('/:id/requisition', async (req: Request, res: Response) => {
 router.get('/:id/requisitions', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     // Verify supply ownership
@@ -302,7 +302,7 @@ router.get('/:id/requisitions', async (req: Request, res: Response) => {
 router.post('/:id/restore', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
     const { requisitionId } = req.body;
 
@@ -346,7 +346,7 @@ router.post('/:id/restore', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT id FROM supplies WHERE id = ? AND user_id = ?', [id, userId]);

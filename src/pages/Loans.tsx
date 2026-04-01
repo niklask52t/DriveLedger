@@ -35,7 +35,7 @@ const emptyLoan: Omit<Loan, 'id' | 'createdAt'> = {
 export default function Loans({ state, setState }: Props) {
   const { t } = useI18n();
   const extraFieldDefs = useExtraFields();
-  const { fmtDistance } = useUnits();
+  useUnits();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Loan | null>(null);
   const [form, setForm] = useState(emptyLoan);
@@ -169,7 +169,7 @@ export default function Loans({ state, setState }: Props) {
     <div className="space-y-8">
       {/* Stats + Add */}
       <div className="flex items-start justify-between">
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
           {[
             { label: t('loans.total_debt'), value: formatCurrency(totalDebt), color: 'text-red-400' },
             { label: t('loans.monthly_payments'), value: formatCurrency(totalMonthly), color: 'text-violet-400' },

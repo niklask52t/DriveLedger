@@ -15,6 +15,7 @@ const OIDC_USERINFO_URL = process.env.OIDC_USERINFO_URL || '';
 const OIDC_REDIRECT_URL = process.env.OIDC_REDIRECT_URL || 'http://localhost:3001/api/oidc/callback';
 const OIDC_SCOPE = process.env.OIDC_SCOPE || 'openid email profile';
 const OIDC_PROVIDER_NAME = process.env.OIDC_PROVIDER_NAME || 'SSO';
+const OIDC_AUTO_REGISTER = process.env.OIDC_AUTO_REGISTER !== 'false'; // default true
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 // In-memory store for OIDC state tokens (short-lived, cleared after use)
@@ -179,7 +180,11 @@ router.get('/callback', async (req: Request, res: Response) => {
     );
     let user = (userRows as any[])[0];
 
-    // Create user if not found
+    // Create user if not found (only if auto-register is enabled)
+    if (!user && !OIDC_AUTO_REGISTER) {
+      console.warn(`[OIDC] Auto-registration disabled. Rejected login for: ${email}`);
+      return res.redirect(`${FRONTEND_URL}/#login?error=oidc_no_account`);
+    }
     if (!user) {
       const userId = uuid();
       const username = displayName || email.split('@')[0];

@@ -27,6 +27,10 @@ export default function Register({ onNavigate }: RegisterProps) {
   useEffect(() => {
     api.getConfig().then((cfg: AppConfig) => {
       setOpenRegistration(cfg.openRegistration === true);
+      // Redirect to login if OIDC-only mode
+      if (cfg.oidcOnly) {
+        onNavigate('login');
+      }
     }).catch(() => {});
   }, []);
 
@@ -231,7 +235,7 @@ export default function Register({ onNavigate }: RegisterProps) {
 
             {/* Password checks */}
             {password.length > 0 && (
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
                 {checks.map((c) => (
                   <div key={c.label} className="flex items-center gap-2">
                     {c.met ? (

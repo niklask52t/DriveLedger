@@ -170,7 +170,7 @@ export default function VehicleInspectionsTab({ vehicleId, state, setState }: Pr
                   <div className="flex items-center gap-4 min-w-0 flex-1">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-3 mb-1">
-                        <h3 className="text-sm font-medium text-zinc-50 truncate">{r.title}</h3>
+                        <h3 className="text-sm font-medium text-zinc-50 truncate" title={r.title}>{r.title}</h3>
                         <span className={`text-xs px-2 py-0.5 rounded-md font-medium shrink-0 ${resultColors[r.overallResult] || resultColors.na}`}>
                           {resultLabels[r.overallResult] || r.overallResult}
                         </span>
@@ -240,7 +240,7 @@ export default function VehicleInspectionsTab({ vehicleId, state, setState }: Pr
                                 <span className={`text-xs px-2 py-0.5 rounded-md ${resultColors[item.result] || resultColors.na}`}>
                                   {resultLabels[item.result] || item.result}
                                 </span>
-                                {item.notes && <span className="text-zinc-500 text-xs max-w-[200px] truncate">{item.notes}</span>}
+                                {item.notes && <span className="text-zinc-500 text-xs max-w-[200px] truncate" title={item.notes}>{item.notes}</span>}
                               </div>
                             ))}
                           </div>
@@ -291,7 +291,7 @@ export default function VehicleInspectionsTab({ vehicleId, state, setState }: Pr
               onChange={(e) => setForm({ ...form, title: e.target.value })}
             />
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label className={labelClass}>{t('common.date')}</label>
               <input

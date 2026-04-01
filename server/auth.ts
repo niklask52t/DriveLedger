@@ -3,13 +3,19 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
 const JWT_SECRET = process.env.JWT_SECRET || (() => {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('[AUTH] FATAL: JWT_SECRET env var must be set in production!');
+  }
   console.warn('[AUTH] WARNING: Using fallback JWT_SECRET. Set JWT_SECRET env var in production!');
-  return 'fallback-jwt-secret-do-not-use-in-production';
+  return crypto.randomBytes(32).toString('hex');
 })();
 
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || (() => {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('[AUTH] FATAL: JWT_REFRESH_SECRET env var must be set in production!');
+  }
   console.warn('[AUTH] WARNING: Using fallback JWT_REFRESH_SECRET. Set JWT_REFRESH_SECRET env var in production!');
-  return 'fallback-jwt-refresh-secret-do-not-use-in-production';
+  return crypto.randomBytes(32).toString('hex');
 })();
 
 export async function hashPassword(password: string): Promise<string> {

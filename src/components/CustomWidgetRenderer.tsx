@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import { api } from '../api';
 
 interface Props {
   code: string;
@@ -12,9 +11,7 @@ export default function CustomWidgetRenderer({ code, name }: Props) {
   useEffect(() => {
     if (!iframeRef.current) return;
 
-    const token = api.getToken();
-
-    // Create a full HTML document for the iframe
+    // Create a full HTML document for the iframe (no token injection for security)
     const html = `
       <!DOCTYPE html>
       <html>
@@ -38,20 +35,6 @@ export default function CustomWidgetRenderer({ code, name }: Props) {
           .violet { color: #8b5cf6; }
           .amber { color: #fbbf24; }
         </style>
-        <script>
-          window.__DRIVELEDGER_TOKEN__ = ${JSON.stringify(token || '')};
-          window.__DRIVELEDGER_API__ = '/api';
-
-          // Helper function for API calls
-          window.dlFetch = function(path) {
-            return fetch('/api' + path, {
-              headers: {
-                'Authorization': 'Bearer ' + window.__DRIVELEDGER_TOKEN__,
-                'Content-Type': 'application/json'
-              }
-            }).then(r => r.json());
-          };
-        </script>
       </head>
       <body>
         ${code}
@@ -76,7 +59,7 @@ export default function CustomWidgetRenderer({ code, name }: Props) {
       </div>
       <iframe
         ref={iframeRef}
-        sandbox="allow-scripts allow-same-origin"
+        sandbox="allow-scripts"
         className="w-full border-0"
         style={{ minHeight: 200 }}
         title={name}

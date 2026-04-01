@@ -10,7 +10,7 @@ router.use(combinedAuthMiddleware);
 router.get('/vehicle/:vehicleId/maintenance', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { vehicleId } = req.params;
     const year = req.query.year as string | undefined;
 
@@ -120,7 +120,7 @@ router.get('/vehicle/:vehicleId/maintenance', async (req: Request, res: Response
 router.get('/vehicle/:vehicleId/history', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { vehicleId } = req.params;
     const year = req.query.year as string | undefined;
 
@@ -179,7 +179,7 @@ router.get('/vehicle/:vehicleId/history', async (req: Request, res: Response) =>
 router.get('/vehicle/:vehicleId/monthly', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { vehicleId } = req.params;
 
     // Verify vehicle ownership

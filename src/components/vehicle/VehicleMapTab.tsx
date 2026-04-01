@@ -208,6 +208,7 @@ export default function VehicleMapTab({ vehicleId, state, setState }: VehicleMap
               <p className="text-sm text-zinc-500">{t("vehicle_tab.map.no_matching_records", { tags: selectedZone.tags.join(', ') })}</p>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-zinc-800">
@@ -236,6 +237,7 @@ export default function VehicleMapTab({ vehicleId, state, setState }: VehicleMap
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       )}

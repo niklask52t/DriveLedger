@@ -42,7 +42,7 @@ function parseRow(row: Record<string, any>): Record<string, any> {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
 
     // Check if user config exists already
     const [existingRows] = await pool.execute('SELECT user_id FROM user_config WHERE user_id = ?', [userId]);
@@ -90,7 +90,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.put('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
 
     // Ensure config row exists
     await pool.execute(

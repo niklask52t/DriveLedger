@@ -387,7 +387,7 @@ export default function Layout({
       {/* Main content */}
       <main className="lg:ml-60 min-h-screen">
         {/* Header */}
-        <header className="h-14 flex items-center px-8 border-b border-zinc-800 gap-4">
+        <header className="h-14 flex items-center px-4 sm:px-8 border-b border-zinc-800 gap-4">
           <div className="lg:hidden w-9" />
           <h1 className="text-lg font-semibold text-zinc-50">
             {pageTitles[currentPage] || 'DriveLedger'}
@@ -402,7 +402,7 @@ export default function Layout({
         {/* Page content */}
         <motion.div
           key={currentPage}
-          className="p-8"
+          className="p-4 sm:p-6 lg:p-8"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25 }}

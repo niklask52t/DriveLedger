@@ -11,7 +11,7 @@ router.use(combinedAuthMiddleware);
 router.get('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
 
     const [rows] = await pool.execute(`
       SELECT DISTINCT h.* FROM households h
@@ -32,7 +32,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { name } = req.body;
 
     if (!name) {
@@ -59,7 +59,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
     const { name } = req.body;
 
@@ -89,7 +89,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute(
@@ -112,7 +112,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 router.get('/:id/members', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     // Verify user is head or member
@@ -155,7 +155,7 @@ router.get('/:id/members', async (req: Request, res: Response) => {
 router.post('/:id/members', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
     const { email, permissions } = req.body;
 
@@ -225,7 +225,7 @@ router.post('/:id/members', async (req: Request, res: Response) => {
 router.delete('/:id/members/:memberId', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id, memberId } = req.params;
 
     // Verify caller is head

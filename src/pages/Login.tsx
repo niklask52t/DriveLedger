@@ -19,6 +19,7 @@ export default function Login({ onNavigate }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
   const [oidcEnabled, setOidcEnabled] = useState(false);
+  const [oidcOnly, setOidcOnly] = useState(false);
   const [oidcProviderName, setOidcProviderName] = useState('SSO');
   const [customLogoUrl, setCustomLogoUrl] = useState('');
   const [customMotd, setCustomMotd] = useState('');
@@ -31,6 +32,7 @@ export default function Login({ onNavigate }: LoginProps) {
           setOidcEnabled(true);
           setOidcProviderName(data.oidcProviderName || 'SSO');
         }
+        if (data.oidcOnly) setOidcOnly(true);
         if (data.customLogoUrl) setCustomLogoUrl(data.customLogoUrl);
         if (data.customMotd) setCustomMotd(data.customMotd);
       })
@@ -111,7 +113,9 @@ export default function Login({ onNavigate }: LoginProps) {
           </div>
 
           <h2 className="text-2xl font-semibold text-zinc-50 mb-1">{t('auth.sign_in')}</h2>
-          <p className="text-sm text-zinc-500 mb-8">{t('auth.enter_credentials')}</p>
+          <p className="text-sm text-zinc-500 mb-8">
+            {oidcOnly ? `Sign in with ${oidcProviderName} to continue` : t('auth.enter_credentials')}
+          </p>
 
           {customMotd && (
             <div className="bg-violet-400/10 border border-violet-400/20 rounded-lg px-4 py-3 mb-6">
@@ -125,75 +129,79 @@ export default function Login({ onNavigate }: LoginProps) {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">
-                {t('auth.email_or_username')}
-              </label>
-              <input
-                type="text"
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 transition-colors"
-                autoComplete="username"
-                autoFocus
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-2">
-                {t('auth.password')}
-              </label>
-              <div className="relative">
+          {!oidcOnly && (
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-2">
+                  {t('auth.email_or_username')}
+                </label>
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={t('auth.enter_password')}
-                  className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 pr-10 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 transition-colors"
-                  autoComplete="current-password"
+                  type="text"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 transition-colors"
+                  autoComplete="username"
+                  autoFocus
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-2">
+                  {t('auth.password')}
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={t('auth.enter_password')}
+                    className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-lg px-3 pr-10 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 transition-colors"
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-end">
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+                  onClick={() => onNavigate('forgot-password')}
+                  className="text-sm text-violet-400 hover:text-violet-300 transition-colors cursor-pointer"
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {t('auth.forgot_password')}
                 </button>
               </div>
-            </div>
 
-            <div className="flex justify-end">
               <button
-                type="button"
-                onClick={() => onNavigate('forgot-password')}
-                className="text-sm text-violet-400 hover:text-violet-300 transition-colors cursor-pointer"
+                type="submit"
+                disabled={loading}
+                className="w-full bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
               >
-                {t('auth.forgot_password')}
+                {loading && <Loader2 size={16} className="animate-spin" />}
+                {t('auth.sign_in')}
               </button>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
-            >
-              {loading && <Loader2 size={16} className="animate-spin" />}
-              {t('auth.sign_in')}
-            </button>
-          </form>
+            </form>
+          )}
 
           {oidcEnabled && (
-            <div className="mt-6">
-              <div className="relative mb-4">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-zinc-800" />
+            <div className={oidcOnly ? '' : 'mt-6'}>
+              {!oidcOnly && (
+                <div className="relative mb-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-zinc-800" />
+                  </div>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="bg-zinc-950 px-3 text-zinc-500">or</span>
+                  </div>
                 </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="bg-zinc-950 px-3 text-zinc-500">or</span>
-                </div>
-              </div>
+              )}
               <a
                 href="/api/oidc/authorize"
                 className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-50 rounded-lg h-10 px-5 text-sm font-medium transition-colors cursor-pointer flex items-center justify-center gap-2"
@@ -204,15 +212,17 @@ export default function Login({ onNavigate }: LoginProps) {
             </div>
           )}
 
-          <p className="mt-8 text-center text-sm text-zinc-500">
-            {t('auth.no_account')}{' '}
-            <button
-              onClick={() => onNavigate('register')}
-              className="text-violet-400 hover:text-violet-300 transition-colors font-medium cursor-pointer"
-            >
-              {t('auth.create_one')}
-            </button>
-          </p>
+          {!oidcOnly && (
+            <p className="mt-8 text-center text-sm text-zinc-500">
+              {t('auth.no_account')}{' '}
+              <button
+                onClick={() => onNavigate('register')}
+                className="text-violet-400 hover:text-violet-300 transition-colors font-medium cursor-pointer"
+              >
+                {t('auth.create_one')}
+              </button>
+            </p>
+          )}
         </div>
       </div>
     </div>

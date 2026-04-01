@@ -51,7 +51,7 @@ function getTableName(recordType: string): string | null {
 router.post('/edit', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { recordType, ids, recordIds, updates } = req.body;
     const idList = Array.isArray(recordIds) && recordIds.length > 0 ? recordIds : ids;
 
@@ -109,7 +109,7 @@ router.post('/edit', async (req: Request, res: Response) => {
 router.post('/delete', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { recordType, ids } = req.body;
 
     if (!recordType || !Array.isArray(ids) || ids.length === 0) {
@@ -140,7 +140,7 @@ router.post('/delete', async (req: Request, res: Response) => {
 router.post('/move', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { fromType, toType, ids } = req.body;
 
     if (!fromType || !toType || !Array.isArray(ids) || ids.length === 0) {
@@ -222,7 +222,7 @@ router.post('/move', async (req: Request, res: Response) => {
 router.post('/tag', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { recordType, ids, addTags, removeTags } = req.body;
 
     if (!recordType || !Array.isArray(ids) || ids.length === 0) {
@@ -292,7 +292,7 @@ router.post('/tag', async (req: Request, res: Response) => {
 router.post('/duplicate', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { recordIds, recordType, targetVehicleId } = req.body;
 
     if (!recordType || !Array.isArray(recordIds) || recordIds.length === 0) {
@@ -302,6 +302,17 @@ router.post('/duplicate', async (req: Request, res: Response) => {
     const tableName = getTableName(recordType);
     if (!tableName) {
       return res.status(400).json({ error: `Invalid recordType: ${recordType}` });
+    }
+
+    // Verify target vehicle belongs to current user
+    if (targetVehicleId) {
+      const [vRows] = await pool.execute(
+        'SELECT id FROM vehicles WHERE id = ? AND user_id = ?',
+        [targetVehicleId, userId]
+      );
+      if ((vRows as any[]).length === 0) {
+        return res.status(403).json({ error: 'Target vehicle not found or not owned by current user' });
+      }
     }
 
     const placeholders = recordIds.map(() => '?').join(', ');
@@ -352,7 +363,7 @@ router.post('/duplicate', async (req: Request, res: Response) => {
 router.post('/duplicate-to-vehicle', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { recordIds, recordType, targetVehicleId } = req.body;
 
     if (!recordType || !Array.isArray(recordIds) || recordIds.length === 0 || !targetVehicleId) {

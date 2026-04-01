@@ -195,7 +195,7 @@ export default function VehicleNotesTab({ vehicleId, state, setState }: Props) {
                           className="w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-violet-500 focus:ring-violet-500/30 shrink-0"
                         />
                         {n.isPinned && <Pin size={12} className="text-violet-400 shrink-0" />}
-                        <h3 className="text-sm font-medium text-zinc-50 truncate">{n.title}</h3>
+                        <h3 className="text-sm font-medium text-zinc-50 truncate" title={n.title}>{n.title}</h3>
                       </div>
                       {isExpanded ? (
                         <MarkdownRenderer content={n.content} className="text-sm text-zinc-300" />

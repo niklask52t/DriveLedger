@@ -9,7 +9,7 @@ router.use(combinedAuthMiddleware);
 
 // Admin-only middleware
 function requireAdmin(req: Request, res: Response, next: () => void) {
-  const user = (req as any).user;
+  const user = req.user!;
   if (!user?.isAdmin) {
     return res.status(403).json({ error: 'Admin access required' });
   }
@@ -22,7 +22,7 @@ router.use(requireAdmin);
 router.get('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
 
     const [rows] = await pool.execute(
       'SELECT * FROM custom_widget_code WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC',
@@ -46,7 +46,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { name, code, enabled, sortOrder } = req.body;
 
     if (!name || code === undefined || code === null) {
@@ -84,7 +84,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute(
@@ -129,7 +129,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute(
@@ -153,7 +153,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 router.get('/preview/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [rows] = await pool.execute(

@@ -26,7 +26,7 @@ router.use(combinedAuthMiddleware);
 router.post('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const data = req.body;
 
     if (!data || typeof data !== 'object') {

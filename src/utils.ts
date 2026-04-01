@@ -1,8 +1,8 @@
 import type { Cost, CostFrequency, Loan, Repair, SavingsGoal, SavingsTransaction, Vehicle } from './types';
 import { differenceInMonths, addMonths, format, parseISO } from 'date-fns';
 
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
+export function formatCurrency(amount: number, currency = 'EUR'): string {
+  return new Intl.NumberFormat('de-DE', { style: 'currency', currency }).format(amount);
 }
 
 export function formatNumber(n: number, decimals = 0): string {
@@ -130,20 +130,28 @@ export function getTotalRepairCosts(repairs: Repair[]): number {
 }
 
 export function generateLoanSchedule(loan: Loan) {
+  if (!loan.startDate || !loan.durationMonths || loan.totalAmount <= 0) return [];
+
   const rows = [];
   let remaining = loan.totalAmount;
   let totalSaved = 0;
   const start = parseISO(loan.startDate);
+  if (isNaN(start.getTime())) return [];
+
+  const monthlyRate = (loan.interestRate || 0) / 100 / 12;
 
   for (let i = 1; i <= loan.durationMonths; i++) {
     const date = addMonths(start, i - 1);
-    remaining -= loan.monthlyPayment;
+    const interest = remaining * monthlyRate;
+    const principal = Math.min(remaining, loan.monthlyPayment - interest);
+    remaining -= principal;
     totalSaved += loan.additionalSavingsPerMonth;
     rows.push({
       nr: i,
       date: format(date, 'yyyy-MM-dd'),
       payment: loan.monthlyPayment + loan.additionalSavingsPerMonth,
-      principal: loan.monthlyPayment,
+      interest,
+      principal,
       savings: loan.additionalSavingsPerMonth,
       remainingDebt: Math.max(0, remaining),
       totalSaved,
@@ -154,7 +162,10 @@ export function generateLoanSchedule(loan: Loan) {
 }
 
 export function calculateFinancing(price: number, downPayment: number, months: number, annualRate: number) {
-  const loanAmount = price - downPayment;
+  const loanAmount = Math.max(0, price - downPayment);
+  if (loanAmount === 0 || months <= 0) {
+    return { loanAmount: 0, monthlyPayment: 0, totalInterest: 0, totalCost: downPayment };
+  }
   if (annualRate === 0) {
     const monthly = loanAmount / months;
     return { loanAmount, monthlyPayment: monthly, totalInterest: 0, totalCost: price };
@@ -185,13 +196,30 @@ export function getSavingsProgress(goal: SavingsGoal, transactions: SavingsTrans
 }
 
 export function getLoanProgress(loan: Loan): { paid: number; remaining: number; percent: number; monthsElapsed: number } {
+  if (!loan.startDate || loan.totalAmount <= 0) {
+    return { paid: 0, remaining: loan.totalAmount || 0, percent: 0, monthsElapsed: 0 };
+  }
   const start = parseISO(loan.startDate);
+  if (isNaN(start.getTime())) {
+    return { paid: 0, remaining: loan.totalAmount, percent: 0, monthsElapsed: 0 };
+  }
   const now = new Date();
   const monthsElapsed = Math.max(0, differenceInMonths(now, start));
-  const paid = Math.min(loan.totalAmount, monthsElapsed * loan.monthlyPayment);
-  const remaining = Math.max(0, loan.totalAmount - paid);
-  const percent = (paid / loan.totalAmount) * 100;
-  return { paid, remaining, percent, monthsElapsed };
+  const monthlyRate = (loan.interestRate || 0) / 100 / 12;
+
+  let remaining = loan.totalAmount;
+  let totalPaid = 0;
+  for (let i = 0; i < monthsElapsed && remaining > 0; i++) {
+    const interest = remaining * monthlyRate;
+    const principal = Math.min(remaining, loan.monthlyPayment - interest);
+    remaining -= principal;
+    totalPaid += principal;
+  }
+
+  remaining = Math.max(0, remaining);
+  totalPaid = Math.min(loan.totalAmount, totalPaid);
+  const percent = (totalPaid / loan.totalAmount) * 100;
+  return { paid: totalPaid, remaining, percent, monthsElapsed };
 }
 
 /** Calculate adjusted mileage: (raw * multiplier) + difference */

@@ -146,6 +146,7 @@ export default function FinancingCalculator() {
         <div className="px-6 py-4 border-b border-zinc-800">
           <h3 className="text-sm font-semibold text-zinc-300">Detailed Comparison</h3>
         </div>
+        <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-zinc-800">
@@ -178,6 +179,7 @@ export default function FinancingCalculator() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

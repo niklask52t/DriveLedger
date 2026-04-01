@@ -517,7 +517,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
                       className="w-3 h-3 rounded-full shrink-0"
                       style={{ backgroundColor: v.color || '#8b5cf6' }}
                     />
-                    <span className="font-semibold text-zinc-50 truncate">{getVehicleLabel(v, config)}</span>
+                    <span className="font-semibold text-zinc-50 truncate" title={getVehicleLabel(v, config)}>{getVehicleLabel(v, config)}</span>
                   </div>
                   <p className="text-sm text-zinc-400 mb-3">{v.brand} {v.model}</p>
                   <div className="space-y-1">
@@ -557,7 +557,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
               {savingsData.map(s => (
                 <div key={s.id}>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm text-zinc-300 truncate">{s.name}</span>
+                    <span className="text-sm text-zinc-300 truncate" title={s.name}>{s.name}</span>
                     <span className="text-xs text-zinc-500">{Math.round(s.progress)}%</span>
                   </div>
                   <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
@@ -594,7 +594,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
                 return (
                   <div key={r.id} className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm text-zinc-300 truncate">{r.description}</p>
+                      <p className="text-sm text-zinc-300 truncate" title={r.description}>{r.description}</p>
                       <p className="text-xs text-zinc-500">{vehicle ? getVehicleLabel(vehicle, config) : '-'} &middot; {r.date}</p>
                     </div>
                     <span className="text-sm font-medium text-red-400 shrink-0">
@@ -620,7 +620,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
               {loanData.map(l => (
                 <div key={l.id}>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm text-zinc-300 truncate">{l.name}</span>
+                    <span className="text-sm text-zinc-300 truncate" title={l.name}>{l.name}</span>
                     <span className="text-xs text-zinc-500">{Math.round(l.percent)}%</span>
                   </div>
                   <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
@@ -653,7 +653,7 @@ export default function Dashboard({ state, onNavigate }: DashboardProps) {
                 <div key={i} className="flex items-start gap-3">
                   <span className={`shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full ${item.severity === 'warning' ? 'bg-red-400' : 'bg-amber-400'}`} />
                   <div className="min-w-0">
-                    <p className="text-sm text-zinc-300 truncate">{item.label}</p>
+                    <p className="text-sm text-zinc-300 truncate" title={item.label}>{item.label}</p>
                     <p className="text-xs text-zinc-500">{item.detail}</p>
                   </div>
                 </div>

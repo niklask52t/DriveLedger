@@ -359,7 +359,7 @@ export default function Reminders({ state, emailEnabled, onRefreshDue }: Props) 
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="text-amber-400">{getTypeIcon(r.type)}</div>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-zinc-50 truncate">{r.title}</p>
+                        <p className="text-sm font-medium text-zinc-50 truncate" title={r.title}>{r.title}</p>
                         <div className="flex items-center gap-2 text-xs text-zinc-500">
                           <span>{t(getTypeLabelKey(r.type))}</span>
                           <span>&middot;</span>
@@ -487,7 +487,7 @@ export default function Reminders({ state, emailEnabled, onRefreshDue }: Props) 
                           <div>
                             <p className="text-sm font-medium text-zinc-50">{r.title}</p>
                             {r.description && (
-                              <p className="text-xs text-zinc-500 mt-0.5 truncate max-w-xs">{r.description}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5 truncate max-w-xs" title={r.description}>{r.description}</p>
                             )}
                           </div>
                         </td>
@@ -625,7 +625,7 @@ export default function Reminders({ state, emailEnabled, onRefreshDue }: Props) 
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
             <div>
               <label className="block text-sm font-medium text-zinc-400 mb-2">{t('common.type')}</label>
               <select
@@ -656,7 +656,7 @@ export default function Reminders({ state, emailEnabled, onRefreshDue }: Props) 
           {/* Trigger / Metric Selection */}
           <div>
             <label className="block text-sm font-medium text-zinc-400 mb-2">{t('reminders.metric')}</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {METRIC_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}

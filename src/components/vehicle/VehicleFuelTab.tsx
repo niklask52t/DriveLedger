@@ -421,7 +421,7 @@ export default function VehicleFuelTab({ vehicleId, state, setState }: Props) {
         }
       >
         <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>{t('common.date')}</label>
               <input type="date" className={inputClass} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
@@ -431,7 +431,7 @@ export default function VehicleFuelTab({ vehicleId, state, setState }: Props) {
               <input type="number" className={inputClass} placeholder="0" value={form.mileage || ''} onChange={(e) => setForm({ ...form, mileage: parseFloat(e.target.value) || 0 })} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>{t('vehicle_tab.fuel.liters')}</label>
               <input type="number" step="0.01" className={inputClass} placeholder="0.00" value={form.fuelAmount || ''} onChange={(e) => setForm({ ...form, fuelAmount: parseFloat(e.target.value) || 0 })} />
@@ -476,7 +476,7 @@ export default function VehicleFuelTab({ vehicleId, state, setState }: Props) {
               )}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>{t('vehicle_tab.fuel.fuel_type')}</label>
               <select className={selectClass} style={{ backgroundImage: selectChevron, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center' }} value={form.fuelType} onChange={(e) => setForm({ ...form, fuelType: e.target.value })}>

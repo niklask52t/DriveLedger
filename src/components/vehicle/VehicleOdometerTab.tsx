@@ -168,7 +168,7 @@ export default function VehicleOdometerTab({ vehicleId, state, setState }: Props
                           {distanceTraveled > 0 ? `+${formatNumber(distanceTraveled)}` : formatNumber(distanceTraveled)} {distanceUnit}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-sm text-zinc-400 max-w-[200px] truncate">{r.notes || '-'}</td>
+                      <td className="px-4 py-3.5 text-sm text-zinc-400 max-w-[200px] truncate" title={r.notes || '-'}>{r.notes || '-'}</td>
                       <td className="px-4 py-3.5">
                         <div className="flex flex-wrap gap-1">
                           {(r.tags || []).map((t, i) => (
@@ -240,7 +240,7 @@ export default function VehicleOdometerTab({ vehicleId, state, setState }: Props
         }
       >
         <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>{t("common.date")}</label>
               <input
@@ -261,7 +261,7 @@ export default function VehicleOdometerTab({ vehicleId, state, setState }: Props
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>{t("vehicle_tab.odometer.final_mileage") || "Final Mileage"} ({distanceUnit})</label>
               <input

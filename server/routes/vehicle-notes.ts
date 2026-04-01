@@ -18,7 +18,7 @@ function parseNoteRow(row: any): any {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const vehicleId = req.query.vehicleId as string | undefined;
 
     let rows: any[];
@@ -47,7 +47,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const [rows] = await pool.execute('SELECT * FROM vehicle_notes WHERE id = ? AND user_id = ?', [req.params.id, userId]);
     const row = (rows as any[])[0];
 
@@ -66,7 +66,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { vehicleId, title } = req.body;
 
     if (!vehicleId || !title) {
@@ -110,7 +110,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT id FROM vehicle_notes WHERE id = ? AND user_id = ?', [id, userId]);
@@ -151,7 +151,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.put('/:id/pin', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT * FROM vehicle_notes WHERE id = ? AND user_id = ?', [id, userId]);
@@ -176,7 +176,7 @@ router.put('/:id/pin', async (req: Request, res: Response) => {
 router.patch('/:id/toggle-pin', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT * FROM vehicle_notes WHERE id = ? AND user_id = ?', [id, userId]);
@@ -201,7 +201,7 @@ router.patch('/:id/toggle-pin', async (req: Request, res: Response) => {
 router.post('/bulk-pin', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { noteIds, pinned } = req.body;
 
     if (!Array.isArray(noteIds) || noteIds.length === 0) {
@@ -235,7 +235,7 @@ router.post('/bulk-pin', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT id FROM vehicle_notes WHERE id = ? AND user_id = ?', [id, userId]);

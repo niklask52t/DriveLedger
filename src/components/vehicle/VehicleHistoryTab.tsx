@@ -157,7 +157,7 @@ export default function VehicleHistoryTab({ vehicleId }: Props) {
                               <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium shrink-0 ${config.bgClass}`}>
                                 {config.label}
                               </span>
-                              <span className="text-sm text-zinc-50 truncate">
+                              <span className="text-sm text-zinc-50 truncate" title={record.description || '-'}>
                                 {record.description || '-'}
                               </span>
                             </div>

@@ -154,7 +154,7 @@ export default function PurchaseCard({ purchase, onEdit, onDelete, onConvert }: 
 
         {/* Pros & Cons */}
         {(pros.length > 0 || cons.length > 0) && (
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             {pros.length > 0 && (
               <div>
                 <h4 className="text-xs font-medium text-emerald-400 mb-2">Pros</h4>

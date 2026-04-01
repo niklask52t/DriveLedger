@@ -233,7 +233,7 @@ export default function VehicleServicesTab({ vehicleId, state, setState }: Props
                 {records.map((r) => (
                   <tr key={r.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
                     <td className="px-4 py-3.5 text-sm text-zinc-50">{formatDate(r.date)}</td>
-                    <td className="px-4 py-3.5 text-sm text-zinc-50 max-w-[200px] truncate">{r.description}</td>
+                    <td className="px-4 py-3.5 text-sm text-zinc-50 max-w-[200px] truncate" title={r.description}>{r.description}</td>
                     <td className="px-4 py-3.5">
                       <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${categoryColors[r.category] || categoryColors.other}`}>
                         {categoryOptions.find((o) => o.value === r.category)?.label || r.category}
@@ -352,7 +352,7 @@ export default function VehicleServicesTab({ vehicleId, state, setState }: Props
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>{t("common.date")}</label>
               <input
@@ -376,7 +376,7 @@ export default function VehicleServicesTab({ vehicleId, state, setState }: Props
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>{t("common.mileage")} ({distanceUnit})</label>
               <input
@@ -438,7 +438,7 @@ export default function VehicleServicesTab({ vehicleId, state, setState }: Props
               <span className="text-sm text-zinc-300">Create Reminder</span>
             </label>
             {createReminder && (
-              <div className="grid grid-cols-2 gap-4 mt-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
                 <div>
                   <label className={labelClass}>Remind Date</label>
                   <input type="date" className={inputClass} value={reminderDate} onChange={(e) => setReminderDate(e.target.value)} />

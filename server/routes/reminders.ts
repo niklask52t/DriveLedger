@@ -12,7 +12,7 @@ router.use(combinedAuthMiddleware);
 router.get('/due', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
 
     // For date-based: remind_at <= NOW()
     // For odometer-based: target_mileage <= vehicle's current_mileage
@@ -44,7 +44,7 @@ router.get('/due', async (req: Request, res: Response) => {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { active, type } = req.query;
 
     let query = 'SELECT * FROM reminders WHERE user_id = ?';
@@ -75,7 +75,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [rows] = await pool.execute('SELECT * FROM reminders WHERE id = ? AND user_id = ?', [id, userId]);
@@ -96,7 +96,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { title, description, type, entity_type, entity_id, remind_at, recurring, email_notify, mileage_threshold, current_mileage_at_creation, metric, target_mileage, mileage_interval, vehicle_id, fixed_interval, custom_thresholds } = req.body;
 
     const effectiveMetric = metric || 'date';
@@ -170,7 +170,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT * FROM reminders WHERE id = ? AND user_id = ?', [id, userId]);
@@ -251,7 +251,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT id FROM reminders WHERE id = ? AND user_id = ?', [id, userId]);
@@ -273,7 +273,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 router.post('/:id/snooze', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
     const { remind_at } = req.body;
 
@@ -322,7 +322,7 @@ router.post('/:id/snooze', async (req: Request, res: Response) => {
 router.post('/:id/complete', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute('SELECT * FROM reminders WHERE id = ? AND user_id = ?', [id, userId]);

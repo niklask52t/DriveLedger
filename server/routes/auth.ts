@@ -21,6 +21,9 @@ const COOKIE_MAX_AGE = COOKIE_LIFESPAN_DAYS * 24 * 60 * 60 * 1000;
 // POST /register
 router.post('/register', async (req: Request, res: Response) => {
   try {
+    if (process.env.OIDC_ONLY === 'true') {
+      return res.status(403).json({ error: 'Registration is disabled. Use SSO to sign in.' });
+    }
     const pool = getPool();
     const { email, username, password, registrationToken } = req.body;
     const openRegistration = process.env.OPEN_REGISTRATION === 'true';
@@ -126,7 +129,6 @@ router.post('/register', async (req: Request, res: Response) => {
         createdAt: now,
       },
       accessToken,
-      refreshToken,
     });
   } catch (err: any) {
     console.error('[AUTH] Register error:', err);
@@ -137,6 +139,9 @@ router.post('/register', async (req: Request, res: Response) => {
 // POST /login
 router.post('/login', async (req: Request, res: Response) => {
   try {
+    if (process.env.OIDC_ONLY === 'true') {
+      return res.status(403).json({ error: 'Password login is disabled. Use SSO to sign in.' });
+    }
     const pool = getPool();
     const { email, password } = req.body;
 
@@ -184,7 +189,6 @@ router.post('/login', async (req: Request, res: Response) => {
         createdAt: user.created_at,
       },
       accessToken,
-      refreshToken,
     });
   } catch (err: any) {
     console.error('[AUTH] Login error:', err);
@@ -379,7 +383,7 @@ router.post('/resend-verification', combinedAuthMiddleware, async (req: Request,
       return res.status(400).json({ error: 'Email is not enabled' });
     }
 
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const [userRows] = await pool.execute(
       'SELECT id, email, email_verified FROM users WHERE id = ?',
       [userId]
@@ -416,7 +420,7 @@ router.post('/resend-verification', combinedAuthMiddleware, async (req: Request,
 router.get('/me', combinedAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
 
     const [userRows] = await pool.execute(
       'SELECT id, email, username, is_admin, email_verified, created_at, updated_at FROM users WHERE id = ?',
@@ -449,7 +453,7 @@ router.get('/me', combinedAuthMiddleware, async (req: Request, res: Response) =>
 router.post('/change-password', combinedAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { currentPassword, newPassword } = req.body;
 
     if (!currentPassword || !newPassword) {
@@ -491,7 +495,7 @@ router.post('/change-password', combinedAuthMiddleware, async (req: Request, res
 router.delete('/account', combinedAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
 
     const conn = await pool.getConnection();
     await conn.beginTransaction();

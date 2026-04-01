@@ -89,10 +89,11 @@ export default function VehicleStatsTab(props: VehicleStatsTabProps) {
   }, [props.state, props.vehicleId]);
 
   useEffect(() => {
+    if (!vehicle) return;
     api.getMonthlyReport(vehicle.id).then((data) => {
       setMonthlyData(data as MonthlyData);
     }).catch(() => {});
-  }, [vehicle.id]);
+  }, [vehicle?.id]);
 
   const categoryData = useMemo(() => {
     const byCategory = getCostsByCategory(vehicleCosts);
@@ -123,12 +124,12 @@ export default function VehicleStatsTab(props: VehicleStatsTabProps) {
   const totalYearly = getTotalYearlyCosts(vehicleCosts);
 
   // Fuel cost estimate (planned vehicles)
-  const estimatedFuelMonthly = vehicle.annualMileage > 0 && vehicle.avgConsumption > 0 && vehicle.fuelPrice > 0
+  const estimatedFuelMonthly = vehicle && vehicle.annualMileage > 0 && vehicle.avgConsumption > 0 && vehicle.fuelPrice > 0
     ? (vehicle.annualMileage / 12 / 100) * vehicle.avgConsumption * vehicle.fuelPrice
     : 0;
 
   // Total estimated monthly cost (planned vehicles)
-  const estimatedTotalMonthly = vehicle.status !== 'owned'
+  const estimatedTotalMonthly = vehicle && vehicle.status !== 'owned'
     ? (vehicle.estimatedFinancing || 0)
       + (vehicle.estimatedInsurance || 0)
       + ((vehicle.estimatedTax || 0) / 12)
@@ -230,7 +231,7 @@ export default function VehicleStatsTab(props: VehicleStatsTabProps) {
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      {vehicle.status === 'owned' ? (
+      {vehicle?.status === 'owned' ? (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
             <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">{t('vehicle_tab.stats.monthly_total')}</p>
@@ -421,6 +422,7 @@ export default function VehicleStatsTab(props: VehicleStatsTabProps) {
         <div className="px-6 py-4 border-b border-zinc-800">
           <h3 className="text-sm font-semibold text-zinc-300">{t('vehicle_tab.stats.category_breakdown')}</h3>
         </div>
+        <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-zinc-800">
@@ -449,6 +451,7 @@ export default function VehicleStatsTab(props: VehicleStatsTabProps) {
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Cost per Distance Section */}

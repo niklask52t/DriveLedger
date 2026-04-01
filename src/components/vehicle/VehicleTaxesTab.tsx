@@ -156,7 +156,7 @@ export default function VehicleTaxesTab({ vehicleId, state, setState }: Props) {
                       className={`border-b border-zinc-800/50 transition-colors ${overdue ? 'bg-red-500/5 hover:bg-red-500/10' : 'hover:bg-zinc-800/30'}`}
                     >
                       <td className="px-4 py-3.5 text-sm text-zinc-50">{formatDate(r.date)}</td>
-                      <td className="px-4 py-3.5 text-sm text-zinc-50 max-w-[250px] truncate">{r.description}</td>
+                      <td className="px-4 py-3.5 text-sm text-zinc-50 max-w-[250px] truncate" title={r.description}>{r.description}</td>
                       <td className="px-4 py-3.5 text-sm text-zinc-50 text-right">{formatCurrency(r.cost)}</td>
                       <td className="px-4 py-3.5 text-center">
                         {r.isRecurring ? (
@@ -249,7 +249,7 @@ export default function VehicleTaxesTab({ vehicleId, state, setState }: Props) {
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>{t("common.date")}</label>
               <input

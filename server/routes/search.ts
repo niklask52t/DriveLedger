@@ -9,7 +9,7 @@ router.use(combinedAuthMiddleware);
 router.get('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const q = req.query.q as string | undefined;
 
     if (!q || q.trim().length === 0) {

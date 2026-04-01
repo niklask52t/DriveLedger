@@ -119,6 +119,8 @@ app.get('/api/config', (_req, res) => {
   res.json({
     emailEnabled: isEmailEnabled(),
     oidcEnabled: process.env.OIDC_ENABLED === 'true',
+    oidcOnly: process.env.OIDC_ONLY === 'true',
+    oidcAutoRegister: process.env.OIDC_AUTO_REGISTER !== 'false', // default true for backwards compat
     oidcProviderName: process.env.OIDC_PROVIDER_NAME || 'SSO',
     customLogoUrl: process.env.CUSTOM_LOGO_URL || '',
     customMotd: process.env.CUSTOM_MOTD || '',
@@ -131,8 +133,11 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// #11 API documentation endpoint
-app.get('/api/docs', (_req, res) => {
+// #11 API documentation endpoint (dev only)
+app.get('/api/docs', (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Not found' });
+  }
   const routes: { method: string; path: string }[] = [];
   app._router.stack.forEach((middleware: any) => {
     if (middleware.route) {

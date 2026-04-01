@@ -13,7 +13,7 @@ const VALID_PERMISSIONS = ['viewer', 'editor'];
 router.post('/vehicles/:vehicleId/share', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { vehicleId } = req.params;
     const { email, permission } = req.body;
 
@@ -77,7 +77,7 @@ router.post('/vehicles/:vehicleId/share', async (req: Request, res: Response) =>
 router.delete('/vehicles/:vehicleId/share/:shareId', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { vehicleId, shareId } = req.params;
 
     // Verify the share exists and belongs to the vehicle owner
@@ -102,7 +102,7 @@ router.delete('/vehicles/:vehicleId/share/:shareId', async (req: Request, res: R
 router.get('/vehicles/:vehicleId/shares', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { vehicleId } = req.params;
 
     // Verify vehicle ownership
@@ -134,7 +134,7 @@ router.get('/vehicles/:vehicleId/shares', async (req: Request, res: Response) =>
 router.get('/shared-with-me', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
 
     const [rows] = await pool.execute(
       `SELECT v.*, vs.permission, vs.id as share_id, u.username as owner_username, u.email as owner_email

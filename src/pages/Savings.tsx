@@ -202,7 +202,7 @@ export default function Savings({ state, setState }: Props) {
     <div className="space-y-8">
       {/* Stats + Add */}
       <div className="flex items-start justify-between">
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
           {[
             { label: t('savings.total_saved'), value: formatCurrency(totalSaved), color: 'text-emerald-400' },
             { label: t('savings.total_target'), value: formatCurrency(totalTarget), color: 'text-violet-400' },

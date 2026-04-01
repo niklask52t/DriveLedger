@@ -263,7 +263,7 @@ export default function Equipment({ state, setState }: Props) {
                     className="rounded border-zinc-700 bg-zinc-800 shrink-0"
                   />
                   <div className="min-w-0">
-                    {isVisible('name') && <h3 className="text-sm font-medium text-zinc-50 truncate">{equipment.name}</h3>}
+                    {isVisible('name') && <h3 className="text-sm font-medium text-zinc-50 truncate" title={equipment.name}>{equipment.name}</h3>}
                     {isVisible('description') && equipment.description && (
                       <p className="text-xs text-zinc-500 mt-1 line-clamp-2">{equipment.description}</p>
                     )}

@@ -14,7 +14,7 @@ router.use(authMiddleware);
 router.get('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
 
     const [rows] = await pool.execute(
       'SELECT id, user_id, name, token_prefix, permissions, active, last_used, created_at FROM api_tokens WHERE user_id = ? ORDER BY created_at DESC',
@@ -32,7 +32,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { name, permissions } = req.body;
 
     if (!name) {
@@ -76,7 +76,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute(
@@ -102,7 +102,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 router.patch('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     const [existingRows] = await pool.execute(

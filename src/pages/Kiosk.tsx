@@ -107,8 +107,13 @@ export default function Kiosk() {
     if (mode === 'plans') setActiveDisplay('vehicles'); // plans shows vehicles with plan info
   }, [mode]);
 
-  const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const currentDate = new Date().toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const currentTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const currentDate = now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   // Helper: get vehicle stats for kiosk display
   const getVehicleStats = useCallback((vehicleId: string) => {

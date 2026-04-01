@@ -10,7 +10,7 @@ router.use(combinedAuthMiddleware);
 router.get('/export', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
 
     const [vehicles] = await pool.execute('SELECT * FROM vehicles WHERE user_id = ?', [userId]);
     const [costs] = await pool.execute('SELECT * FROM costs WHERE user_id = ?', [userId]);
@@ -63,7 +63,7 @@ router.get('/export', async (req: Request, res: Response) => {
 router.post('/import', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const data = req.body;
 
     if (!data || typeof data !== 'object') {
@@ -288,7 +288,12 @@ router.get('/backup', adminMiddleware, async (req: Request, res: Response) => {
     for (const table of tables) {
       try {
         const [rows] = await pool.execute(`SELECT * FROM \`${table}\``);
-        backup[table] = rows as any[];
+        // Strip password hashes from user data in backup
+        if (table === 'users') {
+          backup[table] = (rows as any[]).map(({ password_hash, ...rest }) => rest);
+        } else {
+          backup[table] = rows as any[];
+        }
       } catch {
         backup[table] = [];
       }
@@ -309,6 +314,16 @@ router.post('/restore', adminMiddleware, async (req: Request, res: Response) => 
     const { data } = req.body;
     if (!data) return res.status(400).json({ error: 'No backup data provided' });
 
+    const ALLOWED_TABLES = new Set([
+      'users', 'vehicles', 'costs', 'loans', 'repairs', 'savings_goals', 'savings_transactions',
+      'planned_purchases', 'persons', 'reminders', 'service_records', 'upgrade_records', 'fuel_records',
+      'odometer_records', 'supplies', 'equipment', 'inspections', 'vehicle_notes', 'taxes', 'planner_tasks',
+      'api_tokens', 'webhooks', 'vehicle_shares', 'user_config', 'extra_field_definitions', 'supply_requisitions',
+      'inspection_templates', 'plan_templates', 'households', 'household_members', 'dashboard_widgets',
+      'custom_translations', 'attachments', 'registration_tokens', 'password_resets', 'custom_widget_code',
+    ]);
+    const VALID_COL_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
     const pool = getPool();
     const conn = await pool.getConnection();
     await conn.beginTransaction();
@@ -319,11 +334,13 @@ router.post('/restore', adminMiddleware, async (req: Request, res: Response) => 
 
       for (const [table, rows] of Object.entries(data)) {
         if (!Array.isArray(rows) || rows.length === 0) continue;
+        if (!ALLOWED_TABLES.has(table)) continue;
         // Clear existing data
         await conn.execute(`DELETE FROM \`${table}\``);
         // Insert rows
         for (const row of rows) {
-          const cols = Object.keys(row);
+          const cols = Object.keys(row).filter(c => VALID_COL_RE.test(c));
+          if (cols.length === 0) continue;
           const placeholders = cols.map(() => '?').join(',');
           await conn.execute(
             `INSERT INTO \`${table}\` (${cols.map(c => '`' + c + '`').join(',')}) VALUES (${placeholders})`,

@@ -15,7 +15,7 @@ router.use(combinedAuthMiddleware);
 router.get('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const [rows] = await pool.execute('SELECT * FROM vehicles WHERE user_id = ? ORDER BY created_at DESC', [userId]);
     return res.status(200).json(rowsToCamelCase(rows as any[]));
   } catch (err: any) {
@@ -28,7 +28,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const [rows] = await pool.execute('SELECT * FROM vehicles WHERE id = ? AND user_id = ?', [req.params.id, userId]);
     const row = (rows as any[])[0];
 
@@ -47,7 +47,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { name } = req.body;
 
     if (!name) {
@@ -133,7 +133,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     // Verify ownership
@@ -245,7 +245,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.get('/:id/qr', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     // Verify ownership
@@ -275,7 +275,7 @@ router.get('/:id/qr', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const userId = (req as any).user.id;
+    const userId = req.user!.id;
     const { id } = req.params;
 
     // Verify ownership
@@ -310,6 +310,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
       await conn.execute('DELETE FROM planner_tasks WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
       await conn.execute('DELETE FROM supplies WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
       await conn.execute('DELETE FROM equipment WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
+      await conn.execute('DELETE FROM reminders WHERE vehicle_id = ? AND user_id = ?', [id, userId]);
       await conn.execute('DELETE FROM vehicle_shares WHERE vehicle_id = ?', [id]);
       await conn.execute('DELETE FROM vehicles WHERE id = ? AND user_id = ?', [id, userId]);
       await conn.commit();

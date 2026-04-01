@@ -132,7 +132,7 @@ router.get('/users', async (req: Request, res: Response) => {
 router.post('/registration-tokens', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const adminId = (req as any).user.id;
+    const adminId = req.user!.id;
     const id = uuid();
     const token = generateSecureToken();
 
@@ -209,7 +209,7 @@ router.delete('/users/:id', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
     const { id } = req.params;
-    const adminId = (req as any).user.id;
+    const adminId = req.user!.id;
 
     // Prevent admin from deleting themselves
     if (id === adminId) {

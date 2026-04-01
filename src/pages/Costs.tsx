@@ -1,11 +1,10 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Download, ArrowUpDown, Pencil, Trash2, Printer } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { api } from '../api';
 import Modal from '../components/Modal';
 import TagInput from '../components/TagInput';
-import TagFilter from '../components/TagFilter';
+// TagFilter not yet rendered but filter logic uses tags
 import BulkActions from '../components/BulkActions';
 import ExtraFields from '../components/ExtraFields';
 import { useExtraFields } from '../hooks/useExtraFields';
@@ -223,9 +222,10 @@ export default function Costs({ state, setState }: Props) {
   };
 
   const handleExport = () => {
+    const esc = (s: string) => `"${(s || '').replace(/"/g, '""')}"`;
     const header = 'Vehicle,Name,Category,Amount,Frequency,Monthly,Paid By\n';
     const rows = filtered.map(c =>
-      `"${getVehicleName(c.vehicleId)}","${c.name}","${getCategoryLabel(c.category)}",${c.amount},"${getFrequencyLabel(c.frequency)}",${toMonthly(c.amount, c.frequency).toFixed(2)},"${c.paidBy}"`
+      `${esc(getVehicleName(c.vehicleId))},${esc(c.name)},${esc(getCategoryLabel(c.category))},${c.amount},${esc(getFrequencyLabel(c.frequency))},${toMonthly(c.amount, c.frequency).toFixed(2)},${esc(c.paidBy)}`
     ).join('\n');
     const blob = new Blob([header + rows], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -321,7 +321,7 @@ export default function Costs({ state, setState }: Props) {
             >
               <option value="">All Persons</option>
               {state.persons.map(p => (
-                <option key={p.id} value={p.name}>{p.name}</option>
+                <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
           </div>
@@ -568,7 +568,7 @@ export default function Costs({ state, setState }: Props) {
               >
                 <option value="">Select person</option>
                 {state.persons.map(p => (
-                  <option key={p.id} value={p.name}>{p.name}</option>
+                  <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
             </div>
