@@ -7,8 +7,9 @@ import { api, ApiError } from './api';
 import { loadState, emptyState, loadDueReminders } from './store';
 import type { Page, AppState, AppConfig, Reminder } from './types';
 
-// Layout & Modal
+// Layout & Error Boundary
 import Layout from './components/Layout';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Auth pages
 import Login from './pages/Login';
@@ -472,8 +473,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

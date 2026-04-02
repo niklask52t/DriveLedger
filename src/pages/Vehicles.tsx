@@ -108,14 +108,17 @@ export default function Vehicles({ state, setState, onNavigate }: VehiclesProps)
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
+  const [submitError, setSubmitError] = useState('');
+
   const handleSubmit = async () => {
+    setSubmitError('');
     try {
       const newVehicle = await api.createVehicle(form);
-      setState({ ...state, vehicles: [...vehicles, newVehicle] });
+      setState({ ...state, vehicles: [...state.vehicles, newVehicle] });
       setForm(emptyVehicle);
       setShowAdd(false);
-    } catch {
-      // ignore
+    } catch (err: any) {
+      setSubmitError(err?.message || t('common.error'));
     }
   };
 
@@ -223,13 +226,13 @@ export default function Vehicles({ state, setState, onNavigate }: VehiclesProps)
       {/* Add Vehicle Modal */}
       <Modal
         isOpen={showAdd}
-        onClose={() => { setShowAdd(false); setForm(emptyVehicle); }}
+        onClose={() => { setShowAdd(false); setForm(emptyVehicle); setSubmitError(''); }}
         title={t('vehicles.add')}
         size="3xl"
         footer={
           <>
             <button
-              onClick={() => { setShowAdd(false); setForm(emptyVehicle); }}
+              onClick={() => { setShowAdd(false); setForm(emptyVehicle); setSubmitError(''); }}
               className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm transition-colors"
             >
               {t('common.cancel')}
@@ -245,6 +248,11 @@ export default function Vehicles({ state, setState, onNavigate }: VehiclesProps)
         }
       >
         <div className="space-y-8">
+          {submitError && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-sm text-red-400">
+              {submitError}
+            </div>
+          )}
           {/* Basic Info */}
           <div>
             <h3 className="text-sm font-semibold text-zinc-50 mb-4">{t('vehicles.basic_info')}</h3>
