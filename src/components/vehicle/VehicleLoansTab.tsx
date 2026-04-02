@@ -1,28 +1,24 @@
 import { ArrowRight, CreditCard } from 'lucide-react';
 import { formatCurrency, getLoanProgress } from '../../utils';
 import { useI18n } from '../../contexts/I18nContext';
-import type { Loan, Page } from '../../types';
+import type { AppState } from '../../types';
 
-interface VehicleLoansTabProps {
-  vehicleLoans: Loan[];
-  onNavigate: (page: Page) => void;
+interface Props {
+  vehicleId: string;
+  state: AppState;
+  setState: (s: AppState) => void;
 }
 
-export default function VehicleLoansTab({ vehicleLoans, onNavigate }: VehicleLoansTabProps) {
+export default function VehicleLoansTab({ vehicleId, state }: Props) {
   const { t } = useI18n();
+
+  const vehicleLoans = state.loans.filter((l) => l.vehicleId === vehicleId);
 
   if (vehicleLoans.length === 0) {
     return (
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
         <CreditCard size={32} className="mx-auto text-zinc-600 mb-3" />
-        <p className="text-zinc-500 text-sm mb-4">{t('vehicle_tab.loans.no_loans')}</p>
-        <button
-          onClick={() => onNavigate('loans')}
-          className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-2 transition-colors"
-        >
-          {t('vehicle_tab.loans.go_to_loans')}
-          <ArrowRight size={14} />
-        </button>
+        <p className="text-zinc-500 text-sm">{t('vehicle_tab.loans.no_loans')}</p>
       </div>
     );
   }
@@ -78,16 +74,6 @@ export default function VehicleLoansTab({ vehicleLoans, onNavigate }: VehicleLoa
           </div>
         );
       })}
-
-      <div className="flex justify-end">
-        <button
-          onClick={() => onNavigate('loans')}
-          className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center gap-2 transition-colors"
-        >
-          {t('vehicle_tab.loans.view_all')}
-          <ArrowRight size={14} />
-        </button>
-      </div>
     </div>
   );
 }

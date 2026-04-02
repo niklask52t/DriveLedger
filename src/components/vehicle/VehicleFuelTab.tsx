@@ -205,6 +205,8 @@ export default function VehicleFuelTab({ vehicleId, state, setState }: Props) {
       fuelType: r.fuelType,
       station: r.station,
       notes: r.notes,
+      costInputMode: 'total',
+      pricePerUnit: r.fuelAmount > 0 ? Math.round((r.fuelCost / r.fuelAmount) * 1000) / 1000 : 0,
     });
     setEditingId(r.id);
     setShowModal(true);

@@ -240,7 +240,7 @@ export default function PurchasePlanner({ state, setState, onNavigate }: Props) 
           </>
         }
       >
-        <PurchaseForm form={form} onChange={setForm} />
+        <PurchaseForm formData={form} setFormData={setForm} onSubmit={handleSave} onCancel={() => setModalOpen(false)} isEdit={!!editingId} />
       </Modal>
     </div>
   );

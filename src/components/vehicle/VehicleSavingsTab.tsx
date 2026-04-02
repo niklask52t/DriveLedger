@@ -1,29 +1,25 @@
-import { ArrowRight, PiggyBank } from 'lucide-react';
+import { PiggyBank } from 'lucide-react';
 import { formatCurrency, getSavingsBalance, getSavingsProgress } from '../../utils';
 import { useI18n } from '../../contexts/I18nContext';
-import type { SavingsGoal, SavingsTransaction, Page } from '../../types';
+import type { AppState } from '../../types';
 
-interface VehicleSavingsTabProps {
-  vehicleSavings: SavingsGoal[];
-  savingsTransactions: SavingsTransaction[];
-  onNavigate: (page: Page) => void;
+interface Props {
+  vehicleId: string;
+  state: AppState;
+  setState: (s: AppState) => void;
 }
 
-export default function VehicleSavingsTab({ vehicleSavings, savingsTransactions, onNavigate }: VehicleSavingsTabProps) {
+export default function VehicleSavingsTab({ vehicleId, state }: Props) {
   const { t } = useI18n();
+
+  const vehicleSavings = state.savingsGoals.filter((g) => g.vehicleId === vehicleId);
+  const savingsTransactions = state.savingsTransactions;
 
   if (vehicleSavings.length === 0) {
     return (
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
         <PiggyBank size={32} className="mx-auto text-zinc-600 mb-3" />
-        <p className="text-zinc-500 text-sm mb-4">{t('vehicle_tab.savings.no_savings')}</p>
-        <button
-          onClick={() => onNavigate('savings')}
-          className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm inline-flex items-center gap-2 transition-colors"
-        >
-          {t('vehicle_tab.savings.go_to_savings')}
-          <ArrowRight size={14} />
-        </button>
+        <p className="text-zinc-500 text-sm">{t('vehicle_tab.savings.no_savings')}</p>
       </div>
     );
   }
@@ -84,16 +80,6 @@ export default function VehicleSavingsTab({ vehicleSavings, savingsTransactions,
           </div>
         );
       })}
-
-      <div className="flex justify-end">
-        <button
-          onClick={() => onNavigate('savings')}
-          className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center gap-2 transition-colors"
-        >
-          {t('vehicle_tab.savings.view_all')}
-          <ArrowRight size={14} />
-        </button>
-      </div>
     </div>
   );
 }

@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
-import Modal from '../../components/Modal';
+import Modal from '../Modal';
 import { cn } from '../../lib/utils';
+import { api } from '../../api';
 import { formatCurrency, getFrequencyLabel, getCategoryLabel, toMonthly, formatDate } from '../../utils';
 import { costCategoryOptions, costFrequencyOptions, emptyCost } from './constants';
 import { useI18n } from '../../contexts/I18nContext';
-import type { Cost, Vehicle, Person } from '../../types';
+import { useUserConfig } from '../../contexts/UserConfigContext';
+import type { AppState, Cost, Vehicle, Person } from '../../types';
 
 const selectChevron = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`;
 
@@ -17,41 +19,64 @@ const selectClass =
 
 const labelClass = 'block text-sm font-medium text-zinc-400 mb-2';
 
-interface VehicleCostsTabProps {
-  vehicleCosts: Cost[];
-  showCostModal: boolean;
-  setShowCostModal: (v: boolean) => void;
-  costForm: Omit<Cost, 'id' | 'createdAt'>;
-  setCostForm: (v: Omit<Cost, 'id' | 'createdAt'>) => void;
-  editingCostId: string | null;
-  setEditingCostId: (v: string | null) => void;
-  onAddCost: () => void;
-  onEditCost: (cost: Cost) => void;
-  onSaveCost: () => void;
-  onDeleteCost: (id: string) => void;
-  vehicles: Vehicle[];
-  persons: Person[];
+interface Props {
+  vehicleId: string;
+  state: AppState;
+  setState: (s: AppState) => void;
 }
 
-export default function VehicleCostsTab({
-  vehicleCosts,
-  showCostModal,
-  setShowCostModal,
-  costForm,
-  setCostForm,
-  editingCostId,
-  setEditingCostId,
-  onAddCost,
-  onEditCost,
-  onSaveCost,
-  onDeleteCost,
-  vehicles,
-  persons,
-}: VehicleCostsTabProps) {
+export default function VehicleCostsTab({ vehicleId, state, setState }: Props) {
   const { t } = useI18n();
+  const { config } = useUserConfig();
+  const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState({ ...emptyCost, vehicleId });
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
+  const vehicleCosts = state.costs.filter((c) => c.vehicleId === vehicleId);
+  const persons = state.persons;
+  const vehicles = state.vehicles;
   const totalMonthly = vehicleCosts.reduce((sum, c) => sum + toMonthly(c.amount, c.frequency), 0);
+
+  function handleAdd() {
+    setForm({ ...emptyCost, vehicleId });
+    setEditingId(null);
+    setShowModal(true);
+  }
+
+  function handleEdit(cost: Cost) {
+    setForm({
+      vehicleId: cost.vehicleId,
+      name: cost.name,
+      category: cost.category,
+      amount: cost.amount,
+      frequency: cost.frequency,
+      paidBy: cost.paidBy,
+      startDate: cost.startDate,
+      endDate: cost.endDate,
+      notes: cost.notes,
+      tags: cost.tags || [],
+    });
+    setEditingId(cost.id);
+    setShowModal(true);
+  }
+
+  async function handleSave() {
+    if (editingId) {
+      const updated = await api.updateCost(editingId, form);
+      setState({ ...state, costs: state.costs.map((c) => (c.id === editingId ? updated : c)) });
+    } else {
+      const created = await api.createCost(form);
+      setState({ ...state, costs: [...state.costs, created] });
+    }
+    setShowModal(false);
+    setEditingId(null);
+  }
+
+  async function handleDelete(id: string) {
+    await api.deleteCost(id);
+    setState({ ...state, costs: state.costs.filter((c) => c.id !== id) });
+  }
 
   return (
     <div>
@@ -63,7 +88,7 @@ export default function VehicleCostsTab({
           </p>
         </div>
         <button
-          onClick={onAddCost}
+          onClick={handleAdd}
           className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium inline-flex items-center gap-2 transition-colors"
         >
           <Plus size={16} />
@@ -105,7 +130,7 @@ export default function VehicleCostsTab({
                       <td className="px-4 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
-                            onClick={() => onEditCost(cost)}
+                            onClick={() => handleEdit(cost)}
                             className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg h-9 px-3 text-sm inline-flex items-center transition-colors"
                           >
                             <Pencil size={14} />
@@ -114,7 +139,7 @@ export default function VehicleCostsTab({
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => {
-                                  onDeleteCost(cost.id);
+                                  handleDelete(cost.id);
                                   setDeleteConfirm(null);
                                 }}
                                 className="bg-red-400/10 text-red-400 hover:bg-red-400/20 rounded-lg h-9 px-3 text-xs transition-colors"
@@ -149,28 +174,28 @@ export default function VehicleCostsTab({
 
       {/* Cost Modal */}
       <Modal
-        isOpen={showCostModal}
+        isOpen={showModal}
         onClose={() => {
-          setShowCostModal(false);
-          setEditingCostId(null);
+          setShowModal(false);
+          setEditingId(null);
         }}
-        title={editingCostId ? t('costs.edit') : t('costs.add')}
+        title={editingId ? t('costs.edit') : t('costs.add')}
         footer={
           <>
             <button
               onClick={() => {
-                setShowCostModal(false);
-                setEditingCostId(null);
+                setShowModal(false);
+                setEditingId(null);
               }}
               className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg h-10 px-4 text-sm transition-colors"
             >
               {t('common.cancel')}
             </button>
             <button
-              onClick={onSaveCost}
+              onClick={handleSave}
               className="bg-violet-500 hover:bg-violet-400 text-white rounded-lg h-10 px-5 text-sm font-medium transition-colors"
             >
-              {editingCostId ? t('common.update') : t('common.add')}
+              {editingId ? t('common.update') : t('common.add')}
             </button>
           </>
         }
@@ -182,8 +207,8 @@ export default function VehicleCostsTab({
               type="text"
               className={inputClass}
               placeholder="e.g. Insurance"
-              value={costForm.name}
-              onChange={(e) => setCostForm({ ...costForm, name: e.target.value })}
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -192,8 +217,8 @@ export default function VehicleCostsTab({
               <select
                 className={selectClass}
                 style={{ backgroundImage: selectChevron, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center' }}
-                value={costForm.category}
-                onChange={(e) => setCostForm({ ...costForm, category: e.target.value as Cost['category'] })}
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value as Cost['category'] })}
               >
                 {costCategoryOptions.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -207,8 +232,8 @@ export default function VehicleCostsTab({
               <select
                 className={selectClass}
                 style={{ backgroundImage: selectChevron, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center' }}
-                value={costForm.frequency}
-                onChange={(e) => setCostForm({ ...costForm, frequency: e.target.value as Cost['frequency'] })}
+                value={form.frequency}
+                onChange={(e) => setForm({ ...form, frequency: e.target.value as Cost['frequency'] })}
               >
                 {costFrequencyOptions.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -226,8 +251,8 @@ export default function VehicleCostsTab({
                 step="0.01"
                 className={inputClass}
                 placeholder="0.00"
-                value={costForm.amount || ''}
-                onChange={(e) => setCostForm({ ...costForm, amount: parseFloat(e.target.value) || 0 })}
+                value={form.amount || ''}
+                onChange={(e) => setForm({ ...form, amount: parseFloat(e.target.value) || 0 })}
               />
             </div>
             <div>
@@ -235,8 +260,8 @@ export default function VehicleCostsTab({
               <select
                 className={selectClass}
                 style={{ backgroundImage: selectChevron, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center' }}
-                value={costForm.paidBy}
-                onChange={(e) => setCostForm({ ...costForm, paidBy: e.target.value })}
+                value={form.paidBy}
+                onChange={(e) => setForm({ ...form, paidBy: e.target.value })}
               >
                 <option value="">{t('vehicle_tab.costs.select_person')}</option>
                 {persons.map((p) => (
@@ -253,8 +278,8 @@ export default function VehicleCostsTab({
               <input
                 type="date"
                 className={inputClass}
-                value={costForm.startDate}
-                onChange={(e) => setCostForm({ ...costForm, startDate: e.target.value })}
+                value={form.startDate}
+                onChange={(e) => setForm({ ...form, startDate: e.target.value })}
               />
             </div>
             <div>
@@ -262,8 +287,8 @@ export default function VehicleCostsTab({
               <input
                 type="date"
                 className={inputClass}
-                value={costForm.endDate}
-                onChange={(e) => setCostForm({ ...costForm, endDate: e.target.value })}
+                value={form.endDate}
+                onChange={(e) => setForm({ ...form, endDate: e.target.value })}
               />
             </div>
           </div>
@@ -272,8 +297,8 @@ export default function VehicleCostsTab({
             <select
               className={selectClass}
               style={{ backgroundImage: selectChevron, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center' }}
-              value={costForm.vehicleId}
-              onChange={(e) => setCostForm({ ...costForm, vehicleId: e.target.value })}
+              value={form.vehicleId}
+              onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}
             >
               <option value="">{t('vehicle_tab.costs.select_vehicle')}</option>
               {vehicles.map((v) => (
@@ -288,8 +313,8 @@ export default function VehicleCostsTab({
             <textarea
               className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-50 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 min-h-[100px] resize-none"
               placeholder={t('common.optional_notes')}
-              value={costForm.notes}
-              onChange={(e) => setCostForm({ ...costForm, notes: e.target.value })}
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
           </div>
         </div>
